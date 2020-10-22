@@ -21,7 +21,7 @@ VERSION = '0.1.0'
 REQUIRED = [
             'h5py>=2.10.0',
             'matplotlib>=3.2.1',
-            'mpl_toolkits',
+#            'mpl_toolkits',
             'numpy>=1.18.4',
             'pyproj>=2.6.1.post1',
             'reportlab>=3.5.42'
