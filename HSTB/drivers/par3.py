@@ -2317,7 +2317,8 @@ class Data73(BaseData):
                                            'em2040_dual_rx': [None, 'tx', 'rx_port', 'rx_stbd'],
                                            'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
                                            # em2045 is the model number given for EM2040c
-                                           'em2045': [None, 'sonar_head1', 'sonar_head2', None],
+                                           'em2045': [None, 'sonar_head1', None, None],
+                                           'em2045_dual' : [None, 'sonar_head1', 'sonar_head2', None],
                                            'em3002': [None, 'sonar_head1', 'sonar_head2', None],
                                            'em2040p': [None, 'sonar_head1', None, None],
                                            'me70bo': ['transducer', None, None, None]}
