@@ -311,16 +311,20 @@ class AllRead:
         elif rec.header['Ntx'] == 1:
             return [rec]
         else:
-            totalrecs = []
-            for sec in rec.tx['TransmitSector#']:
-                split_rec = copy.copy(rec)
-                split_rec.tx = split_rec.tx[sec]
-                split_rec.rx = split_rec.rx[np.where(split_rec.rx['TransmitSectorID'] == sec)]
+            try:
+                totalrecs = []
+                for sec in np.unique(rec.rx['TransmitSectorID']):
+                    split_rec = copy.copy(rec)
+                    split_rec.tx = split_rec.tx[sec]
+                    split_rec.rx = split_rec.rx[np.where(split_rec.rx['TransmitSectorID'] == sec)]
 
-                # ping time equals datagram time plus sector transmit delay
-                setattr(split_rec, 'time', split_rec.time + split_rec.tx['Delay'])
+                    # ping time equals datagram time plus sector transmit delay
+                    setattr(split_rec, 'time', split_rec.time + split_rec.tx['Delay'])
 
-                totalrecs.append(split_rec)
+                    totalrecs.append(split_rec)
+            except IndexError:
+                print('_divide_rec: Found ping record without the correct number of sectors, expected {}'.format(np.unique(rec.rx['TransmitSectorID'])))
+                return []
             return totalrecs
 
     def pad_to_dense(self, arr, padval=999.0, maxlen=500, override_type=None, detectioninfo=False):
@@ -390,6 +394,59 @@ class AllRead:
             raise ValueError('Unable to find a suitable packet to read the end time of the file')
         return [starttime, endtime]
 
+    def _finalize_records(self, recs_to_read, recs_count):
+        """
+        Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
+        convert to xarray.  Major steps include
+        - adding empty arrays so that concatenation later on will work
+        - pad_to_dense to convert the ragged sector-wise arrays into square numpy arrays
+        - translate the runtime parameters from integer/binary codes to string identifiers for easy reading (and to
+             allow comparing results between different file types)
+        returns: recs_to_read, dict of dicts finalized
+        """
+
+        # exclude some recs as we needed them during processing but not past this point
+        exclude = [{'ping': 'txsector_beam'}]
+        for dgram in exclude:
+            del recs_to_read[list(dgram.keys())[0]][list(dgram.values())[0]]
+
+        # drop the delay array since we've already used it for adjusting ping time
+        recs_to_read['ping'].pop('delay')
+
+        for rec in recs_to_read:
+            for dgram in recs_to_read[rec]:
+                if recs_count[rec] == 0:
+                    if rec != 'runtime_params' or dgram == 'time':
+                        recs_to_read[rec][dgram] = np.zeros(0)  # found no records, empty array
+                    else:
+                        recs_to_read[rec][dgram] = np.zeros(0,
+                                                            'U2')  # found no records, empty array of strings for the mode/stab records
+                elif rec in ['attitude',
+                             'navigation']:  # these recs have time blocks of data in them, need to be concatenated
+                    recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
+                elif rec == 'ping':
+                    if dgram in ['beampointingangle', 'traveltime']:
+                        # these datagrams can vary in number of beams, have to pad with 999 for 'jaggedness'
+                        recs_to_read[rec][dgram] = self.pad_to_dense(recs_to_read[rec][dgram])
+                    elif dgram in ['detectioninfo', 'qualityfactor']:
+                        # same for detection info, but it also needs to be converted to something other than int8
+                        recs_to_read[rec][dgram] = self.pad_to_dense(recs_to_read[rec][dgram], override_type=np.int,
+                                                                     detectioninfo=dgram == 'detectioninfo')
+                    else:
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                elif rec == 'runtime_params':
+                    if dgram == 'yawpitchstab':
+                        recs_to_read[rec][dgram] = translate_yawpitch(np.array(recs_to_read[rec][dgram]))
+                    elif dgram == 'mode':
+                        recs_to_read[rec][dgram] = translate_mode(np.array(recs_to_read[rec][dgram]))
+                    elif dgram == 'modetwo':
+                        recs_to_read[rec][dgram] = translate_mode_two(np.array(recs_to_read[rec][dgram]))
+                    else:
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                else:
+                    recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+        return recs_to_read
+
     def sequential_read_records(self, first_installation_rec=False):
         """
         Using global recs_categories, parse out only the given datagram types by reading headers and decoding only
@@ -440,47 +497,7 @@ class AllRead:
 
             if datagram_type == '73' and first_installation_rec:
                 self.eof = True
-
-        # these loops are to deal with the lists generated above
-        #    exclude some recs as we needed them during processing but not past this point
-        exclude = [{'ping': 'txsector_beam'}]
-        for dgram in exclude:
-            del recs_to_read[list(dgram.keys())[0]][list(dgram.values())[0]]
-
-        # drop the delay array since we've already used it for adjusting ping time
-        recs_to_read['ping'].pop('delay')
-
-        for rec in recs_to_read:
-            for dgram in recs_to_read[rec]:
-                if recs_count[rec] == 0:
-                    if rec != 'runtime_params' or dgram == 'time':
-                        recs_to_read[rec][dgram] = np.zeros(0)  # found no records, empty array
-                    else:
-                        recs_to_read[rec][dgram] = np.zeros(0,
-                                                            'U2')  # found no records, empty array of strings for the mode/stab records
-                elif rec in ['attitude', 'navigation']:  # these recs have time blocks of data in them, need to be concatenated
-                    recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
-                elif rec == 'ping':
-                    if dgram in ['beampointingangle', 'traveltime']:
-                        # these datagrams can vary in number of beams, have to pad with 999 for 'jaggedness'
-                        recs_to_read[rec][dgram] = self.pad_to_dense(recs_to_read[rec][dgram])
-                    elif dgram in ['detectioninfo', 'qualityfactor']:
-                        # same for detection info, but it also needs to be converted to something other than int8
-                        recs_to_read[rec][dgram] = self.pad_to_dense(recs_to_read[rec][dgram], override_type=np.int,
-                                                                     detectioninfo=dgram == 'detectioninfo')
-                    else:
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
-                elif rec == 'runtime_params':
-                    if dgram == 'yawpitchstab':
-                        recs_to_read[rec][dgram] = translate_yawpitch(np.array(recs_to_read[rec][dgram]))
-                    elif dgram == 'mode':
-                        recs_to_read[rec][dgram] = translate_mode(np.array(recs_to_read[rec][dgram]))
-                    elif dgram == 'modetwo':
-                        recs_to_read[rec][dgram] = translate_mode_two(np.array(recs_to_read[rec][dgram]))
-                    else:
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
-                else:
-                    recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+        recs_to_read = self._finalize_records(recs_to_read, recs_count)
         recs_to_read['format'] = 'all'
         return recs_to_read
 

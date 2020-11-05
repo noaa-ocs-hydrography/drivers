@@ -40,6 +40,16 @@ class kmall():
         self.datagram_data = None
         self.read_method = None
         self.eof = False
+        self.validate_inputs()
+
+    def validate_inputs(self):
+        """
+        Ensure that the file passed in is a valid .kmall file
+        """
+        if not os.path.exists(self.filename):
+            raise ValueError('File provided does not exist: {}'.format(self.filename))
+        if os.path.splitext(self.filename)[1] != '.kmall':
+            raise ValueError('File provided does not have the kmall extension: {}'.format(self.filename))
 
     def decode_datagram(self):
         """
