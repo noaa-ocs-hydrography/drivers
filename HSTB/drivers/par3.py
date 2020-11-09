@@ -158,6 +158,8 @@ class AllRead:
         self.error = False
         self.start_ptr = start_ptr
         self.end_ptr = end_ptr
+        self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122]
+
         self.startbytesearch = self._build_startbytesearch()
         self.at_right_byte = False
 
@@ -217,9 +219,8 @@ class AllRead:
         # only including 204x, 71x, and 312 systems.  These use the Data78 rec, others use Depth datagram, different
         #   process
 
-        ems = [2040, 2045, 710, 712, 312, 122]
         emsrchs = []
-        for em in ems:
+        for em in self.ems_with_rangeangle:
             sonartype = struct.pack('H', em)
             em_search_exp = search_exp + sonartype
             compiled_expr = re.compile(em_search_exp)
@@ -236,7 +237,7 @@ class AllRead:
             cur_ptr = self.infile.tell()
             if cur_ptr >= self.start_ptr + self.filelen:
                 self.eof = True
-                return
+                raise ValueError('Unable to find sonar startbyte, is this sonar supported?')
             # consider start bytes right at the end of the given filelength as valid, even if they extend
             # over to the next chunk
             srchdat = self.infile.read(min(20, (self.start_ptr + self.filelen) - cur_ptr))
@@ -392,7 +393,46 @@ class AllRead:
                 pass
         if endtime is None:
             raise ValueError('Unable to find a suitable packet to read the end time of the file')
+        self.infile.seek(0,0)
+        self.eof = False
+        self.start_ptr = 0
         return [starttime, endtime]
+
+    def fast_read_serial_number(self):
+        """
+        Get the serial numbers and model number of the provided file
+
+        Returns
+        -------
+        list, [serialnumber: int, secondaryserialnumber: int, sonarmodelnumber: str]
+
+        """
+        found_install_params = False
+        recs_skipped = 0
+        
+        while not found_install_params:
+            self.read()
+            datagram_type = str(self.packet.dtype)
+            if datagram_type != '73':
+                recs_skipped += 1
+                if recs_skipped == 10:
+                    print('Warning: not finding the installation parameters record at the beginning of {}'.format(self.infilename))
+                continue
+            self.get()
+            try:
+                serialnumber = self.packet.subpack.SerialNum
+                serialnumbertwo = self.packet.subpack.SerialNum2
+            except:
+                raise ValueError('Error: unable to find the serial number records in the Data73 record')
+            try:
+                sonarmodel = self.packet.subpack.settings['sonar_model_number']
+            except:
+                raise ValueError('Error: unable to find the translated sonar model number in the Data73 record')
+            found_install_params = True
+
+        self.infile.seek(0, 0)
+        self.eof = False
+        return [serialnumber, serialnumbertwo, sonarmodel]
 
     def _finalize_records(self, recs_to_read, recs_count):
         """
@@ -423,7 +463,10 @@ class AllRead:
                                                             'U2')  # found no records, empty array of strings for the mode/stab records
                 elif rec in ['attitude',
                              'navigation']:  # these recs have time blocks of data in them, need to be concatenated
-                    recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
+                    if dgram == 'altitude' and not recs_to_read[rec][dgram]:
+                        pass
+                    else:
+                        recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
                 elif rec == 'ping':
                     if dgram in ['beampointingangle', 'traveltime']:
                         # these datagrams can vary in number of beams, have to pad with 999 for 'jaggedness'
@@ -445,6 +488,8 @@ class AllRead:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 else:
                     recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+        if recs_to_read['navigation']['altitude'] == []:
+            recs_to_read['navigation'].pop('altitude')
         return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
@@ -478,15 +523,22 @@ class AllRead:
                         else:
                             tmprec = rec
 
+                        val = None
                         if subrec == 'settings':
                             val = [getattr(tmprec, subrec)]
                         else:
                             try:  # flow for array/list attribute
                                 val = list(getattr(tmprec, subrec))
                             except TypeError:  # flow for float/int attribute
-                                val = [getattr(tmprec, subrec)]
+                                try:
+                                    val = [getattr(tmprec, subrec)]
+                                except ValueError:  # it just isn't there
+                                    val = []
                             except AttributeError:  # flow for nested recs
-                                val = [tmprec[subrec]]
+                                try:
+                                    val = [tmprec[subrec]]
+                                except ValueError:  # it just isn't there
+                                    val = []
 
                         # generate new list or append to list for each rec of that dgram type found
                         for translated in recs_categories_translator[datagram_type][subrec]:
@@ -3491,7 +3543,7 @@ class Data110_att(BaseData):
             self.raw_data = Data110_grp(datablock, self.time, read_limit=read_limit)
             self.weektime = self.raw_data.weektime
             self.source = 'GRP102'
-        elif first_record[:2] == b'\xaaQ':
+        elif first_record[:2] in [b'\xaaQ', b'\xaaS']:
             datablock = b""
             for raw in raw_arrays:
                 r = raw.tobytes()  # same as bytes(raw)
@@ -3499,7 +3551,7 @@ class Data110_att(BaseData):
                 self.raw_padding.append(r[Data110_grp.hdr_sz:])
             self.raw_data = Data110_aaq(datablock, self.time, read_limit=read_limit)
             self.source = 'binary23'
-        elif first_record[0] == b'q' and raw_data_size == 42:
+        elif first_record[0] == 113 and raw_data_size == 43:  # 113 being 'q'
             datablock = b""
             for raw in raw_arrays:
                 r = raw.tobytes()  # same as bytes(raw)

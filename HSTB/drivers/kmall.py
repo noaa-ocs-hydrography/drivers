@@ -3989,7 +3989,41 @@ class kmall():
                 end_time = self.datagram_data['header']['dgtime']
             except:
                 self.eof = True  # read_datagram fails at end of file
+        self.eof = False
+        self.FID.seek(0)
         return [start_time, end_time]
+
+    def fast_read_serial_number(self):
+        """
+        Get the serial numbers and model number of the provided file
+        returns: list, [serialnumber: int, secondaryserialnumber: int, sonarmodelnumber: str]
+        """
+
+        self.datagram_data = None
+        self.eof = False
+
+        if self.FID is None:
+            self.OpenFiletoRead()
+        else:
+            self.FID.seek(0)
+
+        rec = self.read_first_datagram('IIP')
+        if rec is None:
+            raise ValueError('kmall: Unable to find installation parameters in file {}'.format(self.filename))
+
+        try:
+            serialnumber = rec['install_txt']['pu_serial_number']
+            serialnumbertwo = 0  # currently there is no support for dual head in kmall files
+        except:
+            raise ValueError('Error: Unable to find pu_serial_number in kmall IIP install_txt')
+        try:
+            sonarmodel = rec['install_txt']['sonar_model_number']
+        except:
+            raise ValueError('Error: Unable to find sonar_model_number in kmall IIP install_txt')
+
+        self.eof = False
+        self.FID.seek(0)
+        return [serialnumber, serialnumbertwo, sonarmodel]
 
     def fast_read_serial_number_translator(self):
         """
