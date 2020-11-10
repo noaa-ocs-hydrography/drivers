@@ -3566,7 +3566,7 @@ class kmall():
                                               'sounding.beamAngleReRx_deg': [['ping', 'beampointingangle']],
                                               'sounding.txSectorNumb': [['ping', 'txsector_beam']],
                                               'sounding.detectionType': [['ping', 'detectioninfo']],
-                                              'sounding.qualityFactor': [['ping', 'qualityfactor_percent']],
+                                              'sounding.qualityFactor': [['ping', 'qualityfactor']],
                                               'sounding.twoWayTravelTime_sec': [['ping', 'traveltime']],
                                               'pingInfo.modeAndStabilisation': [['ping', 'yawpitchstab']],
                                               'pingInfo.pulseForm': [['ping', 'mode']],
@@ -3586,7 +3586,7 @@ class kmall():
             'ping': {'time': None, 'counter': None, 'rxid': None, 'soundspeed': None, 'ntx': None,
                      'serial_num': None, 'txsectorid': None, 'tiltangle': None, 'delay': None,
                      'frequency': None, 'beampointingangle': None, 'txsector_beam': None,
-                     'detectioninfo': None, 'qualityfactor_percent': None, 'traveltime': None, 'mode': None,
+                     'detectioninfo': None, 'qualityfactor': None, 'traveltime': None, 'mode': None,
                      'modetwo': None, 'yawpitchstab': None},
             'runtime_params': {'time': None, 'runtime_settings': None},
             'profile': {'time': None, 'depth': None, 'soundspeed': None},
@@ -3631,7 +3631,7 @@ class kmall():
                         # found no records, empty array of strings for the mode/stab records
                         recs_to_read[rec][dgram] = np.zeros(0, 'U2')
                 elif rec == 'ping':  # use the argsort indices here to sort by time
-                    if dgram in ['beampointingangle', 'traveltime', 'qualityfactor_percent']:
+                    if dgram in ['beampointingangle', 'traveltime', 'qualityfactor']:
                         # these datagrams can vary in number of beams, have to pad with 999 for 'jaggedness'
                         recs_to_read[rec][dgram] = self._pad_to_dense(recs_to_read[rec][dgram])
                     elif dgram in ['detectioninfo', 'qualityfactor']:
@@ -4012,12 +4012,12 @@ class kmall():
             raise ValueError('kmall: Unable to find installation parameters in file {}'.format(self.filename))
 
         try:
-            serialnumber = rec['install_txt']['pu_serial_number']
+            serialnumber = int(rec['install_txt']['pu_serial_number'])
             serialnumbertwo = 0  # currently there is no support for dual head in kmall files
         except:
             raise ValueError('Error: Unable to find pu_serial_number in kmall IIP install_txt')
         try:
-            sonarmodel = rec['install_txt']['sonar_model_number']
+            sonarmodel = rec['install_txt']['sonar_model_number'].lower()
         except:
             raise ValueError('Error: Unable to find sonar_model_number in kmall IIP install_txt')
 
