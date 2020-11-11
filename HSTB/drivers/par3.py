@@ -3443,20 +3443,20 @@ class Data110_grp(BaseData):
 class Data110_aaq(BaseData):
     hdr_dtype = np.dtype([('Header1', 'B'), ('Header2', 'B'),
                           ('Seconds', 'i'), ('FracSeconds', 'f'), ('Latitude', 'f'),
-                          ('Longitude', 'f'), ('Height', 'f'), ('Heave', 'f'),
+                          ('Longitude', 'f'), ('Altitude', 'f'), ('Heave', 'f'),
                           ('NorthVelocity', 'f'), ('EastVelocity', 'f'),
                           ('DownVelocity', 'f'), ('Roll', 'f'), ('Pitch', 'f'),
                           ('Heading', 'f'), ('RollRate', 'f'), ('PitchRate', 'f'),
                           ('YawRate', 'f'), ('StatusWord', 'H'), ('CheckSum', 'H')])
     raw_dtype = np.dtype([('Header1', 'B'), ('Header2', 'B'),
                           ('Seconds', '>i'), ('FracSeconds', '>H'), ('Latitude', '>i'),
-                          ('Longitude', '>i'), ('Height', '>i'), ('Heave', '>h'),
+                          ('Longitude', '>i'), ('Altitude', '>i'), ('Heave', '>h'),
                           ('NorthVelocity', '>h'), ('EastVelocity', '>h'),
                           ('DownVelocity', '>h'), ('Roll', '>h'), ('Pitch', '>h'),
                           ('Heading', '>H'), ('RollRate', '>h'), ('PitchRate', '>h'),
                           ('YawRate', '>h'), ('StatusWord', '>H'), ('CheckSum', '>H')])
     conversions = {'FracSeconds': 0.0001, 'Latitude': 90. / 2 ** 30, 'Longitude': 90. / 2 ** 30,
-                   'Height': 0.01, 'Heave': 0.01, 'NorthVelocity': 0.01, 'EastVelocity': 0.01,
+                   'Altitude': 0.01, 'Heave': 0.01, 'NorthVelocity': 0.01, 'EastVelocity': 0.01,
                    'DownVelocity': 0.01, 'Roll': 90. / 2 ** 14, 'Pitch': 90. / 2 ** 14,
                    'Heading': 90. / 2 ** 14, 'RollRate': 90. / 2 ** 14,
                    'PitchRate': 90. / 2 ** 14, 'YawRate': 90. / 2 ** 14}
@@ -3464,25 +3464,53 @@ class Data110_aaq(BaseData):
     def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
         super(Data110_aaq, self).__init__(datablock, byteswap=byteswap,
                                           read_limit=read_limit)  # read as many records as passed in
+        
+class Data110_aas(BaseData):
+    hdr_dtype = np.dtype([('Header1', 'B'), ('Header2', 'B'),
+                          ('Seconds', 'i'), ('FracSeconds', 'f'), ('Latitude', 'f'),
+                          ('Longitude', 'f'), ('Altitude', 'f'), ('Heave', 'f'),
+                          ('NorthVelocity', 'f'), ('EastVelocity', 'f'),
+                          ('DownVelocity', 'f'), ('Roll', 'f'), ('Pitch', 'f'),
+                          ('Heading', 'f'), ('RollRate', 'f'), ('PitchRate', 'f'),
+                          ('YawRate', 'f'), ('DelayedHeaveSeconds', 'i'), ('DelayedHeaveFracSeconds', 'f'),
+                          ('DelayedHeave', 'f'), ('StatusWord', 'H'), ('CheckSum', 'H')])
+    raw_dtype = np.dtype([('Header1', 'B'), ('Header2', 'B'),
+                          ('Seconds', '>i'), ('FracSeconds', '>H'), ('Latitude', '>i'),
+                          ('Longitude', '>i'), ('Altitude', '>i'), ('Heave', '>h'),
+                          ('NorthVelocity', '>h'), ('EastVelocity', '>h'),
+                          ('DownVelocity', '>h'), ('Roll', '>h'), ('Pitch', '>h'),
+                          ('Heading', '>H'), ('RollRate', '>h'), ('PitchRate', '>h'),
+                          ('YawRate', '>h'), ('DelayedHeaveSeconds', '>i'), ('DelayedHeaveFracSeconds', '>H'),
+                          ('DelayedHeave', '>h'), ('StatusWord', '>H'), ('CheckSum', '>H')])
+    conversions = {'FracSeconds': 0.0001, 'Latitude': 90. / 2 ** 30, 'Longitude': 90. / 2 ** 30,
+                   'Altitude': 0.01, 'Heave': 0.01, 'NorthVelocity': 0.01, 'EastVelocity': 0.01,
+                   'DownVelocity': 0.01, 'Roll': 90. / 2 ** 14, 'Pitch': 90. / 2 ** 14,
+                   'Heading': 90. / 2 ** 14, 'RollRate': 90. / 2 ** 14,
+                   'PitchRate': 90. / 2 ** 14, 'YawRate': 90. / 2 ** 14, 'DelayedHeaveFracSeconds': 0.0001,
+                   'DelayedHeave': 0.01}
+
+    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+        super(Data110_aas, self).__init__(datablock, byteswap=byteswap,
+                                          read_limit=read_limit)  # read as many records as passed in
 
 
 class Data110_q42(BaseData):
     hdr_dtype = np.dtype([('Header', 'S1'),
                           ('Seconds', 'i'), ('FracSeconds', 'f'), ('Latitude', 'f'),
-                          ('Longitude', 'f'), ('Height', 'f'), ('Heave', 'f'),
+                          ('Longitude', 'f'), ('Altitude', 'f'), ('Heave', 'f'),
                           ('NorthVelocity', 'f'), ('EastVelocity', 'f'),
                           ('DownVelocity', 'f'), ('Roll', 'f'), ('Pitch', 'f'),
                           ('Heading', 'f'), ('RollRate', 'f'), ('PitchRate', 'f'),
                           ('YawRate', 'f'), ('StatusWord', 'H'), ('CheckSum', 'H')])
     raw_dtype = np.dtype([('Header', 'S1'),
                           ('Seconds', '>i'), ('FracSeconds', '>B'), ('Latitude', '>i'),
-                          ('Longitude', '>i'), ('Height', '>i'), ('Heave', '>h'),
+                          ('Longitude', '>i'), ('Altitude', '>i'), ('Heave', '>h'),
                           ('NorthVelocity', '>h'), ('EastVelocity', '>h'),
                           ('DownVelocity', '>h'), ('Roll', '>h'), ('Pitch', '>h'),
                           ('Heading', '>H'), ('RollRate', '>h'), ('PitchRate', '>h'),
                           ('YawRate', '>h'), ('StatusWord', '>H'), ('CheckSum', '>H')])
     conversions = {'FracSeconds': 0.01, 'Latitude': 90. / 2 ** 30, 'Longitude': 90. / 2 ** 30,
-                   'Height': 0.01, 'Heave': 0.01, 'NorthVelocity': 0.01, 'EastVelocity': 0.01,
+                   'Altitude': 0.01, 'Heave': 0.01, 'NorthVelocity': 0.01, 'EastVelocity': 0.01,
                    'DownVelocity': 0.01, 'Roll': 90. / 2 ** 14, 'Pitch': 90. / 2 ** 14,
                    'Heading': 90. / 2 ** 14, 'RollRate': 90. / 2 ** 14,
                    'PitchRate': 90. / 2 ** 14, 'YawRate': 90. / 2 ** 14}
@@ -3543,7 +3571,7 @@ class Data110_att(BaseData):
             self.raw_data = Data110_grp(datablock, self.time, read_limit=read_limit)
             self.weektime = self.raw_data.weektime
             self.source = 'GRP102'
-        elif first_record[:2] in [b'\xaaQ', b'\xaaS']:
+        elif first_record[:2] == b'\xaaQ':  # seapath binary 23 format, see seatex format document
             datablock = b""
             for raw in raw_arrays:
                 r = raw.tobytes()  # same as bytes(raw)
@@ -3551,6 +3579,14 @@ class Data110_att(BaseData):
                 self.raw_padding.append(r[Data110_grp.hdr_sz:])
             self.raw_data = Data110_aaq(datablock, self.time, read_limit=read_limit)
             self.source = 'binary23'
+        elif first_record[:2] == b'\xaaS':  # seapath binary 26 format, see seatex format document
+            datablock = b""
+            for raw in raw_arrays:
+                r = raw.tobytes()  # same as bytes(raw)
+                datablock += r[:Data110_aas.hdr_sz]
+                self.raw_padding.append(r[Data110_grp.hdr_sz:])
+            self.raw_data = Data110_aas(datablock, self.time, read_limit=read_limit)
+            self.source = 'binary26'
         elif first_record[0] == 113 and raw_data_size == 43:  # 113 being 'q'
             datablock = b""
             for raw in raw_arrays:
