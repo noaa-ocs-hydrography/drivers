@@ -212,7 +212,12 @@ def get_export_info_from_log(logfile):
             lns = lfile.readlines()
             for ln in lns:
                 if ln[0:5] == 'Datum':
-                    attributes['datum'] = ln.split(' : ')[1].rstrip()
+                    dtm = ln.split(' : ')[1].rstrip().upper()
+                    if dtm.find('NAD83') != -1:
+                        dtm = 'NAD83'
+                    elif dtm.find('WGS84') != -1:
+                        dtm = 'WGS84'
+                    attributes['datum'] = dtm
                 elif ln[0:4] == 'Zone':
                     attributes['zone'] = ln.split(' : ')[1].rstrip()
                 elif ln[0:4] == 'Grid':
