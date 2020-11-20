@@ -63,8 +63,10 @@ smrmsg (uncertainty) files are:
 
 from datetime import datetime, timedelta, timezone
 import numpy as np
+import struct
 import xarray as xr
 import matplotlib.pyplot as plt
+import os
 from pyproj import CRS
 
 plt.ion()
@@ -211,7 +213,19 @@ def get_export_info_from_log(logfile):
         with open(logfile, 'r') as lfile:
             lns = lfile.readlines()
             for ln in lns:
-                if ln[0:5] == 'Datum':
+                if ln[0:10] == 'Input file':
+                    infile = ln.split(' : ')[1].rstrip()
+                    infile = os.path.split(infile)[1]
+                    attributes['input_sbet_file'] = infile
+                elif ln[0:11] == 'Output file':
+                    outfile = ln.split(' : ')[1].rstrip()
+                    outfile = os.path.split(outfile)[1]
+                    attributes['exported_sbet_file'] = outfile
+                elif ln[0:13] == 'Time Interval':
+                    samplerate = float(ln.split(' : ')[1].rstrip())
+                    samplerate_hz = str(1 / samplerate)
+                    attributes['sample_rate_hertz'] = samplerate_hz
+                elif ln[0:5] == 'Datum':
                     dtm = ln.split(' : ')[1].rstrip().upper()
                     if dtm.find('NAD83') != -1:
                         dtm = 'NAD83'
@@ -228,12 +242,19 @@ def get_export_info_from_log(logfile):
                     attributes['mission_date'] = ln.split(' : ')[1].rstrip()
                     if attributes['mission_date']:
                         attributes['mission_date'] = datetime.strptime(attributes['mission_date'], '%m/%d/%Y')
+        if 'datum' not in attributes:
+            print('{}: Not a valid export log file, unable to find the "Datum" line'.format(logfile))
+            return None
+        if 'sample_rate_hertz' not in attributes:  # no sample rate specified, full 200 hz sbet
+            attributes['sample_rate_hertz'] = '200'
         return attributes
     except TypeError:
         print('Expected a string path to the logfile, got {}'.format(logfile))
+        return None
     except FileNotFoundError:
         print('Logfile does not exist: {}'.format(logfile))
-
+        return None
+    
 
 def weekly_seconds_to_UTC_timestamps(week_secs, weekstart_datetime=None, weekstart_year=None, weekstart_week=None):
     """
@@ -516,3 +537,128 @@ def smrmsg_to_xarray(smrmsgfile, logfile=None, weekstart_year=None, weekstart_we
     else:
         smrmsgdat = None
     return smrmsgdat
+
+
+def is_sbet(sbetfile: str):
+    """
+    Check if the file is an sbet.  Ideally we just rely on the checking if the file contains an even number of 17 doubles,
+    but add in the time check just in case.
+
+    Parameters
+    ----------
+    sbetfile
+        file path to a POSPac sbet file
+
+    Returns
+    -------
+    bool
+        True if file is an sbet, False if not
+
+    """
+    try:
+        with open(sbetfile, 'rb') as ofil:
+            dat = ofil.read(8 * 17 * 2)  # read the first two records (8 bytes per double, 17 doubles, 2 records)
+            ofil.seek(0, 2)
+            totalsize = ofil.tell()
+    except:
+        print('unable to read sbet file: {}'.format(sbetfile))
+        return False
+    unpacked = struct.unpack('d'*34, dat)
+    time_diff = np.abs(unpacked[0] - unpacked[17])
+    if time_diff < 10:  # not checking for gaps here, just ensuring that these two records contain time
+        if totalsize % 17 == 0:
+            return True
+        else:
+            # print('sbet does not contain a multiple of 17 total records: {}'.format(sbetfile))
+            return False
+    else:
+        # print('sbet failed time difference check: {}'.format(sbetfile))
+        return False
+
+
+def is_smrmsg(smrmsgfile: str):
+    """
+    Check if the file is an smrmsg file.  Ideally we just rely on the checking if the file contains an even number of 10 doubles,
+    but add in the time check just in case.
+
+    Parameters
+    ----------
+    smrmsgfile
+        file path to a POSPac smrmsg file
+
+    Returns
+    -------
+    bool
+        True if file is an smrmsg, False if not
+
+    """
+    try:
+        with open(smrmsgfile, 'rb') as ofil:
+            dat = ofil.read(8 * 10 * 2)  # read the first two records (8 bytes per double, 17 doubles, 2 records)
+            ofil.seek(0, 2)
+            totalsize = ofil.tell()
+    except:
+        print('unable to read smrmsg file: {}'.format(smrmsgfile))
+        return False
+    unpacked = struct.unpack('d'*20, dat)
+    time_diff = np.abs(unpacked[0] - unpacked[10])
+    if time_diff < 10:  # not checking for gaps here, just ensuring that these two records contain time
+        if totalsize % 10 == 0:
+            return True
+        else:
+            # print('smrmsg does not contain a multiple of 10 total records')
+            return False
+    else:
+        # print('smrmsg failed time difference check')
+        return False
+
+
+def sbet_fast_read_start_end_time(sbetfile: str):
+    """
+    Determine the start and end time of the provided POSPac sbet file by reading the first and last record.
+
+    Parameters
+    ----------
+    sbetfile
+        full file path to a POSPac sbet file
+
+    Returns
+    -------
+    list
+        list of floats, [start time, end time] for the sbet
+    """
+
+    try:
+        with open(sbetfile, 'rb') as ofil:
+            firsttime = struct.unpack('d', ofil.read(8))[0]  # read the first time
+            ofil.seek(-17 * 8, 2)  # go to the start of the last record
+            lasttime = struct.unpack('d', ofil.read(8))[0]  # read the last time
+        return [float(np.round(firsttime, 3)), float(np.round(lasttime, 3))]
+    except:
+        print('unable to read sbet file: {}'.format(sbetfile))
+        return None
+    
+    
+def smrmsg_fast_read_start_end_time(smrmsgfile: str):
+    """
+    Determine the start and end time of the provided POSPac smrmsg file by reading the first and last record.
+
+    Parameters
+    ----------
+    smrmsgfile
+        full file path to a POSPac smrmsg file
+
+    Returns
+    -------
+    list
+        list of floats, [start time, end time] for the smrmsg file
+    """
+    try:
+        with open(smrmsgfile, 'rb') as ofil:
+            firsttime = struct.unpack('d', ofil.read(8))[0]  # read the first time
+            ofil.seek(-10 * 8, 2)  # go to the start of the last record
+            lasttime = struct.unpack('d', ofil.read(8))[0]  # read the last time
+        return [float(np.round(firsttime, 3)), float(np.round(lasttime, 3))]
+    except:
+        print('unable to read smrmsg file: {}'.format(smrmsgfile))
+        return None
