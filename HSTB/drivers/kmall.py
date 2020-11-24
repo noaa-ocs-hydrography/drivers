@@ -3680,6 +3680,7 @@ class kmall():
             for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
                 recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], spike_index)
 
+        recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
         return recs_to_read
 
     def sequential_read_records(self, start_ptr=0, end_ptr=0, first_installation_rec=False, serial_translator=None):

@@ -490,6 +490,7 @@ class AllRead:
                     recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
         if recs_to_read['navigation']['altitude'] == []:
             recs_to_read['navigation'].pop('altitude')
+        recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
         return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
