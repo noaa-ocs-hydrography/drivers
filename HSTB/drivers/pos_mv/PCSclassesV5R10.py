@@ -104,6 +104,8 @@ def ParseFields(subfields, classdict, bIgnore=False):
                                 except:
                                     pass
                             print(" !!!! ********  !!!!! ERROR warning Zero length array -- ", txtline)
+                            print('-----', use_type, ctypes.sizeof(use_type), n)
+
                         if cnt != 1:
                             use_type = tdict[datatype] * cnt
                             if cnt == 0:
