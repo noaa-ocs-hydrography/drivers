@@ -12,8 +12,10 @@ try:
 except:
     _dHSTP = False
 
-types = {"char": ctypes.c_char, "ushort": ctypes.c_ushort, "long": ctypes.c_long, "short": ctypes.c_short,
-         "ulong": ctypes.c_ulong, "double": ctypes.c_double, "float": ctypes.c_float, "ubyte": ctypes.c_uint8, "byte": ctypes.c_uint8}
+types = {"char": ctypes.c_char, "ushort": ctypes.c_uint16, "long": ctypes.c_int32, "short": ctypes.c_int16,
+         "ulong": ctypes.c_uint32, "double": ctypes.c_double, "float": ctypes.c_float, "ubyte": ctypes.c_uint8,
+         "byte": ctypes.c_uint8}
+
 
 structures = {}  # place finished data structures in this dictionary and other structures can then use them as a sub-type
 GROUP_ID_VALUES = {}
