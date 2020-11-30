@@ -53,6 +53,7 @@ The primary classes in this module to be accessed directly are
 import sys
 import os
 import numpy as np
+from numpy.lib.recfunctions import append_fields
 import pyproj
 import datetime as dtm
 import pickle
@@ -96,6 +97,40 @@ recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['
                               '110': {'Time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                       'Longitude': [['navigation', 'longitude']],
                                       'Altitude': [['navigation', 'altitude']]}}
+
+oldstyle_recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
+                            '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
+                            '102': ['time', 'PingCounter', 'SoundSpeed', 'Ntx', 'SystemSerialNum',
+                                    'tx.TransmitSector#', 'tx.TiltAngle', 'tx.Delay', 'tx.CenterFrequency',
+                                    'rx.BeamPointingAngle', 'rx.TransmitSectorID', 'rx.DetectionWindowLength',
+                                    'rx.QualityFactor', 'rx.TravelTime'],
+                            '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
+                            '85': ['time', 'data.Depth', 'data.SoundSpeed'],
+                            '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
+
+oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                              'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
+                                              'Heading': [['attitude', 'heading']]},
+                                       '73': {'time': [['installation_params', 'time']],
+                                              'Serial#': [['installation_params', 'serial_one']],
+                                              'Serial#2': [['installation_params', 'serial_two']],
+                                              'settings': [['installation_params', 'installation_settings']]},
+                                       '102': {'time': [['ping', 'time']], 'PingCounter': [['ping', 'counter']],
+                                               'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                               'SystemSerialNum': [['ping', 'serial_num']], 'TransmitSector#': [['ping', 'txsectorid']],
+                                               'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
+                                               'CenterFrequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
+                                               'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionWindowLength': [['ping', 'detectioninfo']],
+                                               'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                       '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
+                                              'ReceiverFixedGain': [['runtime_params', 'modetwo']],
+                                              'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
+                                              'settings': [['runtime_params', 'runtime_settings']]},
+                                       '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                              'SoundSpeed': [['profile', 'soundspeed']]},
+                                       '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                               'Longitude': [['navigation', 'longitude']],
+                                               'Altitude': [['navigation', 'altitude']]}}
 
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
@@ -159,6 +194,7 @@ class AllRead:
         self.start_ptr = start_ptr
         self.end_ptr = end_ptr
         self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122]
+        self.ems_with_oldrangeangle = [3020, 1020, 120, 2000]
 
         self.startbytesearch = self._build_startbytesearch()
         self.at_right_byte = False
@@ -220,7 +256,7 @@ class AllRead:
         #   process
 
         emsrchs = []
-        for em in self.ems_with_rangeangle:
+        for em in self.ems_with_rangeangle + self.ems_with_oldrangeangle:
             sonartype = struct.pack('H', em)
             em_search_exp = search_exp + sonartype
             compiled_expr = re.compile(em_search_exp)
@@ -307,7 +343,7 @@ class AllRead:
             rec = self.packet.subpack
         except AttributeError:
             raise ValueError('No data found in packet.subpack for record')
-        if type(rec) != Data78:
+        if type(rec) not in [Data78, Data102]:
             return [rec]
         elif rec.header['Ntx'] == 1:
             return [rec]
@@ -344,12 +380,35 @@ class AllRead:
         Z = np.full((len(arr), maxlen), padval, dtype=typ)
         for enu, row in enumerate(arr):
             # some records being read have NaNs in them unexpectedly, like part of the record isn't being read
-            row[np.isnan(row)] = 0
+            row[np.isnan(row)] = padval - 1
             if detectioninfo:
                 Z[enu, :len(row)] = translate_detectioninfo(row)
             else:
                 Z[enu, :len(row)] = row
         return Z
+
+    def has_old_style_rangeangle(self):
+        """
+        Simple method to determine whether this is of the new type of sonar that has the new rangeangle datagram 78
+        or the old type that has the old rangeangle datagram 102
+        """
+        self.read()
+        while not self.eof:
+            datagram_type = self.packet.dtype
+            if datagram_type == 102:
+                return True
+            elif datagram_type == 78:
+                return False
+            else:
+                self.read()
+        try:
+            sonarmodelnumber = self.packet.header[3]
+            expectedmodelnumber = self.ems_with_rangeangle + self.ems_with_oldrangeangle
+            if sonarmodelnumber not in self.ems_with_oldrangeangle + self.ems_with_rangeangle:
+                raise ValueError('Unable to read file {}: sonar model number not recognized.  Found {}, expected one of {}'.format(self.infilename, sonarmodelnumber, expectedmodelnumber))
+        except:
+            raise EnvironmentError('File {} could not be read, no valid packets found'.format(self.infilename))
+        raise EnvironmentError('File {} has no old or new style rangeangle datagrams'.format(self.infilename))
 
     def fast_read_start_end_time(self):
         """
@@ -466,7 +525,10 @@ class AllRead:
                     if dgram == 'altitude' and not recs_to_read[rec][dgram]:
                         pass
                     else:
-                        recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
+                        try:  # data110 approach, concatenate the nav packets to one array
+                            recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
+                        except:  # data80 approach, cast as numpy array, just one list of values
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'ping':
                     if dgram in ['beampointingangle', 'traveltime']:
                         # these datagrams can vary in number of beams, have to pad with 999 for 'jaggedness'
@@ -499,6 +561,14 @@ class AllRead:
         the necessary datagrams.
 
         """
+        # first determine whether we need to use the old or new style rangeangle datagram
+        if not self.has_old_style_rangeangle():
+            categories = recs_categories
+            category_translator = recs_categories_translator
+        else:
+            categories = oldstyle_recs_categories
+            category_translator = oldstyle_recs_categories_translator
+
         # recs_to_read is the returned dict of records parsed from the file
         recs_to_read = copy.deepcopy(recs_categories_result)
         recs_count = dict([(k, 0) for k in recs_to_read])
@@ -510,13 +580,13 @@ class AllRead:
         while not self.eof:
             self.read()  # find the start of the record and read the header
             datagram_type = str(self.packet.dtype)
-            if datagram_type in list(recs_categories.keys()):  # if the header indicates this is a record you want...
-                for rec_ident in list(recs_categories_translator[datagram_type].values())[0]:
+            if datagram_type in list(categories.keys()):  # if the header indicates this is a record you want...
+                for rec_ident in list(category_translator[datagram_type].values())[0]:
                     recs_count[rec_ident[0]] += 1
                 self.get()  # read the rest of the datagram and decode the data
                 recs = self._divide_rec()  # split up the Data78 if applicable, otherwise just get the same rec back
                 for rec in recs:
-                    for subrec in recs_categories[datagram_type]:
+                    for subrec in categories[datagram_type]:
                         #  override for nested recs, designated with periods in the recs_to_read dict
                         if subrec.find('.') > 0:
                             tmprec = getattr(rec, subrec.split('.')[0])
@@ -542,7 +612,7 @@ class AllRead:
                                     val = []
 
                         # generate new list or append to list for each rec of that dgram type found
-                        for translated in recs_categories_translator[datagram_type][subrec]:
+                        for translated in category_translator[datagram_type][subrec]:
                             if recs_to_read[translated[0]][translated[1]] is None:
                                 recs_to_read[translated[0]][translated[1]] = copy.copy(val)
                             else:
@@ -2148,7 +2218,7 @@ class Data68_xyz(BasePlottableData):
         super(Data68_xyz, self).__init__(datablock, byteswap=byteswap,
                                          read_limit=read_limit)  # read as many records as passed in
         self._zres = data68_info['Zresolution']
-        self.header['Depth'] *= self.zres
+        self.header['Depth'] *= self._zres
         self._xyres = data68_info['XYresolution']
         self.header['AcrossTrack'] *= self._xyres
         self.header['AlongTrack'] *= self._xyres
@@ -2158,7 +2228,7 @@ class Data68_xyz(BasePlottableData):
 
     def get_datablock(self, data=None):
         tmp_header = self.header.copy()
-        tmp_header['Depth'] /= self.zres
+        tmp_header['Depth'] /= self._zres
         tmp_header['AcrossTrack'] /= self._xyres
         tmp_header['AlongTrack'] /= self._xyres
         tmp_header['OneWayRange'] *= self._samplerate
@@ -2373,6 +2443,7 @@ class Data73(BaseData):
                                            'em2045': [None, 'sonar_head1', None, None],
                                            'em2045_dual' : [None, 'sonar_head1', 'sonar_head2', None],
                                            'em3002': [None, 'sonar_head1', 'sonar_head2', None],
+                                           'em3020': [None, 'sonar_head1', 'sonar_head2', None],
                                            'em2040p': [None, 'sonar_head1', None, None],
                                            'me70bo': ['transducer', None, None, None]}
         self.time = POSIXtime
@@ -2673,6 +2744,7 @@ class Data80(BaseData):
         """
         self.gg_data = Data80_gga(self.raw_data)
         self.source_data = self.gg_data.header  # for backward compatibility
+        self.gg_data.Altitude = self.gg_data.OrthometricHeight + self.gg_data.GeoidSeparation
 
     def _parse_ggk(self):
         """
@@ -3164,6 +3236,10 @@ class Data102(BaseData):
         # read nrx -- skip over the tx data in the block
         self.rx_data = Data102_nrx(datablock[ntx * self.tx_data.hdr_sz:], read_limit=nrx)
         self.rx = self.rx_data.header  # maintain backward compatibility
+
+        # include the twowaytraveltime from the provided range and sampling freq following the datagram note
+        self.rx_data.TravelTime = self.rx_data.Range / self.SamplingFrequency
+        self.rx = append_fields(self.rx_data.header, 'TravelTime', self.rx_data.TravelTime, dtypes=np.float32)
 
     def get_datablock(self, data=None):
         # FIXME: Not sure what happens if TVG was removed
