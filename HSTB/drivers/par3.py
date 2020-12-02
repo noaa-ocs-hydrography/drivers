@@ -608,7 +608,7 @@ class AllRead:
                             except AttributeError:  # flow for nested recs
                                 try:
                                     val = [tmprec[subrec]]
-                                except ValueError:  # it just isn't there
+                                except (TypeError, ValueError):  # it just isn't there
                                     val = []
 
                         # generate new list or append to list for each rec of that dgram type found
@@ -2722,21 +2722,25 @@ class Data80(BaseData):
         self.header['Course'] *= 0.01  # convert to degrees
         self.header['Heading'] *= 0.01  # convert to degrees
         self.time = POSIXtime
+        self.gg_data = None
         self.parse_raw()
 
     def parse_raw(self):
         """
         Parses the raw_data that arrived in SIS and puts it in source_data.
         """
-        msg_type = np.frombuffer(self.raw_data[:5], dtype='S5')
-        if msg_type[0] == b'INGGA':
-            self._parse_gga()
-        elif msg_type[0] == b'GPGGA':
-            self._parse_gga()
-        elif msg_type[0] == b'INGGK':
-            self._parse_ggk()
-        elif msg_type[0] == b'GPGGK':
-            self._parse_ggk()
+        try:
+            msg_type = np.frombuffer(self.raw_data[:5], dtype='S5')
+            if msg_type[0] == b'INGGA':
+                self._parse_gga()
+            elif msg_type[0] == b'GPGGA':
+                self._parse_gga()
+            elif msg_type[0] == b'INGGK':
+                self._parse_ggk()
+            elif msg_type[0] == b'GPGGK':
+                self._parse_ggk()
+        except AttributeError:
+            print('Data80: Unable to find {} in this record'.format(msg_type))
 
     def _parse_gga(self):
         """
@@ -2759,7 +2763,10 @@ class Data80(BaseData):
     def get_display_string(self):
         s = super(Data80, self).get_display_string()
         s += '\n***raw data record***\n'
-        s += self.gg_data.get_display_string()
+        if self.gg_data is not None:
+            s += self.gg_data.get_display_string()
+        else:
+            print('Data80: Unable to find gg_data')
         return s
 
 
@@ -3239,7 +3246,10 @@ class Data102(BaseData):
 
         # include the twowaytraveltime from the provided range and sampling freq following the datagram note
         self.rx_data.TravelTime = self.rx_data.Range / self.SamplingFrequency
-        self.rx = append_fields(self.rx_data.header, 'TravelTime', self.rx_data.TravelTime, dtypes=np.float32)
+        try:
+            self.rx = append_fields(self.rx_data.header, 'TravelTime', self.rx_data.TravelTime, dtypes=np.float32)
+        except TypeError:  # only one traveltime found, so the dtype is float32
+            self.rx = append_fields(self.rx_data.header, 'TravelTime', [self.rx_data.TravelTime], dtypes=np.float32)
 
     def get_datablock(self, data=None):
         # FIXME: Not sure what happens if TVG was removed
