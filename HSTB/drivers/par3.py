@@ -64,39 +64,72 @@ from glob import glob
 
 from matplotlib import pyplot as plt
 
-recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
-                   '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                   '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#', 
-                          'tx.TransmitSector#', 'tx.TiltAngle', 'tx.Delay', 'tx.Frequency', 'rx.BeamPointingAngle',
-                          'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
-                   '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
-                   '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                   '110': ['data.Time', 'source_data.Latitude', 'source_data.Longitude',
-                           'source_data.Altitude']}
+recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
+                      '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
+                      '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
+                             'tx.TransmitSector#', 'tx.TiltAngle', 'tx.Delay', 'tx.Frequency', 'rx.BeamPointingAngle',
+                             'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
+                      '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
+                      '85': ['time', 'data.Depth', 'data.SoundSpeed'],
+                      '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
 
-recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
-                                     'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
-                                     'Heading': [['attitude', 'heading']]},
-                              '73': {'time': [['installation_params', 'time']],
-                                     'Serial#': [['installation_params', 'serial_one']],
-                                     'Serial#2': [['installation_params', 'serial_two']],
-                                     'settings': [['installation_params', 'installation_settings']]},
-                              '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
-                                     'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
-                                     'Serial#': [['ping', 'serial_num']], 'TransmitSector#': [['ping', 'txsectorid']],
-                                     'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
-                                     'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
-                                     'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
-                                     'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
-                              '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
-                                     'ReceiverFixedGain': [['runtime_params', 'modetwo']],
-                                     'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
-                                     'settings': [['runtime_params', 'runtime_settings']]},
-                              '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
-                                     'SoundSpeed': [['profile', 'soundspeed']]},
-                              '110': {'Time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
-                                      'Longitude': [['navigation', 'longitude']],
-                                      'Altitude': [['navigation', 'altitude']]}}
+recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                        'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
+                                        'Heading': [['attitude', 'heading']]},
+                                 '73': {'time': [['installation_params', 'time']],
+                                        'Serial#': [['installation_params', 'serial_one']],
+                                        'Serial#2': [['installation_params', 'serial_two']],
+                                        'settings': [['installation_params', 'installation_settings']]},
+                                 '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
+                                        'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                        'Serial#': [['ping', 'serial_num']], 'TransmitSector#': [['ping', 'txsectorid']],
+                                        'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
+                                        'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
+                                        'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
+                                        'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                 '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
+                                        'ReceiverFixedGain': [['runtime_params', 'modetwo']],
+                                        'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
+                                        'settings': [['runtime_params', 'runtime_settings']]},
+                                 '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                        'SoundSpeed': [['profile', 'soundspeed']]},
+                                 '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                        'Longitude': [['navigation', 'longitude']],
+                                        'Altitude': [['navigation', 'altitude']]}}
+
+recs_categories_110 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
+                       '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
+                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
+                              'tx.TransmitSector#', 'tx.TiltAngle', 'tx.Delay', 'tx.Frequency', 'rx.BeamPointingAngle',
+                              'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
+                       '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
+                       '85': ['time', 'data.Depth', 'data.SoundSpeed'],
+                       '110': ['data.Time', 'source_data.Latitude', 'source_data.Longitude',
+                               'source_data.Altitude']}
+
+recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                         'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
+                                         'Heading': [['attitude', 'heading']]},
+                                  '73': {'time': [['installation_params', 'time']],
+                                         'Serial#': [['installation_params', 'serial_one']],
+                                         'Serial#2': [['installation_params', 'serial_two']],
+                                         'settings': [['installation_params', 'installation_settings']]},
+                                  '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
+                                         'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                         'Serial#': [['ping', 'serial_num']], 'TransmitSector#': [['ping', 'txsectorid']],
+                                         'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
+                                         'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
+                                         'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
+                                         'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                  '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
+                                         'ReceiverFixedGain': [['runtime_params', 'modetwo']],
+                                         'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
+                                         'settings': [['runtime_params', 'runtime_settings']]},
+                                  '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                         'SoundSpeed': [['profile', 'soundspeed']]},
+                                  '110': {'Time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                          'Longitude': [['navigation', 'longitude']],
+                                          'Altitude': [['navigation', 'altitude']]}}
 
 oldstyle_recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                             '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
@@ -392,6 +425,7 @@ class AllRead:
         Simple method to determine whether this is of the new type of sonar that has the new rangeangle datagram 78
         or the old type that has the old rangeangle datagram 102
         """
+        self.infile.seek(0)
         self.read()
         while not self.eof:
             datagram_type = self.packet.dtype
@@ -410,6 +444,26 @@ class AllRead:
             raise EnvironmentError('File {} could not be read, no valid packets found'.format(self.infilename))
         raise EnvironmentError('File {} has no old or new style rangeangle datagrams'.format(self.infilename))
 
+    def has_data110(self):
+        """
+        Simple method to determine whether this is file contains network attitude velocity data110 records
+        """
+
+        self.infile.seek(0)
+        found80 = 0
+
+        self.infile.seek(self.start_ptr)
+        self.eof = False
+        while found80 < 3:
+            self.read()
+            datagram_type = self.packet.dtype
+            if datagram_type == 110:
+                return True
+            elif datagram_type == 80:
+                found80 += 1
+        self.infile.seek(0)
+        return False
+
     def fast_read_start_end_time(self):
         """
         Get the start and end time for the dataset without mapping the file
@@ -421,6 +475,7 @@ class AllRead:
         """
         starttime = None
         endtime = None
+        self.infile.seek(0)
 
         # Read the first records till you get one that has time in the packet (most recs at this point i believe)
         while starttime is None:
@@ -468,6 +523,7 @@ class AllRead:
         """
         found_install_params = False
         recs_skipped = 0
+        self.infile.seek(0)
         
         while not found_install_params:
             self.read()
@@ -563,11 +619,19 @@ class AllRead:
         """
         # first determine whether we need to use the old or new style rangeangle datagram
         if not self.has_old_style_rangeangle():
-            categories = recs_categories
-            category_translator = recs_categories_translator
+            # prefer data110 for the higher rate altitude
+            if self.has_data110():
+                categories = recs_categories_110
+                category_translator = recs_categories_translator_110
+                # print('Using network attitude velocity 110, rangeangle 78')
+            else:
+                categories = recs_categories_80
+                category_translator = recs_categories_translator_80
+                # print('Using position 80, rangeangle 78')
         else:
             categories = oldstyle_recs_categories
             category_translator = oldstyle_recs_categories_translator
+            # print('Using position 80, oldstyle rangeangle 102')
 
         # recs_to_read is the returned dict of records parsed from the file
         recs_to_read = copy.deepcopy(recs_categories_result)
@@ -2756,6 +2820,7 @@ class Data80(BaseData):
         """
         self.gg_data = Data80_ggk(self.raw_data)
         self.source_data = self.gg_data.header  # for backward compatibility
+        self.gg_data.Altitude = self.gg_data.OrthometricHeight + self.gg_data.GeoidSeparation
 
     def get_datablock(self, data=None):
         raise Exception("Not Implemented")
