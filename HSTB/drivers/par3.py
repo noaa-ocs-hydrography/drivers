@@ -348,7 +348,7 @@ class AllRead:
                 self.packet_read = True
                 if not self.packet.valid:
                     self.error = True
-                    print("Record without proper STX or ETX found.")
+                    print("Record without proper STX or ETX found: {}".format(self.infile.tell()))
             else:
                 self.eof = True
                 self.error = True
@@ -425,16 +425,25 @@ class AllRead:
         Simple method to determine whether this is of the new type of sonar that has the new rangeangle datagram 78
         or the old type that has the old rangeangle datagram 102
         """
-        self.infile.seek(0)
+        curptr = self.infile.tell()
+        has_oldstyle = None
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        self.eof = False
         self.read()
         while not self.eof:
             datagram_type = self.packet.dtype
             if datagram_type == 102:
-                return True
+                has_oldstyle = True
+                break
             elif datagram_type == 78:
-                return False
+                has_oldstyle = False
+                break
             else:
                 self.read()
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
+        if has_oldstyle is not None:
+            return has_oldstyle
         try:
             sonarmodelnumber = self.packet.header[3]
             expectedmodelnumber = self.ems_with_rangeangle + self.ems_with_oldrangeangle
@@ -449,20 +458,23 @@ class AllRead:
         Simple method to determine whether this is file contains network attitude velocity data110 records
         """
 
-        self.infile.seek(0)
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
         found80 = 0
+        has_data = False
 
-        self.infile.seek(self.start_ptr)
         self.eof = False
         while found80 < 3:
             self.read()
             datagram_type = self.packet.dtype
             if datagram_type == 110:
-                return True
+                has_data = True
+                break
             elif datagram_type == 80:
                 found80 += 1
-        self.infile.seek(0)
-        return False
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
+        return has_data
 
     def fast_read_start_end_time(self):
         """
@@ -475,7 +487,9 @@ class AllRead:
         """
         starttime = None
         endtime = None
-        self.infile.seek(0)
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
+        startptr = self.start_ptr
 
         # Read the first records till you get one that has time in the packet (most recs at this point i believe)
         while starttime is None:
@@ -507,9 +521,10 @@ class AllRead:
                 pass
         if endtime is None:
             raise ValueError('Unable to find a suitable packet to read the end time of the file')
-        self.infile.seek(0,0)
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
         self.eof = False
-        self.start_ptr = 0
+        self.start_ptr = startptr
         return [starttime, endtime]
 
     def fast_read_serial_number(self):
@@ -523,8 +538,11 @@ class AllRead:
         """
         found_install_params = False
         recs_skipped = 0
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
+        startptr = self.start_ptr
+
         self.infile.seek(0)
-        
         while not found_install_params:
             self.read()
             datagram_type = str(self.packet.dtype)
@@ -545,8 +563,10 @@ class AllRead:
                 raise ValueError('Error: unable to find the translated sonar model number in the Data73 record')
             found_install_params = True
 
-        self.infile.seek(0, 0)
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
         self.eof = False
+        self.start_ptr = startptr
         return [serialnumber, serialnumbertwo, sonarmodel]
 
     def _finalize_records(self, recs_to_read, recs_count):
