@@ -2731,8 +2731,14 @@ class Data80_gga(BaseData):
                     self.header[n] = deg + minutes / 60.
                 elif n == 14:
                     t2 = t.split(b'*')
-                    self.header[-2] = int(t2[0])
-                    self.header[-1] = int(t2[1], 16)
+                    try:
+                        self.header[-2] = int(t2[0])
+                    except:
+                        self.header[-2] = 0
+                    try:
+                        self.header[-1] = int(t2[1], 16)
+                    except:
+                        self.header[-1] = 0
                 else:
                     self.header[n] = int(t)
             else:
@@ -2824,23 +2830,29 @@ class Data80(BaseData):
             elif msg_type[0] == b'GPGGK':
                 self._parse_ggk()
         except AttributeError:
-            print('Data80: Unable to find {} in this record'.format(msg_type))
+            print('Data80: Unable to find {} in this record'.format(msg_type[0]))
 
     def _parse_gga(self):
         """
         parse the gga string.
         """
+        # try:
         self.gg_data = Data80_gga(self.raw_data)
         self.source_data = self.gg_data.header  # for backward compatibility
         self.gg_data.Altitude = self.gg_data.OrthometricHeight + self.gg_data.GeoidSeparation
+        # except:
+        #     print('Unable to process GGA string: {}'.format(self.raw_data))
 
     def _parse_ggk(self):
         """
         parse the ggk string.
         """
-        self.gg_data = Data80_ggk(self.raw_data)
-        self.source_data = self.gg_data.header  # for backward compatibility
-        self.gg_data.Altitude = self.gg_data.OrthometricHeight + self.gg_data.GeoidSeparation
+        try:
+            self.gg_data = Data80_ggk(self.raw_data)
+            self.source_data = self.gg_data.header  # for backward compatibility
+            self.gg_data.Altitude = self.gg_data.EllipsoidHeight
+        except:
+            print('Unable to process GGK string: {}'.format(self.raw_data))
 
     def get_datablock(self, data=None):
         raise Exception("Not Implemented")
