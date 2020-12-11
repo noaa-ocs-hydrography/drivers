@@ -284,6 +284,7 @@ def weekly_seconds_to_UTC_timestamps(week_secs, weekstart_datetime=None, weeksta
         weekstart = weekstart - timedelta(days=1)
     elif weekstart_datetime is not None:
         weekstart = weekstart_datetime
+        weekstart = weekstart - timedelta(days=weekstart.weekday())
     else:
         raise ValueError('Expected either weekstart_datetime or both weekstart_year/weekstart_week.')
     
@@ -451,9 +452,10 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
 
     Returns
     -------
-    dat: xarray Dataset, data and attribution from the sbet relevant to our survey processing
-
+    xarray Dataset
+        data and attribution from the sbet relevant to our survey processing
     """
+
     if logfile is not None:
         attrs = get_export_info_from_log(logfile)
         if not attrs['datum'] or attrs['mission_date'] is None:
@@ -491,10 +493,67 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
     if override_zone is not None:
         attrs['zone'] = override_zone
     attrs['logging rate (hz)'] = str(sbet_rate)
-    attrs['source_file'] = sbetfile
+    attrs['nav_files'] = {os.path.split(sbetfile)[1]: sbet_fast_read_start_end_time(sbetfile)}
+    if smrmsgfile is not None:
+        attrs['nav_error_files'] = {os.path.split(smrmsgfile)[1]: smrmsg_fast_read_start_end_time(smrmsgfile)}
+    else:
+        attrs['nav_error_files'] = {}
 
     sbetdat.attrs = attrs
     return sbetdat
+
+
+def sbets_to_xarray(sbetfiles: list, smrmsgfiles: list = None, logfiles: list = None, weekstart_year: int = None,
+                    weekstart_week: int = None, override_datum: str = None, override_grid: str = None,
+                    override_zone: str = None, override_ellipsoid: str = None):
+    """
+    convenience function for running sbet_to_xarray multiple times and concatenating the result
+
+    Parameters
+    ----------
+    sbetfile
+        full file path to the sbet files
+    logfile
+        full file path to the sbet export log files
+    weekstart_year
+        if you aren't providing a logfile, must provide the year of the sbet here
+    weekstart_week
+        if you aren't providing a logfile, must provide the week of the sbet here
+    override_datum
+        provide a string datum identifier if you want to override what is read from the log or you don't have a log, ex: 'NAD83 (2011)'
+    override_grid
+        provide a string grid identifier if you want to override what is read from the log or you don't have a log, ex: 'Universal Transverse Mercator'
+    override_zone
+        provide a string zone identifier if you want to override what is read from the log or you don't have a log, ex: 'UTM North 20 (66W to 60W)'
+    override_ellipsoid
+        provide a string ellipsoid identifier if you want to override what is read from the log or you don't have a log, ex: 'GRS80'
+
+    Returns
+    -------
+    xarray Dataset
+        data and attribution from the sbets relevant to our survey processing
+    """
+
+    newdata = []
+    # concatenating datasets will override the attributes, no existing way to do combine_attrs='update'
+    totalsbetfiles = {}
+    totalerrorfiles = {}
+    for cnt, sbet in enumerate(sbetfiles):
+        converted_data = sbet_to_xarray(sbet, smrmsgfile=smrmsgfiles[cnt], logfile=logfiles[cnt], weekstart_year=weekstart_year,
+                                        weekstart_week=weekstart_week, override_datum=override_datum,
+                                        override_grid=override_grid, override_zone=override_zone,
+                                        override_ellipsoid=override_ellipsoid)
+        newdata.append(converted_data)
+        totalsbetfiles.update(converted_data.nav_files)
+        totalerrorfiles.update(converted_data.nav_error_files)
+    navdata = xr.concat(newdata, dim='time')
+    del newdata
+    # sbet files might be in any time order
+    navdata = navdata.sortby('time', ascending=True)
+    # shovel in the total file attributes
+    navdata.attrs['nav_files'] = totalsbetfiles
+    navdata.attrs['nav_error_files'] = totalerrorfiles
+    return navdata
 
 
 def smrmsg_to_xarray(smrmsgfile, logfile=None, weekstart_year=None, weekstart_week=None):
@@ -553,8 +612,8 @@ def is_sbet(sbetfile: str):
     -------
     bool
         True if file is an sbet, False if not
-
     """
+
     try:
         with open(sbetfile, 'rb') as ofil:
             dat = ofil.read(8 * 17 * 2)  # read the first two records (8 bytes per double, 17 doubles, 2 records)
@@ -563,8 +622,22 @@ def is_sbet(sbetfile: str):
     except:
         print('unable to read sbet file: {}'.format(sbetfile))
         return False
-    unpacked = struct.unpack('d'*34, dat)
-    time_diff = np.abs(unpacked[0] - unpacked[17])
+
+    # POSPac system files like iin_2020_2097_S222_B.out that reside in the Proc folder of the POSPac project look
+    #   identical to the sbet.  We can only identify them by name unfortunately.
+    ignore_these_prefixes = ['vnav', 'iinkar', 'iin', 'xp']
+    prefix = os.path.split(sbetfile)[1].split('_')[0]
+    if prefix in ignore_these_prefixes:
+        print('skipping {} as it is a POSPac system file'.format(sbetfile))
+        return False
+
+    try:
+        unpacked = struct.unpack('d'*34, dat)
+        time_diff = np.abs(unpacked[0] - unpacked[17])
+    except:
+        print('Unable to read from {}'.format(sbetfile))
+        return False
+
     if time_diff < 10:  # not checking for gaps here, just ensuring that these two records contain time
         if totalsize % 17 == 0:
             return True
@@ -590,8 +663,8 @@ def is_smrmsg(smrmsgfile: str):
     -------
     bool
         True if file is an smrmsg, False if not
-
     """
+
     try:
         with open(smrmsgfile, 'rb') as ofil:
             dat = ofil.read(8 * 10 * 2)  # read the first two records (8 bytes per double, 17 doubles, 2 records)
@@ -600,8 +673,22 @@ def is_smrmsg(smrmsgfile: str):
     except:
         print('unable to read smrmsg file: {}'.format(smrmsgfile))
         return False
-    unpacked = struct.unpack('d'*20, dat)
-    time_diff = np.abs(unpacked[0] - unpacked[10])
+
+    # POSPac system files like g111_2020_2097_S222_B.out that reside in the Extract folder of the POSPac project look
+    #   identical to the smrmsg.  We can only identify them by name unfortunately.
+    ignore_these_prefixes = ['g111', 's2rms', 'srms', 'vrms', 'rmsg']
+    prefix = os.path.split(smrmsgfile)[1].split('_')[0]
+    if prefix in ignore_these_prefixes:
+        print('skipping {} as it is a POSPac system file'.format(smrmsgfile))
+        return False
+
+    try:
+        unpacked = struct.unpack('d'*20, dat)
+        time_diff = np.abs(unpacked[0] - unpacked[10])
+    except:
+        print('Unable to read from {}'.format(smrmsgfile))
+        return False
+
     if time_diff < 10:  # not checking for gaps here, just ensuring that these two records contain time
         if totalsize % 10 == 0:
             return True
@@ -653,6 +740,7 @@ def smrmsg_fast_read_start_end_time(smrmsgfile: str):
     list
         list of floats, [start time, end time] for the smrmsg file
     """
+
     try:
         with open(smrmsgfile, 'rb') as ofil:
             firsttime = struct.unpack('d', ofil.read(8))[0]  # read the first time
