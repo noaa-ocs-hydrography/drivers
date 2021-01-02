@@ -53,7 +53,7 @@ The primary classes in this module to be accessed directly are
 import sys
 import os
 import numpy as np
-from numpy.lib.recfunctions import append_fields
+from numpy.lib.recfunctions import append_fields, merge_arrays
 import pyproj
 import datetime as dtm
 import pickle
@@ -67,7 +67,7 @@ from matplotlib import pyplot as plt
 recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                       '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
-                             'tx.TransmitSector#', 'tx.TiltAngle', 'tx.Delay', 'tx.Frequency', 'rx.BeamPointingAngle',
+                             'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                              'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
                       '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                       '85': ['time', 'data.Depth', 'data.SoundSpeed'],
@@ -82,8 +82,7 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
                                         'settings': [['installation_params', 'installation_settings']]},
                                  '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
                                         'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
-                                        'Serial#': [['ping', 'serial_num']], 'TransmitSector#': [['ping', 'txsectorid']],
-                                        'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
+                                        'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                         'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                         'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
                                         'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
@@ -100,7 +99,7 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
 recs_categories_110 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                        '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
                        '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
-                              'tx.TransmitSector#', 'tx.TiltAngle', 'tx.Delay', 'tx.Frequency', 'rx.BeamPointingAngle',
+                              'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                               'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                        '85': ['time', 'data.Depth', 'data.SoundSpeed'],
@@ -116,8 +115,7 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
                                          'settings': [['installation_params', 'installation_settings']]},
                                   '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
                                          'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
-                                         'Serial#': [['ping', 'serial_num']], 'TransmitSector#': [['ping', 'txsectorid']],
-                                         'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
+                                         'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                          'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                          'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
                                          'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
@@ -134,7 +132,7 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
 oldstyle_recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                             '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
                             '102': ['time', 'PingCounter', 'SoundSpeed', 'Ntx', 'SystemSerialNum',
-                                    'tx.TransmitSector#', 'tx.TiltAngle', 'tx.Delay', 'tx.CenterFrequency',
+                                    'rx.TiltAngle', 'rx.Delay', 'rx.CenterFrequency',
                                     'rx.BeamPointingAngle', 'rx.TransmitSectorID', 'rx.DetectionWindowLength',
                                     'rx.QualityFactor', 'rx.TravelTime'],
                             '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
@@ -150,7 +148,7 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
                                               'settings': [['installation_params', 'installation_settings']]},
                                        '102': {'time': [['ping', 'time']], 'PingCounter': [['ping', 'counter']],
                                                'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
-                                               'SystemSerialNum': [['ping', 'serial_num']], 'TransmitSector#': [['ping', 'txsectorid']],
+                                               'SystemSerialNum': [['ping', 'serial_num']],
                                                'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                                'CenterFrequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                                'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionWindowLength': [['ping', 'detectioninfo']],
@@ -169,7 +167,7 @@ recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': Non
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                                   'installation_settings': None},
                           'ping': {'time': None, 'counter': None, 'soundspeed': None, 'ntx': None, 'serial_num': None,
-                                   'txsectorid': None, 'tiltangle': None, 'delay': None, 'frequency': None,
+                                   'tiltangle': None, 'delay': None, 'frequency': None,
                                    'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
                                    'qualityfactor': None, 'traveltime': None},
                           'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
@@ -228,6 +226,7 @@ class AllRead:
         self.end_ptr = end_ptr
         self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122]
         self.ems_with_oldrangeangle = [3020, 1020, 120, 2000]
+        self.time_buffer = []
 
         self.startbytesearch = self._build_startbytesearch()
         self.at_right_byte = False
@@ -366,59 +365,106 @@ class AllRead:
             except NotImplementedError as err:
                 print(err)
             self.packet_read = False
-
-    def _divide_rec(self):
+    
+    def _better_merge_arrays(self, base_arr, arrone, arrtwo, arrthree):
+        newdtype = np.dtype(base_arr.dtype.descr + arrone.dtype.descr + arrtwo.dtype.descr + arrthree.dtype.descr)
+        newarray = np.empty(shape=base_arr.shape, dtype=newdtype)
+        for field in base_arr.dtype.names:
+            newarray[field] = base_arr[field]
+        for field in arrone.dtype.names:
+            newarray[field] = arrone[field]
+        for field in arrtwo.dtype.names:
+            newarray[field] = arrtwo[field]
+        for field in arrthree.dtype.names:
+            newarray[field] = arrthree[field]
+        return newarray
+    
+    def _populate_rec(self):
         """
-        Data78 comes in from sequential read by time/ping.  Each ping may have multiple sectors to it which we want
-        to treat as separate pings.  Do this by generating a new record for each sector in the ping.
+        Data78 comes in from sequential read by time/ping.  We want to just expand all the sector based arrays from
+        sector-wise to beam-wise.  This will make our xarray Dataset only have time/beam dimensions, which makes
+        further computation simple. 
+        
+        Creates some duplication, but compression will basically make the increased data stored take up like no space
         """
         try:
             rec = self.packet.subpack
         except AttributeError:
-            raise ValueError('No data found in packet.subpack for record')
+            print('Par3: No data found in packet.subpack for record')
+            return None
         if type(rec) not in [Data78, Data102]:
-            return [rec]
-        elif rec.header['Ntx'] == 1:
-            return [rec]
+            return rec
+        elif np.isnan(rec.rx['TravelTime']).all():
+            print('Par3: {}: Found invalid ping (did not contain travel time)'.format(rec.time))
+            return None
         else:
-            try:
-                totalrecs = []
-                for sec in np.unique(rec.rx['TransmitSectorID']):
-                    split_rec = copy.copy(rec)
-                    split_rec.tx = split_rec.tx[sec]
-                    split_rec.rx = split_rec.rx[np.where(split_rec.rx['TransmitSectorID'] == sec)]
+            if 'Delay' not in rec.tx.dtype.names:
+                # this is a duplicate, happens when running sequential read with start_ptr/end_ptr, eof doesnt kick in
+                # shows here because 'Delay', etc.  are already removed from rec.tx
+                return None
 
-                    # ping time equals datagram time plus sector transmit delay
-                    setattr(split_rec, 'time', split_rec.time + split_rec.tx['Delay'])
+            # xarray Dataset must have no duplicate times (this appears to happen every now and then with dual head/dual ping)
+            while rec.time in self.time_buffer:
+                rec.time = rec.time + 0.000001
+            self.time_buffer.append(rec.time)
+            if len(self.time_buffer) > 10:
+                self.time_buffer.remove(self.time_buffer[0])
 
-                    totalrecs.append(split_rec)
-            except IndexError:
-                print('_divide_rec: Found ping record without the correct number of sectors, expected {}'.format(np.unique(rec.rx['TransmitSectorID'])))
-                return []
-            return totalrecs
+            try:  # the data78 approach
+                delay_array = rec.tx['Delay']
+                freq_array = rec.tx['Frequency']
+                tiltangle_array = rec.tx['TiltAngle']
+                freqname = 'Frequency'
+            except:  # the data102 approach
+                if isinstance(rec.tx['Delay'], np.ndarray):
+                    delay_array = rec.tx['Delay']
+                    freq_array = rec.tx['CenterFrequency']
+                    tiltangle_array = rec.tx['TiltAngle']
+                    freqname = 'CenterFrequency'
+                else:
+                    delay_array = [rec.tx['Delay']]
+                    freq_array = [rec.tx['CenterFrequency']]
+                    tiltangle_array = [rec.tx['TiltAngle']]
+                    freqname = 'CenterFrequency'
 
-    def pad_to_dense(self, arr, padval=999.0, maxlen=500, override_type=None, detectioninfo=False):
+            # expand out the sector wise arrays to be beam wise
+            populated_delay = np.empty(rec.rx['TransmitSectorID'].shape, dtype=[('Delay', np.float32)])
+            populated_freq = np.empty(rec.rx['TransmitSectorID'].shape, dtype=[(freqname, np.int32)])
+            populated_tiltangle = np.empty(rec.rx['TransmitSectorID'].shape, dtype=[('TiltAngle', np.float32)])
+            for id in np.unique(rec.rx['TransmitSectorID']):
+                populated_delay[rec.rx['TransmitSectorID'] == id] = delay_array[id]
+                populated_freq[rec.rx['TransmitSectorID'] == id] = freq_array[id]
+                populated_tiltangle[rec.rx['TransmitSectorID'] == id] = tiltangle_array[id]
+            
+            #rec.rx = merge_arrays([rec.rx, populated_delay, populated_freq, populated_tiltangle], flatten=True)
+            rec.rx = self._better_merge_arrays(rec.rx, populated_delay, populated_freq, populated_tiltangle)
+
+            new_tx_names = [n for n in rec.tx.dtype.names if n not in ['Delay', freqname, 'TiltAngle']]
+            rec.tx = rec.tx[new_tx_names]
+
+            return rec
+                
+    def _translate_to_array(self, data_list, override_type=None, uneven=False, maxlen=None, fullwith=None):
         """
-        Appends the minimal required amount of zeroes at the end of each
-        array in the jagged array `M`, such that `M` looses its jaggedness.
+        Translate and generate numpy array from list of records
         """
 
-        # override the dynamic length of beams across records by applying static length limit.
-        # ideally this should cover all cases
         if override_type is not None:
             typ = override_type
         else:
             typ = arr[0].dtype
 
-        Z = np.full((len(arr), maxlen), padval, dtype=typ)
-        for enu, row in enumerate(arr):
-            # some records being read have NaNs in them unexpectedly, like part of the record isn't being read
-            row[np.isnan(row)] = padval - 1
-            if detectioninfo:
-                Z[enu, :len(row)] = translate_detectioninfo(row)
-            else:
-                Z[enu, :len(row)] = row
-        return Z
+        Z = []
+
+        if not uneven:
+            for enu, row in enumerate(data_list):
+                Z.append(translate_detectioninfo(row))
+            newZ = np.array(Z, dtype=typ)
+        else:
+            newZ = np.full((len(data_list), maxlen), fullwith, dtype=typ)
+            for i, j in enumerate(data_list):
+                newZ[i][0:len(j)] = translate_detectioninfo(j)
+        return newZ
 
     def has_old_style_rangeangle(self):
         """
@@ -569,35 +615,35 @@ class AllRead:
         self.start_ptr = startptr
         return [serialnumber, serialnumbertwo, sonarmodel]
 
-    def _finalize_records(self, recs_to_read, recs_count):
+    def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber):
         """
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
         convert to xarray.  Major steps include
         - adding empty arrays so that concatenation later on will work
-        - pad_to_dense to convert the ragged sector-wise arrays into square numpy arrays
         - translate the runtime parameters from integer/binary codes to string identifiers for easy reading (and to
              allow comparing results between different file types)
         returns: recs_to_read, dict of dicts finalized
         """
-
-        # exclude some recs as we needed them during processing but not past this point
-        exclude = [{'ping': 'txsector_beam'}]
-        for dgram in exclude:
-            del recs_to_read[list(dgram.keys())[0]][list(dgram.values())[0]]
-
-        # drop the delay array since we've already used it for adjusting ping time
-        recs_to_read['ping'].pop('delay')
+        # first check for varying number of beams (see EM302)
+        uneven = False
+        maxlen = None
+        if 'ping' in recs_to_read:
+            minlen = len(min(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
+            maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
+            if minlen != maxlen:
+                print('par3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
+                uneven = True
 
         for rec in recs_to_read:
             for dgram in recs_to_read[rec]:
                 if recs_count[rec] == 0:
                     if rec != 'runtime_params' or dgram == 'time':
-                        recs_to_read[rec][dgram] = np.zeros(0)  # found no records, empty array
+                        # found no records, empty array
+                        recs_to_read[rec][dgram] = np.zeros(0)
                     else:
-                        recs_to_read[rec][dgram] = np.zeros(0,
-                                                            'U2')  # found no records, empty array of strings for the mode/stab records
-                elif rec in ['attitude',
-                             'navigation']:  # these recs have time blocks of data in them, need to be concatenated
+                        # found no records, empty array of strings for the mode/stab records
+                        recs_to_read[rec][dgram] = np.zeros(0, 'U2')
+                elif rec in ['attitude', 'navigation']:  # these recs have time blocks of data in them, need to be concatenated
                     if dgram == 'altitude' and not recs_to_read[rec][dgram]:
                         pass
                     else:
@@ -606,20 +652,31 @@ class AllRead:
                         except:  # data80 approach, cast as numpy array, just one list of values
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'ping':
-                    if dgram in ['beampointingangle', 'traveltime']:
-                        # these datagrams can vary in number of beams, have to pad with 999 for 'jaggedness'
-                        recs_to_read[rec][dgram] = self.pad_to_dense(recs_to_read[rec][dgram])
-                    elif dgram in ['detectioninfo', 'qualityfactor']:
+                    if dgram == 'detectioninfo':
                         # same for detection info, but it also needs to be converted to something other than int8
-                        recs_to_read[rec][dgram] = self.pad_to_dense(recs_to_read[rec][dgram], override_type=np.int,
-                                                                     detectioninfo=dgram == 'detectioninfo')
+                        recs_to_read[rec][dgram] = self._translate_to_array(recs_to_read[rec][dgram], override_type=np.int32, uneven=uneven, maxlen=maxlen, fullwith=2)
+                    elif dgram == 'qualityfactor':
+                        if uneven:
+                            newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=np.int32)
+                            for i, j in enumerate(recs_to_read[rec][dgram]):
+                                newrec[i][0:len(j)] = j
+                            recs_to_read[rec][dgram] = newrec
+                        else:
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.int32)
                     else:
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                        if uneven and isinstance(recs_to_read[rec][dgram][0], np.ndarray):
+                            newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=recs_to_read[rec][dgram][0].dtype)
+                            for i, j in enumerate(recs_to_read[rec][dgram]):
+                                newrec[i][0:len(j)] = j
+                            recs_to_read[rec][dgram] = newrec
+                        else:
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'runtime_params':
                     if dgram == 'yawpitchstab':
                         recs_to_read[rec][dgram] = translate_yawpitch(np.array(recs_to_read[rec][dgram]))
                     elif dgram == 'mode':
-                        recs_to_read[rec][dgram] = translate_mode(np.array(recs_to_read[rec][dgram]))
+                        pingmode = sonarmodelnumber in ['em302', 'em710']
+                        recs_to_read[rec][dgram] = translate_mode(np.array(recs_to_read[rec][dgram]), pingmode=pingmode)
                     elif dgram == 'modetwo':
                         recs_to_read[rec][dgram] = translate_mode_two(np.array(recs_to_read[rec][dgram]))
                     else:
@@ -629,6 +686,12 @@ class AllRead:
         if recs_to_read['navigation']['altitude'] == []:
             recs_to_read['navigation'].pop('altitude')
         recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
+
+        # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
+        #   next chunk might include a duplicate time
+        recs_to_read['ping']['time'][0] += 0.000010
+        if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
+            recs_to_read['ping']['time'][1] += 0.000010
         return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
@@ -637,6 +700,8 @@ class AllRead:
         the necessary datagrams.
 
         """
+        serialnumber, serialnumbertwo, sonarmodelnumber = self.fast_read_serial_number()
+
         # first determine whether we need to use the old or new style rangeangle datagram
         if not self.has_old_style_rangeangle():
             # prefer data110 for the higher rate altitude
@@ -668,8 +733,8 @@ class AllRead:
                 for rec_ident in list(category_translator[datagram_type].values())[0]:
                     recs_count[rec_ident[0]] += 1
                 self.get()  # read the rest of the datagram and decode the data
-                recs = self._divide_rec()  # split up the Data78 if applicable, otherwise just get the same rec back
-                for rec in recs:
+                rec = self._populate_rec()  # Build the rx delay and freq arrays if this is a rangeangle record
+                if rec is not None:
                     for subrec in categories[datagram_type]:
                         #  override for nested recs, designated with periods in the recs_to_read dict
                         if subrec.find('.') > 0:
@@ -704,7 +769,7 @@ class AllRead:
 
             if datagram_type == '73' and first_installation_rec:
                 self.eof = True
-        recs_to_read = self._finalize_records(recs_to_read, recs_count)
+        recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber)
         recs_to_read['format'] = 'all'
         return recs_to_read
 

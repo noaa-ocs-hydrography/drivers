@@ -40,6 +40,7 @@ class kmall():
         self.datagram_data = None
         self.read_method = None
         self.eof = False
+        self.time_buffer = []
         self.validate_inputs()
 
     def validate_inputs(self):
@@ -3467,62 +3468,48 @@ class kmall():
                     self.FID.seek(possible_start - 4)
                     return True
 
-    def _divide_rec(self, rec):
+    def _populate_rec(self, rec: dict):
         """
-        MRZ comes in from sequential read by time/ping.  Each ping may have multiple sectors to it which we want
-        to treat as separate pings.  Do this by generating a new record for each sector in the ping.  When rec is MRZ,
-        the return is a list of rec split by sector.  Otherwise returns the original rec as the only element in a list
-        returns: totalrecs, list of split rec
+        MRZ comes in from sequential read by time/ping.  We want to just expand all the sector based arrays from
+        sector-wise to beam-wise.  This will make our xarray Dataset only have time/beam dimensions, which makes
+        further computation simple.
+
+        Creates some duplication, but compression will basically make the increased data stored take up like no space
         """
         if self.datagram_ident != 'MRZ':
-            return [rec]
-        elif rec['pingInfo']['numTxSectors'] == 1:
-            return [rec]
+            return rec
+        elif np.isnan(rec['sounding']['twoWayTravelTime_sec']).all():
+            print('Kmall: {}: Found invalid ping (did not contain travel time'.format(rec['header']['dgtime']))
+            return None
         else:
-            totalrecs = []
-            pingtime = rec['header']['dgtime']
-            for sec in rec['txSectorInfo']['txSectorNumb']:
-                split_rec = copy.copy(rec)
-                split_rec['txSectorInfo'] = {k: v[sec] for (k,v) in rec['txSectorInfo'].items()}
-                rx_index = np.where(np.array(rec['sounding']['txSectorNumb']) == sec)
-                split_rec['sounding'] = {k: np.array(v)[rx_index] for (k,v) in rec['sounding'].items()}
+            record_time = rec['header']['dgtime']
+            # xarray Dataset must have no duplicate times (this appears to happen every now and then with dual head/dual ping)
+            while record_time in self.time_buffer:
+                record_time = record_time + 0.000001
+            self.time_buffer.append(record_time)
+            if len(self.time_buffer) > 10:
+                self.time_buffer.remove(self.time_buffer[0])
 
-                # ping time equals datagram time plus sector transmit delay
-                split_rec['header']['dgtime'] = pingtime + split_rec['txSectorInfo']['sectorTransmitDelay_sec']
+            # expand out the sector wise arrays to be beam wise
+            txsector_index = np.array(rec['sounding']['txSectorNumb'])
+            populated_delay = np.empty(txsector_index.shape, dtype=np.float32)
+            populated_freq = np.empty(txsector_index.shape, dtype=np.int32)
+            populated_tiltangle = np.empty(txsector_index.shape, dtype=np.float32)
+            try:
+                for id in np.unique(txsector_index):
+                    populated_delay[txsector_index == id] = rec['txSectorInfo']['sectorTransmitDelay_sec'][id]
+                    populated_freq[txsector_index == id] = rec['txSectorInfo']['centreFreq_Hz'][id]
+                    populated_tiltangle[txsector_index == id] = rec['txSectorInfo']['tiltAngleReTx_deg'][id]
+            except:
+                # this is a duplicate, happens when running sequential read with start_ptr/end_ptr, eof doesnt kick in
+                # shows here because 'Delay', etc.  are already removed from rec.tx
+                return None
 
-                totalrecs.append(split_rec)
-            return totalrecs
+            rec['txSectorInfo']['tiltAngleReTx_deg'] = populated_tiltangle.tolist()
+            rec['txSectorInfo']['centreFreq_Hz'] = populated_freq.tolist()
+            rec['txSectorInfo']['sectorTransmitDelay_sec'] = populated_delay.tolist()
 
-    def _pad_to_dense(self, arr, padval=999.0, maxlen=500, override_type=None, detectioninfo=False):
-        """
-        Appends the minimal required amount of zeroes at the end of each array in the jagged array `M`, such that `M`
-        loses its jaggedness.
-
-        A required operation for our sector-wise read.  Each sector has a varying amount of beams over time, so the
-        resulting number of values per ping (beam pointing angle for example) will differ between pings.  Here we make
-        these ragged arrays square, by using the padval to fill in the holes.
-
-        A padval of 999 is arbitrary, but we use that nodatavalue in kluster to reform pings and do processing, so
-        leave at 999 for Kluster.  maxlen is the max number of expected beams per sector.
-        returns: Z, square array padded with padval where arr is ragged
-        """
-
-        # override the dynamic length of beams across records by applying static length limit.
-        # ideally this should cover all cases
-        if override_type is not None:
-            typ = override_type
-        else:
-            typ = arr[0].dtype
-
-        Z = np.full((len(arr), maxlen), padval, dtype=typ)
-        for enu, row in enumerate(arr):
-            # some records being read have NaNs in them unexpectedly, like part of the record isn't being read
-            row[np.isnan(row)] = 0
-            if detectioninfo:
-                Z[enu, :len(row)] = self.translate_detectioninfo(row)
-            else:
-                Z[enu, :len(row)] = row
-        return Z
+            return rec
 
     def _build_sequential_read_categories(self):
         """
@@ -3535,9 +3522,9 @@ class kmall():
                                    'sample.KMdefault.latitude_deg', 'sample.KMdefault.longitude_deg',
                                    'sample.KMdefault.ellipsoidHeight_m'],
                            'IIP': ['header.dgtime', 'install_txt'],
-                           'MRZ': ['header.dgtime', 'cmnPart.pingCnt', 'cmnPart.rxTransducerInd',
+                           'MRZ': ['header.dgtime', 'cmnPart.pingCnt',
                                    'pingInfo.soundSpeedAtTxDepth_mPerSec', 'pingInfo.numTxSectors', 'header.systemID',
-                                   'txSectorInfo.txSectorNumb', 'txSectorInfo.tiltAngleReTx_deg',
+                                   'txSectorInfo.tiltAngleReTx_deg',
                                    'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
                                    'sounding.beamAngleReRx_deg', 'sounding.txSectorNumb', 'sounding.detectionType',
                                    'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
@@ -3555,11 +3542,9 @@ class kmall():
                                               'sample.KMdefault.ellipsoidHeight_m': [['navigation', 'altitude']]},
                                       'MRZ': {'header.dgtime': [['ping', 'time']],
                                               'cmnPart.pingCnt': [['ping', 'counter']],
-                                              'cmnPart.rxTransducerInd': [['ping', 'rxid']],
                                               'pingInfo.soundSpeedAtTxDepth_mPerSec': [['ping', 'soundspeed']],
                                               'pingInfo.numTxSectors': [['ping', 'ntx']],
                                               'header.systemID': [['ping', 'serial_num']],
-                                              'txSectorInfo.txSectorNumb': [['ping', 'txsectorid']],
                                               'txSectorInfo.tiltAngleReTx_deg': [['ping', 'tiltangle']],
                                               'txSectorInfo.sectorTransmitDelay_sec': [['ping', 'delay']],
                                               'txSectorInfo.centreFreq_Hz': [['ping', 'frequency']],
@@ -3583,8 +3568,8 @@ class kmall():
             'attitude': {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
             'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                     'installation_settings': None},
-            'ping': {'time': None, 'counter': None, 'rxid': None, 'soundspeed': None, 'ntx': None,
-                     'serial_num': None, 'txsectorid': None, 'tiltangle': None, 'delay': None,
+            'ping': {'time': None, 'counter': None, 'soundspeed': None, 'ntx': None,
+                     'serial_num': None, 'tiltangle': None, 'delay': None,
                      'frequency': None, 'beampointingangle': None, 'txsector_beam': None,
                      'detectioninfo': None, 'qualityfactor': None, 'traveltime': None, 'mode': None,
                      'modetwo': None, 'yawpitchstab': None},
@@ -3599,16 +3584,11 @@ class kmall():
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
         convert to xarray.  Major steps include
         - adding empty arrays so that concatenation later on will work
-        - pad_to_dense to convert the ragged sector-wise arrays into square numpy arrays
         - translate the runtime parameters from integer/binary codes to string identifiers for easy reading (and to
              allow comparing results between different file types)
         - convert systemID to serial number if serial_translator is provided (as dict {systemid: serialnum})
         returns: recs_to_read, dict of dicts finalized
         """
-        # drop the delay array and txsector_beam array since we've already used it for adjusting ping time and building
-        #    sector masks
-        recs_to_read['ping'].pop('delay')
-        recs_to_read['ping'].pop('txsector_beam')
 
         # ping records aren't sorted for some reason, have to do that here
         idx = np.argsort(recs_to_read['ping']['time'])
@@ -3630,14 +3610,12 @@ class kmall():
                     else:
                         # found no records, empty array of strings for the mode/stab records
                         recs_to_read[rec][dgram] = np.zeros(0, 'U2')
+                elif rec in ['navigation', 'attitude']:  # these recs have time blocks of data in them, need to be concatenated
+                    recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
                 elif rec == 'ping':  # use the argsort indices here to sort by time
-                    if dgram in ['beampointingangle', 'traveltime', 'qualityfactor']:
-                        # these datagrams can vary in number of beams, have to pad with 999 for 'jaggedness'
-                        recs_to_read[rec][dgram] = self._pad_to_dense(recs_to_read[rec][dgram])
-                    elif dgram in ['detectioninfo', 'qualityfactor']:
-                        # same for detection info, but it also needs to be converted to something other than int8
-                        recs_to_read[rec][dgram] = self._pad_to_dense(recs_to_read[rec][dgram], override_type=np.int)
-                    elif dgram == 'yawandpitchstabilization':
+                    if dgram in ['detectioninfo', 'qualityfactor']:
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.int32)
+                    elif dgram == 'yawpitchstab':
                         recs_to_read[rec][dgram] = self.translate_yawpitch_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram == 'mode':
                         recs_to_read[rec][dgram] = self.translate_mode_tostring(np.array(recs_to_read[rec][dgram]))
@@ -3646,8 +3624,6 @@ class kmall():
                     else:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                     recs_to_read[rec][dgram] = recs_to_read[rec][dgram][idx]
-                elif rec in ['navigation', 'attitude']:  # these recs have time blocks of data in them, need to be concatenated
-                    recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
                 else:
                     recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
 
@@ -3681,6 +3657,12 @@ class kmall():
                 recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], spike_index)
 
         recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
+
+        # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
+        #   next chunk might include a duplicate time
+        recs_to_read['ping']['time'][0] += 0.000010
+        if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
+            recs_to_read['ping']['time'][1] += 0.000010
         return recs_to_read
 
     def sequential_read_records(self, start_ptr=0, end_ptr=0, first_installation_rec=False, serial_translator=None):
@@ -3718,8 +3700,8 @@ class kmall():
                 recs_count[rec_ident[0]] += 1
 
             rec = self.datagram_data
-            recs = self._divide_rec(rec)  # split up the MRZ record for multiple sectors, otherwise just returns [rec]
-            for rec in recs:
+            rec = self._populate_rec(rec)
+            if rec is not None:
                 for subrec in recs_categories[self.datagram_ident]:
                     #  override for nested recs, designated with periods in the recs_to_read dict
                     if subrec.find('.') > 0:
@@ -3959,9 +3941,11 @@ class kmall():
         self.datagram_data = None
         self.eof = False
 
-        if self.FID is None:
+        if self.FID is None:  # open file and start at beginning
+            current_pointer = None
             self.OpenFiletoRead()
-        else:
+        else:  # save the current file position and start at beginning, resume old position after method ends
+            current_pointer = self.FID.tell()
             self.FID.seek(0)
 
         start_time = None
@@ -3991,7 +3975,10 @@ class kmall():
             except:
                 self.eof = True  # read_datagram fails at end of file
         self.eof = False
-        self.FID.seek(0)
+        if current_pointer is not None:
+            self.FID.seek(current_pointer)
+        else:
+            self.FID.seek(0)
         return [start_time, end_time]
 
     def fast_read_serial_number(self):
@@ -4003,9 +3990,11 @@ class kmall():
         self.datagram_data = None
         self.eof = False
 
-        if self.FID is None:
+        if self.FID is None:  # open file and start at beginning
+            current_pointer = None
             self.OpenFiletoRead()
-        else:
+        else:  # save the current file position and start at beginning, resume old position after method ends
+            current_pointer = self.FID.tell()
             self.FID.seek(0)
 
         rec = self.read_first_datagram('IIP')
@@ -4023,7 +4012,10 @@ class kmall():
             raise ValueError('Error: Unable to find sonar_model_number in kmall IIP install_txt')
 
         self.eof = False
-        self.FID.seek(0)
+        if current_pointer is not None:
+            self.FID.seek(current_pointer)
+        else:
+            self.FID.seek(0)
         return [serialnumber, serialnumbertwo, sonarmodel]
 
     def fast_read_serial_number_translator(self):
@@ -4041,9 +4033,30 @@ class kmall():
 
         Expect this all to change when dual head systems are added and the install params txt changes
         """
+
+        self.datagram_data = None
+        self.eof = False
+
+        if self.FID is None:  # open file and start at beginning
+            current_pointer = None
+            self.OpenFiletoRead()
+        else:  # save the current file position and start at beginning, resume old position after method ends
+            current_pointer = self.FID.tell()
+            self.FID.seek(0)
+
         install_params = self.read_first_datagram('IIP')
+        if install_params is None:
+            raise ValueError('kmall: Unable to find installation parameters in file {}'.format(self.filename))
+
         sys_id = install_params['install_txt']['ip_address_subnet_mask'].split('.')[3].split(':')[0]
         serial_num = install_params['install_txt']['pu_serial_number']
+
+        self.eof = False
+        if current_pointer is not None:
+            self.FID.seek(current_pointer)
+        else:
+            self.FID.seek(0)
+
         return {int(sys_id): int(serial_num)}
 
 
