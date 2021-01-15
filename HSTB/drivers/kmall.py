@@ -3482,6 +3482,9 @@ class kmall():
             print('Kmall: {}: Found invalid ping (did not contain travel time'.format(rec['header']['dgtime']))
             return None
         else:
+            # any NaN returns for traveltime are set to 0, lets us easily filter later
+            rec['sounding']['twoWayTravelTime_sec'] = np.nan_to_num(rec['sounding']['twoWayTravelTime_sec'])
+            
             record_time = rec['header']['dgtime']
             # xarray Dataset must have no duplicate times (this appears to happen every now and then with dual head/dual ping)
             while record_time in self.time_buffer:

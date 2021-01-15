@@ -398,6 +398,9 @@ class AllRead:
             print('Par3: {}: Found invalid ping (did not contain travel time)'.format(rec.time))
             return None
         else:
+            # any NaN returns for traveltime are set to 0, lets us easily filter later
+            rec.rx['TravelTime'] = np.nan_to_num(rec.rx['TravelTime'])
+            
             if 'Delay' not in rec.tx.dtype.names:
                 # this is a duplicate, happens when running sequential read with start_ptr/end_ptr, eof doesnt kick in
                 # shows here because 'Delay', etc.  are already removed from rec.tx
