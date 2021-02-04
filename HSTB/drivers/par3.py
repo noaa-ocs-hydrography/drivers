@@ -309,17 +309,25 @@ class AllRead:
             # consider start bytes right at the end of the given filelength as valid, even if they extend
             # over to the next chunk
             srchdat = self.infile.read(min(20, (self.start_ptr + self.filelen) - cur_ptr))
-            stx_idx = srchdat.find(b'\x02')
-            if stx_idx >= 0:
-                possible_start = cur_ptr + stx_idx
-                self.infile.seek(possible_start)
-                datchk = self.infile.read(4)
-                for srch in self.startbytesearch:
-                    m = srch.search(datchk, 0)
-                    if m:
-                        self.infile.seek(possible_start - 4)
-                        self.at_right_byte = True
-                        break
+            stx_idx = 1
+            # First loop through is mandatory to find a startbyte
+            while stx_idx >= 0:
+                stx_idx = srchdat.find(b'\x02')  # -1 if there is no startbyte
+                if stx_idx >= 0:
+                    possible_start = cur_ptr + stx_idx
+                    self.infile.seek(possible_start)  # go to startbyte
+                    datchk = self.infile.read(4)  # read the first four bytes
+                    for srch in self.startbytesearch:
+                        m = srch.search(datchk, 0)
+                        if m:
+                            self.infile.seek(possible_start - 4)  # found a valid start, go to the start of the record
+                            self.at_right_byte = True
+                            break
+                try:                            
+                    srchdat = srchdat[stx_idx + 1:]  # Start after that invalid start byte, look for the next in the chunk
+                    cur_ptr += stx_idx + 1
+                except:  # must be at the end of the chunk, so the next .find will return -1 anyway
+                    pass
 
     def read(self):
         """
