@@ -322,12 +322,14 @@ class AllRead:
                         if m:
                             self.infile.seek(possible_start - 4)  # found a valid start, go to the start of the record
                             self.at_right_byte = True
+                            stx_idx = -1  # force quit the loop since you found the right byte
                             break
-                try:                            
-                    srchdat = srchdat[stx_idx + 1:]  # Start after that invalid start byte, look for the next in the chunk
-                    cur_ptr += stx_idx + 1
-                except:  # must be at the end of the chunk, so the next .find will return -1 anyway
-                    pass
+                if not self.at_right_byte:   # continue search in this srchdat chunk of the file
+                    try:
+                        srchdat = srchdat[stx_idx + 1:]  # Start after that invalid start byte, look for the next in the chunk
+                        cur_ptr += stx_idx + 1
+                    except:  # must be at the end of the chunk, so the next .find will return -1 anyway
+                        pass
 
     def read(self):
         """
@@ -696,6 +698,26 @@ class AllRead:
                     recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
         if recs_to_read['navigation']['altitude'] == []:
             recs_to_read['navigation'].pop('altitude')
+
+        # finding spikes in latitude/longitude that go to 0 (only seen this once with old data), have to identify and remove
+        for var in ['latitude', 'longitude']:
+            dif = np.diff(recs_to_read['navigation'][var])
+            spike_idx = dif >= 1  # just look for spikes greater than one degree, should cover most cases
+            spikes = np.count_nonzero(spike_idx)
+            if spikes:
+                print('Removing {} {} spikes found in navigation record...'.format(spikes, var))
+                spike_index = np.where(spike_idx)[0]
+                for cnt, spk in enumerate(spike_index):
+                    if np.abs(recs_to_read['navigation'][var][spk] - recs_to_read['navigation'][var][spk - 1]) < 1:
+                        # positive spike
+                        spike_index[cnt] = spk + 1
+                    else:
+                        # positive spike
+                        spike_index[cnt] = spk
+                for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+                    if rec_type in recs_to_read['navigation']:
+                        recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], spike_index)
+                
         recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
 
         # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
