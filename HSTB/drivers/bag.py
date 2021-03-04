@@ -3,7 +3,11 @@ from xml.etree import ElementTree as et
 import datetime
 import tempfile
 
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ModuleNotFoundError:
+    def tqdm(iterate_stuff, *args, **kywrds):
+        return iterate_stuff  # if this doesn't work, try iter(iterate_stuff)
 import h5py
 import numpy
 
