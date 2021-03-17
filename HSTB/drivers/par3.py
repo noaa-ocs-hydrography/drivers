@@ -276,7 +276,7 @@ class AllRead:
         Build the regular expression we are going to use to find the next startbyte, if necessary.
         """
         # Possible datagram types as int
-        recids = [68, 88, 102, 78, 83, 89, 107, 79, 65, 110, 67, 72, 80, 71, 85, 73, 105, 112, 82, 104, 48, 49, 66, 51]
+        recids = [68, 88, 102, 78, 83, 89, 107, 79, 65, 110, 67, 72, 80, 71, 85, 73, 105, 112, 82, 104, 66]
         # search for startbyte + one of the datagramtypes
         search_exp = b'\x02[' + b'|'.join([struct.pack('B', x) for x in recids]) + b']'
         # sonartype always follows datagramtype, include it to eliminate possible mismatches
@@ -290,6 +290,8 @@ class AllRead:
         emsrchs = []
         for em in self.ems_with_rangeangle + self.ems_with_oldrangeangle:
             sonartype = struct.pack('H', em)
+            if sonartype == b'.\x01':
+                sonartype = b'\.\x01'
             em_search_exp = search_exp + sonartype
             compiled_expr = re.compile(em_search_exp)
             emsrchs.append(compiled_expr)
@@ -557,7 +559,10 @@ class AllRead:
                 starttime = self.packet.time
             except AttributeError:  # no time for this packet
                 self.read()
-                starttime = self.packet.time
+                try:
+                    starttime = self.packet.time
+                except AttributeError:
+                    raise ValueError('Par3: Unable to read the time of the first record.  This is generally because the sonar model is one that is not currently enabled in this module')
         if starttime is None:
             raise ValueError('Unable to find a suitable packet to read the start time of the file')
 
