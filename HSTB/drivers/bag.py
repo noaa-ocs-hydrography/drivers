@@ -1241,7 +1241,7 @@ def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN
         # Using vr_depth or vr_uncrt reads the entire array, so we need to read the index range first then grab the depth
         #   -- much much faster for a large dataset
         # tile = self.vr_depth[index_start:index_end].reshape(dimensions_y, dimensions_x)
-        tile = vr.varres_refinements[:, index_start:index_end][self.varres_refinements.dtype.names[0]].reshape(dimensions_y, dimensions_x)
+        tile = vr.varres_refinements[:, index_start:index_end][vr.varres_refinements.dtype.names[0]].reshape(dimensions_y, dimensions_x)
         # uncrt = self.vr_uncrt[index_start:index_end].reshape(dimensions_y, dimensions_x)
         # uncrt = self.varres_refinements[:, index_start:index_end][self.varres_refinements.dtype.names[1]].reshape(dimensions_y, dimensions_x)
         tile[tile == vr.fill_value] = numpy.nan
