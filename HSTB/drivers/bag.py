@@ -930,7 +930,7 @@ class VRBag(SRBag):
         self.elevation[i, j] = self.elevation.fillvalue
         self.uncertainty[i, j] = self.uncertainty.fillvalue
 
-    def read_refinement(self, i, j):
+    def read_refinement_old(self, i, j):
         index_start = self.varres_metadata[i, j, "index"]
 
         dimensions_x = self.varres_metadata[i, j, "dimensions_x"]
@@ -948,6 +948,31 @@ class VRBag(SRBag):
             tile = self.varres_refinements[:, index_start:index_end][self.varres_refinements.dtype.names[0]].reshape(dimensions_y, dimensions_x)
             # uncrt = self.vr_uncrt[index_start:index_end].reshape(dimensions_y, dimensions_x)
             uncrt = self.varres_refinements[:, index_start:index_end][self.varres_refinements.dtype.names[1]].reshape(dimensions_y, dimensions_x)
+            ref = Refinement(tile, uncrt, resolution_x, resolution_y, sw_corner_x, sw_corner_y)
+        else:
+            ref = None
+        return ref
+
+    def read_refinement(self, i, j):
+        mdata = self.varres_metadata[i, j]
+        index_start = mdata["index"]
+
+        dimensions_x = mdata["dimensions_x"]
+        dimensions_y = mdata["dimensions_y"]
+        resolution_x = mdata["resolution_x"]
+        resolution_y = mdata["resolution_y"]
+        sw_corner_x = mdata["sw_corner_x"]
+        sw_corner_y = mdata["sw_corner_y"]
+
+        if index_start < 0xffffffff:
+            index_end = index_start + int(dimensions_x * dimensions_y)
+            # Using vr_depth or vr_uncrt reads the entire array, so we need to read the index range first then grab the depth
+            #   -- much much faster for a large dataset
+            # tile = self.vr_depth[index_start:index_end].reshape(dimensions_y, dimensions_x)
+            data = self.varres_refinements[:, index_start:index_end]
+            tile = data[self.varres_refinements.dtype.names[0]].reshape(dimensions_y, dimensions_x)
+            # uncrt = self.vr_uncrt[index_start:index_end].reshape(dimensions_y, dimensions_x)
+            uncrt = data[self.varres_refinements.dtype.names[1]].reshape(dimensions_y, dimensions_x)
             ref = Refinement(tile, uncrt, resolution_x, resolution_y, sw_corner_x, sw_corner_y)
         else:
             ref = None
