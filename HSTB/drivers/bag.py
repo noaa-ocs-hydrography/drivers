@@ -205,6 +205,7 @@ class SRBag(h5py.File):
 
         """
         if "mode" not in kywrds:  # make sure the file is set for write access
+            kywrds = kywrds.copy()
             kywrds['mode'] = "w"
         f = h5py.File(input_file_full_path, **kywrds)
         root = f.require_group('/BAG_root')
@@ -254,9 +255,13 @@ class SRBag(h5py.File):
         min_version
             minimum version of the bag spec to allow, default to 1.5.0
         kywrds
-            keywords passed along to h5py.File
+            keywords passed along to h5py.File, like mode (which defaults to rw but should be changed to r)
         """
         # @todo Add backward compatibility for the primary xml attributes that are used like geographic extent
+        # @todo -- switch default from read/write to read
+        if len(args) == 0 and "mode" not in kywrds:  # make sure the file is set for read access if not otherwise specified
+            kywrds = kywrds.copy()
+            kywrds['mode'] = "r+"
         super().__init__(input_file_full_path, *args, **kywrds)
         self.bag_root = self['/BAG_root']
         # self.elevation = self.bag_root["elevation"]
@@ -635,17 +640,8 @@ class SRBag(h5py.File):
         wgs.ImportFromEPSG(4326)
         transform = osr.CoordinateTransformation(self.srs, wgs)
 
-        point = ogr.Geometry(ogr.wkbPoint)
-        point.AddPoint(llx, lly)
-        point.Transform(transform)
-        west_lon = point.GetX()
-        south_lat = point.GetY()
-
-        point = ogr.Geometry(ogr.wkbPoint)
-        point.AddPoint(urx, ury)
-        point.Transform(transform)
-        east_lon = point.GetX()
-        north_lat = point.GetY()
+        south_lat, west_lon = transform.TransformPoint(llx, lly)[:2]
+        north_lat, east_lon = transform.TransformPoint(urx, ury)[:2]
 
         self.bounding_box_north_element.text = str(north_lat)
         self.bounding_box_east_element.text = str(east_lon)
@@ -1643,5 +1639,21 @@ if __name__ == "__main__":
         bag.close()
     print("done")
     import sys  # pycharm is staying in a console after debugging, so just forcing it to close (do I have a switch wrong?)
+    if 0:
+        sssfile = SRBag.new_bag(r'c:\temp\testbounds.bag')
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(26900 + 10)  # zone 10 north
+        sssfile.horizontal_crs_wkt = srs.ExportToWkt()
+        sss_data = numpy.zeros((4, 7))
+        sssfile.numx = sss_data.shape[1]  # columns
+        sssfile.numy = sss_data.shape[0]  # rows
 
+        sssfile.set_elevation(sss_data)
+        sssfile.set_uncertainty(numpy.zeros(sss_data.shape))
+
+        sssfile.set_res((2, 2))
+        sssfile.set_origin((500000, 4000000))
+        sssfile.close()
+
+        del sssfile
     sys.exit()
