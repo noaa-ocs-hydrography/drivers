@@ -1,17 +1,21 @@
 import ctypes
 import mmap
-import io
 import os
 import stat
 import time
 import sys
 import glob
-import shutil
-import datetime
-import re
+from datetime import datetime, timedelta, timezone
 from collections import OrderedDict
 
-import numpy
+import numpy as np
+
+try:
+    import xarray as xr
+    xarray_enabled = True
+except ImportError:
+    xarray_enabled = False
+
 
 from HSTB.drivers.pos_mv import PCSclassesV5R10
 from HSTB.drivers.pos_mv import PCSclassesV5R9
@@ -222,7 +226,7 @@ class PCSFile(PCSBaseFile):
             if bDebug:
                 print("Reached End of Data")
         # self.sensorTimes.append(curTime)
-        # self.sensorTimes = numpy.array(self.sensorTimes, dtype=[('time', numpy.double), ('position', numpy.uint64)])
+        # self.sensorTimes = np.array(self.sensorTimes, dtype=[('time', np.double), ('position', np.uint64)])
         # self.sensorTimes.sort(order = ["time", "position"])
 
     def QuickCache(self, grp, grp_id=-1, nCache=-1, bDebug=False):
@@ -237,12 +241,12 @@ class PCSFile(PCSBaseFile):
         str_pos = -1
         position_list = self.sensorHeaders.setdefault((grp_id, grp), [])
         while len(data) > len(keystring):
-            str_pos = data.find("$GRP" + chr(grp_id & 0x00FF) + chr((grp_id & 0xFF00) >> 8), str_pos + 1)
+            str_pos = data.find(b"$GRP" + chr(grp_id & 0x00FF).encode() + chr((grp_id & 0xFF00) >> 8).encode(), str_pos + 1)
             if str_pos >= 0:  # find returns -1 if no more tags found
                 position_list.append(str_pos + fileoffset)
             else:
                 # move the file pointer back to the last read data, just beyond the string in case the next tag was split on the chunk boundary
-                if position_list[-1] + 6 > fileoffset:
+                if position_list and position_list[-1] + 6 > fileoffset:
                     fileoffset = position_list[-1] + len(keystring)
                 else:  # didn't find any occurances -- go to almost the end of the current chunk
                     fileoffset = self.msdffile.tell() - len(keystring) + 1
@@ -268,26 +272,117 @@ class PCSFile(PCSBaseFile):
         if starttime < 0:
             i1 = 0
         else:
-            fpos = self.sensorTimes[numpy.searchsorted(self.sensorTimes["time"], starttime, side="left")]['position']
-            i1 = numpy.searchsorted(positions, fpos, side="left")
+            fpos = self.sensorTimes[np.searchsorted(self.sensorTimes["time"], starttime, side="left")]['position']
+            i1 = np.searchsorted(positions, fpos, side="left")
         if endtime < 0:
             i2 = len(positions)
         else:
-            fpos = self.sensorTimes[numpy.searchsorted(self.sensorTimes["time"], endtime, side="right")]['position']
-            i2 = numpy.searchsorted(positions, fpos, side="right")
+            fpos = self.sensorTimes[np.searchsorted(self.sensorTimes["time"], endtime, side="right")]['position']
+            i2 = np.searchsorted(positions, fpos, side="right")
 
         cls = self.GetRecordClass(grp_id, grp)
-        # carray = numpy.array([cls()] * len(positions[i1:i2]), cls._dtype)
-        carray = numpy.zeros(len(positions[i1:i2]), cls._dtype)
+        # carray = np.array([cls()] * len(positions[i1:i2]), cls._dtype)
+        carray = np.zeros(len(positions[i1:i2]), cls._dtype)
         for i, cpos in enumerate(positions[i1:i2]):
             try:
-                carray[i] = numpy.ctypeslib.as_array(self.ReadSensorType(grp_id, grp, cpos))
+                carray[i] = np.ctypeslib.as_array(self.ReadSensorType(grp_id, grp, cpos))
             except self.driver.EOD:
                 carray = carray[:-1]
         return carray
 
     def HeaveTimeSeries(self):
         return self.GetAllArrays("Heave_True_Heave_Data", 111, ["Time_Distance_Fields.Time_1", "Time_Distance_Fields.Time_types", "True_Heave", "Heave", ])
+
+
+def weekly_seconds_to_UTC_timestamps(week_secs, weekstart_datetime=None, weekstart_year=None, weekstart_week=None):
+    """
+    Convert gps week seconds to UTC timestamp (seconds since 1970,1,1).  Takes in either a datetime object that
+    represents the start of the week or a isocalendar (accessible through datetime) tuple that gives the same
+    information.
+
+    Expects weekstart_datetime to be the start of the week on Sunday
+
+    Parameters
+    ----------
+    week_secs: np array, array of timestamps since the beginning of the week (how POS time is stored)
+    weekstart_datetime: datetime.datetime, object representing the start of the UNIX week (Sunday)
+    weekstart_year: int, year for the start of the week, ex: 2020
+    weekstart_week: int, week number for the start of the week, ex: 14
+
+    Returns
+    -------
+    weekstart: datetime object, represents the start of the UTC week
+    timestamps: np array, same shape as week_secs, UTC timestamps
+
+    """
+    if weekstart_datetime is None and (weekstart_year is not None) and (weekstart_week is not None):
+        weekstart = datetime.strptime(str(weekstart_year) + '-' + str(weekstart_week) + '-' + str(1), '%G-%V-%u')
+        # this gets you week start if week started on Monday (ISO standard).  We want UNIX time where the week starts
+        #    on Sunday
+        weekstart = weekstart - timedelta(days=1)
+    elif weekstart_datetime is not None:
+        weekstart = weekstart_datetime
+        weekstart = weekstart - timedelta(days=weekstart.weekday())
+    else:
+        raise ValueError('Expected either weekstart_datetime or both weekstart_year/weekstart_week.')
+
+    utc_weekly_offset = weekstart.replace(tzinfo=timezone.utc).timestamp()
+    timestamps = week_secs + utc_weekly_offset
+
+    return weekstart, timestamps
+
+
+def _pos_convert(posfile, weekstart_year, weekstart_week):
+    f = PCSFile(posfile, nCache=0)
+    f.QuickCache('$GRP', 1)
+    data = f.GetArray('$GRP', 1)
+    if not data['Latitude'].any():
+        raise ValueError('pos_to_xarray: Group1 not found, is required for xarray conversion')
+    t_type = data['Time_Distance_Fields']['Time_types'][0]
+    t1_type = t_type & 7
+    if not t1_type == 2:  # UTC Weekly Seconds
+        raise NotImplementedError('pos_to_xarray: Expected time in UTC Weekly Seconds (2), found : {} (0=POS, 1=GPS)'.format(t1_type))
+
+    alt, lat, lon, weektime = data['Altitude'], data['Latitude'], data['Longitude'], data['Time_Distance_Fields']['Time_1']
+    weekstart, utctime = weekly_seconds_to_UTC_timestamps(weektime, weekstart_year=weekstart_year, weekstart_week=weekstart_week)
+    alt.astype(np.float32)
+
+    # found this to be necessary for sbet/smrmsg, sorting here as well just in case
+    time_indices = utctime.argsort()
+    pos_dataset = xr.Dataset({'latitude': (['time'], lat[time_indices]),
+                              'longitude': (['time'], lon[time_indices]),
+                              'altitude': (['time'], alt[time_indices])},
+                             coords={'time': utctime[time_indices]},
+                             attrs={'reference': {'latitude': 'reference point', 'longitude': 'reference point',
+                                                  'altitude': 'reference point'},
+                                    'units': {'latitude': 'degrees', 'longitude': 'degrees', 'altitude': 'meters'}})
+    return pos_dataset
+
+
+def pos_to_xarray(posfile: str, weekstart_year: int, weekstart_week: int):
+    if not xarray_enabled:
+        raise EnvironmentError('pos_to_xarray: Unable to import xarray, pos_to_xarray disabled')
+    attrs = {'mission_date': datetime.fromisocalendar(weekstart_year, weekstart_week, 1).strftime('%Y-%m-%d %H:%M:%S')}
+    posdat = _pos_convert(posfile, weekstart_year, weekstart_week)
+    attrs['pos_files'] = {os.path.split(posfile)[1]: [float(posdat.time.values[0]), float(posdat.time.values[-1])]}
+    posdat.attrs = attrs
+    return posdat
+
+
+def posfiles_to_xarray(posfiles: list, weekstart_year: int = None, weekstart_week: int = None):
+    newdata = []
+    totalposfiles = {}
+    for cnt, posf in enumerate(posfiles):
+        converted_data = pos_to_xarray(posf, weekstart_year=weekstart_year, weekstart_week=weekstart_week)
+        newdata.append(converted_data)
+        totalposfiles.update(converted_data.pos_files)
+    navdata = xr.concat(newdata, dim='time')
+    del newdata
+    # pos files might be in any time order
+    navdata = navdata.sortby('time', ascending=True)
+    # shovel in the total file attributes
+    navdata.attrs['pos_files'] = totalposfiles
+    return navdata
 
 
 def main():

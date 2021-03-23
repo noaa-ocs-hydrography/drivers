@@ -293,6 +293,7 @@ def weekly_seconds_to_UTC_timestamps(week_secs, weekstart_datetime=None, weeksta
 
     return weekstart, timestamps
 
+
 def _sbet_convert(sbetfile, weekstart_year, weekstart_week):
     """
     Perform the load and conversion to xarray for the POS MV SBET
@@ -332,8 +333,9 @@ def _sbet_convert(sbetfile, weekstart_year, weekstart_week):
                          coords={'time': sbet_data[:, 0][time_indices]},
                          attrs={'reference': {'latitude': 'reference point', 'longitude': 'reference point',
                                               'altitude': 'reference point'},
-                                'units': {'latitude': 'degrees', 'longitude': 'meters', 'altitude': 'meters'}})
+                                'units': {'latitude': 'degrees', 'longitude': 'degrees', 'altitude': 'meters'}})
     return sbetdat
+
 
 def _smrmsg_convert(smrmsgfile, weekstart_year, weekstart_week):
     """
@@ -388,6 +390,7 @@ def _smrmsg_convert(smrmsgfile, weekstart_year, weekstart_week):
                                             'down_position_error': 'meters (1 sigma)', 'roll_error': 'degrees (1 sigma)',
                                             'pitch_error': 'degrees (1 sigma)', 'heading_error': 'degrees (1 sigma)'}})
     return smrmsgdat
+
 
 def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None, weekstart_week=None, override_datum=None,
                    override_grid=None, override_zone=None, override_ellipsoid=None):
@@ -588,7 +591,7 @@ def smrmsg_to_xarray(smrmsgfile, logfile=None, weekstart_year=None, weekstart_we
 
         final_attrs = {}
         if 'mission_date' not in attrs:
-            attrs['mission_date'] = weekstart.strftime('%Y-%m-%d %H:%M:%S')
+            attrs = {'mission_date': datetime.fromisocalendar(weekstart_year, weekstart_week, 1).strftime('%Y-%m-%d %H:%M:%S')}
         final_attrs['mission_date'] = attrs['mission_date']
         final_attrs['logging rate (hz)'] = smrmsg_rate
         final_attrs['source_file'] = smrmsgfile
