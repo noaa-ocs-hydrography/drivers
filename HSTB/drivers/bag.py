@@ -261,7 +261,7 @@ class SRBag(h5py.File):
         # @todo -- switch default from read/write to read
         if len(args) == 0 and "mode" not in kywrds:  # make sure the file is set for read access if not otherwise specified
             kywrds = kywrds.copy()
-            kywrds['mode'] = "r+"
+            kywrds['mode'] = 'r'  # "r+"
         super().__init__(input_file_full_path, *args, **kywrds)
         self.bag_root = self['/BAG_root']
         # self.elevation = self.bag_root["elevation"]
@@ -520,6 +520,15 @@ class SRBag(h5py.File):
         except ValueError:
             x = 1e20
         return x
+    @property
+    def maxx(self):
+        corner_pt = self.corner_points_string.split()
+        try:
+            meta_pt = corner_pt[1].split(',')
+            x = float(meta_pt[0])
+        except ValueError:
+            x = 1e20
+        return x
 
     @minx.setter
     def minx(self, val):
@@ -545,6 +554,15 @@ class SRBag(h5py.File):
         meta_sw_pt = corner_pt[0].split(',')
         try:
             y = float(meta_sw_pt[1])
+        except IndexError:
+            y = 1e20
+        return y
+    @property
+    def maxy(self):
+        corner_pt = self.corner_points_string.split()
+        meta_pt = corner_pt[1].split(',')
+        try:
+            y = float(meta_pt[1])
         except IndexError:
             y = 1e20
         return y
@@ -707,11 +725,13 @@ class SRBag(h5py.File):
         self.bag_root.create_dataset("metadata", maxshape=(None,), data=numpy.array(list(metadata), dtype="S1"))
 
     def flush(self):
-        self.commit_xml()
+        if self.mode != 'r':
+            self.commit_xml()
         super().flush()
 
     def close(self):
-        self.commit_xml()
+        if self.mode != 'r':
+            self.commit_xml()
         super().close()
 
     @property
