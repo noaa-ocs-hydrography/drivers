@@ -17,7 +17,7 @@ except ModuleNotFoundError:
     print("scipy did not import, interpolate_vr_bag function will not work")
 from osgeo import gdal, osr, ogr
 
-from HSTB.shared.gridded_coords import Grid
+from HSTB.shared.gridded_coords import Grid, affine_center
 import HSTB.resources
 
 DEBUGGING = False
@@ -97,6 +97,19 @@ class Refinement(Grid):
         if uncertainty is None:
             uncertainty = numpy.zeros(self.depth.shape, dtype=numpy.float32)
         self.uncertainty = uncertainty
+    def get_xy_pts_arrays(self):
+        r, c = numpy.indices(self.depth.shape)  # make indices into array elements that can be converted to x,y coordinates
+        pts = numpy.array([r, c, self.depth, self.uncertainty]).reshape(6, -1)
+        pts = pts[:, pts[2] != VRBag.fill_value]  # remove nodata points
+
+        x, y = affine_center(pts[0], pts[1], *self.geotransform)
+        return x, y, pts
+
+    def get_xy_pts_matrix(self):
+        r, c = numpy.indices(self.depth.shape)  # make indices into array elements that can be converted to x,y coordinates
+        pts = numpy.array([r, c, r, c, self.depth, self.uncertainty])
+        pts[0], pts[1] = affine_center(pts[2], pts[3], *self.geotransform)
+        return pts
 
 class SRBag(h5py.File):
     fill_value = 1000000.
@@ -522,12 +535,7 @@ class SRBag(h5py.File):
         return x
     @property
     def maxx(self):
-        corner_pt = self.corner_points_string.split()
-        try:
-            meta_pt = corner_pt[1].split(',')
-            x = float(meta_pt[0])
-        except ValueError:
-            x = 1e20
+        x = self.minx + self.cell_size_x * (self.numx - 1)
         return x
 
     @minx.setter
@@ -559,12 +567,7 @@ class SRBag(h5py.File):
         return y
     @property
     def maxy(self):
-        corner_pt = self.corner_points_string.split()
-        meta_pt = corner_pt[1].split(',')
-        try:
-            y = float(meta_pt[1])
-        except IndexError:
-            y = 1e20
+        y = self.miny + self.cell_size_y * (self.numy - 1)
         return y
 
     @miny.setter
@@ -973,14 +976,14 @@ class VRBag(SRBag):
         mdata = self.varres_metadata[i, j]
         index_start = mdata["index"]
 
-        dimensions_x = mdata["dimensions_x"]
-        dimensions_y = mdata["dimensions_y"]
-        resolution_x = mdata["resolution_x"]
-        resolution_y = mdata["resolution_y"]
-        sw_corner_x = mdata["sw_corner_x"]
-        sw_corner_y = mdata["sw_corner_y"]
-
         if index_start < 0xffffffff:
+            dimensions_x = mdata["dimensions_x"]
+            dimensions_y = mdata["dimensions_y"]
+            resolution_x = mdata["resolution_x"]
+            resolution_y = mdata["resolution_y"]
+            sw_corner_x = mdata["sw_corner_x"]
+            sw_corner_y = mdata["sw_corner_y"]
+
             index_end = index_start + int(dimensions_x * dimensions_y)
             # Using vr_depth or vr_uncrt reads the entire array, so we need to read the index range first then grab the depth
             #   -- much much faster for a large dataset
@@ -989,7 +992,17 @@ class VRBag(SRBag):
             tile = data[self.varres_refinements.dtype.names[0]].reshape(dimensions_y, dimensions_x)
             # uncrt = self.vr_uncrt[index_start:index_end].reshape(dimensions_y, dimensions_x)
             uncrt = data[self.varres_refinements.dtype.names[1]].reshape(dimensions_y, dimensions_x)
-            ref = Refinement(tile, uncrt, resolution_x, resolution_y, sw_corner_x, sw_corner_y)
+
+            bag_supergrid_dx = self.cell_size_x
+            bag_supergrid_dy = self.cell_size_y
+            bag_llx = self.minx - bag_supergrid_dx / 2.0  # @todo seems the llx is center of the supergridd cel?????
+            bag_lly = self.miny - bag_supergrid_dy / 2.0
+
+            supergrid_x = j * bag_supergrid_dx
+            supergrid_y = i * bag_supergrid_dy
+            refinement_llx = bag_llx + supergrid_x + sw_corner_x - resolution_x / 2.0  # @TODO implies swcorner is to the center and not the exterior
+            refinement_lly = bag_lly + supergrid_y + sw_corner_y - resolution_y / 2.0
+            ref = Refinement(tile, uncrt, resolution_x, resolution_y, refinement_llx, refinement_lly)
         else:
             ref = None
         return ref
