@@ -3663,9 +3663,10 @@ class kmall():
 
         # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
         #   next chunk might include a duplicate time
-        recs_to_read['ping']['time'][0] += 0.000010
-        if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
-            recs_to_read['ping']['time'][1] += 0.000010
+        if recs_to_read['ping']['time'].any():
+            recs_to_read['ping']['time'][0] += 0.000010
+            if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
+                recs_to_read['ping']['time'][1] += 0.000010
         return recs_to_read
 
     def sequential_read_records(self, start_ptr=0, end_ptr=0, first_installation_rec=False, serial_translator=None):

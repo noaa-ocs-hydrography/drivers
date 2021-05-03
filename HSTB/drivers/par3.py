@@ -645,7 +645,7 @@ class AllRead:
         # first check for varying number of beams (see EM302)
         uneven = False
         maxlen = None
-        if 'ping' in recs_to_read:
+        if 'ping' in recs_to_read and recs_to_read['ping']['traveltime']:
             minlen = len(min(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             if minlen != maxlen:
@@ -727,9 +727,10 @@ class AllRead:
 
         # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
         #   next chunk might include a duplicate time
-        recs_to_read['ping']['time'][0] += 0.000010
-        if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
-            recs_to_read['ping']['time'][1] += 0.000010
+        if recs_to_read['ping']['time'].any():
+            recs_to_read['ping']['time'][0] += 0.000010
+            if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
+                recs_to_read['ping']['time'][1] += 0.000010
         return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
