@@ -92,6 +92,19 @@ class BAGError(Exception):
 
 class Refinement(Grid):
     def __init__(self, depth, uncertainty, res_x, res_y, sw_x=0, sw_y=0):
+        """ Note that refinements have a geotransform that is based on cell corners while the data is defined to be at the
+        cell centers, so use affine_center to get the data positions -- maybe the should be reversed and return cell centers
+        and have to do extra math to get cell edges.
+
+        Parameters
+        ----------
+        depth
+        uncertainty
+        res_x
+        res_y
+        sw_x
+        sw_y
+        """
         super().__init__((sw_x, sw_y), depth.shape, (res_x, res_y), allocate=False)
         self.depth = depth
         if uncertainty is None:
@@ -99,11 +112,11 @@ class Refinement(Grid):
         self.uncertainty = uncertainty
     def get_xy_pts_arrays(self):
         r, c = numpy.indices(self.depth.shape)  # make indices into array elements that can be converted to x,y coordinates
-        pts = numpy.array([r, c, self.depth, self.uncertainty]).reshape(6, -1)
-        pts = pts[:, pts[2] != VRBag.fill_value]  # remove nodata points
+        pts = numpy.array([r, c, r, c, self.depth, self.uncertainty]).reshape(6, -1)
+        pts = pts[:, pts[4] != VRBag.fill_value]  # remove nodata points
 
-        x, y = affine_center(pts[0], pts[1], *self.geotransform)
-        return x, y, pts
+        pts[0], pts[1] = affine_center(pts[0], pts[1], *self.geotransform)
+        return pts
 
     def get_xy_pts_matrix(self):
         r, c = numpy.indices(self.depth.shape)  # make indices into array elements that can be converted to x,y coordinates
@@ -217,9 +230,9 @@ class SRBag(h5py.File):
         VRBag instance which is stored at the path given
 
         """
-        if "mode" not in kywrds:  # make sure the file is set for write access
-            kywrds = kywrds.copy()
-            kywrds['mode'] = "w"
+        kywrds = kywrds.copy()  # don't change the callers data in case they are using a dict object
+        kywrds['mode'] = "w"  # make sure the file is set for write access
+
         f = h5py.File(input_file_full_path, **kywrds)
         root = f.require_group('/BAG_root')
         # root.attrs["Bag Version"] = numpy.string_("1.6.2")
@@ -229,7 +242,9 @@ class SRBag(h5py.File):
         root.attrs.create('Bag Version', data="1.6.2", dtype=H5T_C_S1_64)
 
         if not xml_metadata:
-            xml_metadata = cls.make_xml("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            srs = osr.SpatialReference()  # supply WGS84 as a default -- user needs to override this
+            srs.ImportFromEPSG(4326)
+            xml_metadata = cls.make_xml(srs, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         if isinstance(xml_metadata, str):
             metadata = numpy.array(list(xml_metadata), dtype="S1")
         else:
@@ -247,9 +262,8 @@ class SRBag(h5py.File):
                             compression='gzip', compression_opts=9)
         f.close()
         # remove any mode and open the file for edit access
-        if 'mode' in kywrds:
-            kywrds.pop('mode')
-        bag = SRBag(input_file_full_path, "r+", **kywrds)
+        kywrds['mode'] = "r+"
+        bag = SRBag(input_file_full_path, **kywrds)
         return bag
 
     def __init__(self, input_file_full_path, *args, min_version=(1,5,0), **kywrds):
@@ -806,9 +820,10 @@ class VRBag(SRBag):
         # create the SR grid first then add the VR data
         sr = super().new_bag(input_file_full_path, xml_metadata, **kywrds)
         sr.close()
+        del sr
 
-        if "mode" not in kywrds:  # make sure the file is set for write access
-            kywrds['mode'] = "r+"
+        kywrds = kywrds.copy()  # don't change the callers data in case they are using a dict object
+        kywrds['mode'] = "r+"  # we made a bag above, so now open as VR for read/write
         f = h5py.File(input_file_full_path, **kywrds)
         root = f['/BAG_root']
 
@@ -853,8 +868,8 @@ class VRBag(SRBag):
     def vr_uncrt(self):
         return self.varres_refinements[self.varres_refinements.dtype.names[1]][0]
 
-    def set_refinements(self, data: list, elev_func=None, uncert_func=None):
-        """ Set the varres_refinements using a list of lists of numpy arrays.
+    def set_refinements(self, data: list, elev_func=None, uncert_func=None, local_offset=True):
+        """ Set ALL the varres_refinements using a list of lists of numpy arrays.
         elevation and uncertainty overview layers will be computed as well as many attributes
 
         Parameters
@@ -865,7 +880,20 @@ class VRBag(SRBag):
             callback to compute representative value, numpy.mean is used if set to None
         uncert_func
             callback to compute representative value, numpy.mean is used if set to None
-
+        local_offset
+            bool which defines if the offset is local to the refinement or includes the bag global positioning
+            both should have the half cell offset to center the data plus any additional offset.
+            Example: A bag in UTM with 3x3 supercells of 64m sizes, minx = 32 (meaning the first cell goes from 0 - 64)
+            If setting a 12m resolution cell offset by 2m from the refinement edge in the 2nd row and 1st column use:
+            ref = Refinement(depths, uncrt, 12, 12, 2, 2)  # 2 for the shift from the edge
+            set_refinement(2,1, ref, local_offset=True)
+            or
+            ref = Refinement(depths, uncrt, 12, 12, 64 + 2, 64*2 2)  # 64 per row or column, rows are Y coordinate
+            set_refinement(2,1,ref, local_offset=False)
+            or
+            ref = Refinement(depths, uncrt, 12, 12, vr.minx-vr.cell_size_x/2 + cols*cell_size_x + 2,
+                                                    vr.miny-vr.cell_size_y/2 + rows*cell_size_y + 2)  # 64 per row or column
+            set_refinement(2,1, ref, local_offset=False)
 
         Returns
         -------
@@ -909,8 +937,20 @@ class VRBag(SRBag):
                         else:
                             self.uncertainty[i, j] = self.fill_value
                         self._write_refinement_at_index(refinement, refinement_idx)
+                        if local_offset:
+                            mx = refinement.minx + refinement.cell_size_x / 2.0
+                            my = refinement.miny + refinement.cell_size_y / 2.0
+                        else:
+                            bag_llx = self.minx - self.cell_size_x / 2.0
+                            bag_lly = self.miny - self.cell_size_y / 2.0
+                            supergrid_x = j * self.cell_size_x
+                            supergrid_y = i * self.cell_size_y
+                            refinement_llx = bag_llx + supergrid_x
+                            refinement_lly = bag_lly + supergrid_y
+                            mx = refinement.minx - refinement_llx + refinement.cell_size_x / 2.0
+                            my = refinement.miny - refinement_lly + refinement.cell_size_y / 2.0
                         self.varres_metadata[i, j] = (refinement_idx, refinement.depth.shape[0], refinement.depth.shape[1],
-                                                      refinement.cell_size_x, refinement.cell_size_y, refinement.minx, refinement.miny)
+                                                      refinement.cell_size_x, refinement.cell_size_y, mx, my)
                         refinement_idx += refinement.depth.size
                     else:
                         # turns out setting these with fill values can take an exceedingly long time --
@@ -937,8 +977,9 @@ class VRBag(SRBag):
         if supergrid_size > 0:
             total_size = self.varres_refinements.size
             # compress the refinements array
-            self.varres_refinements[idx:total_size - idx - supergrid_size] = self.varres_refinements[
-                                                                             idx + supergrid_size:total_size - idx - supergrid_size]
+            remaining_datasizse = total_size - idx - supergrid_size
+            self.varres_refinements[:, idx: remaining_datasizse - supergrid_size] = self.varres_refinements[:,
+                                                                                                 idx + supergrid_size:remaining_datasizse]
             # fix all the other refinements to point to the new index locations
             # find indices that are real values, 0xffffffff is used for empty grids
             not_max_int = self.varres_metadata[:, :, self.INDEX] != 0xffffffff
@@ -1012,21 +1053,27 @@ class VRBag(SRBag):
     def recompute_mins_and_maxs(self):
         super().recompute_mins_and_maxs()
         # min max in varres metadata
-        self.varres_metadata.attrs['max_dimensions_x'] = self.varres_metadata[:, :, self.DIMX].max()
-        self.varres_metadata.attrs['min_dimensions_x'] = self.varres_metadata[self.varres_metadata[:, :, self.DIMX] > 0, self.DIMX].min()
         self.varres_metadata.attrs['max_dimensions_y'] = self.varres_metadata[:, :, self.DIMY].max()
-        self.varres_metadata.attrs['min_dimensions_y'] = self.varres_metadata[self.varres_metadata[:, :, self.DIMY] > 0, self.DIMY].min()
-        self.varres_metadata.attrs['max_resolution_x'] = self.varres_metadata[:, :, self.RESX].max()
-        self.varres_metadata.attrs['min_resolution_x'] = self.varres_metadata[self.varres_metadata[:, :, self.RESX] > 0, self.RESX].min()
         self.varres_metadata.attrs['max_resolution_y'] = self.varres_metadata[:, :, self.RESY].max()
-        self.varres_metadata.attrs['min_resolution_y'] = self.varres_metadata[self.varres_metadata[:, :, self.RESY] > 0, self.RESY].min()
+        self.varres_metadata.attrs['max_resolution_x'] = self.varres_metadata[:, :, self.RESX].max()
+        self.varres_metadata.attrs['max_dimensions_x'] = self.varres_metadata[:, :, self.DIMX].max()
+        if self.varres_metadata.attrs['max_dimensions_x'] > 0:  # zero meand the whole VR is empty
+            self.varres_metadata.attrs['min_dimensions_x'] = self.varres_metadata[self.varres_metadata[:, :, self.DIMX] > 0, self.DIMX].min()
+            self.varres_metadata.attrs['min_dimensions_y'] = self.varres_metadata[self.varres_metadata[:, :, self.DIMY] > 0, self.DIMY].min()
+            self.varres_metadata.attrs['min_resolution_x'] = self.varres_metadata[self.varres_metadata[:, :, self.RESX] > 0, self.RESX].min()
+            self.varres_metadata.attrs['min_resolution_y'] = self.varres_metadata[self.varres_metadata[:, :, self.RESY] > 0, self.RESY].min()
+        else:
+            self.varres_metadata.attrs['min_dimensions_x'] = 0
+            self.varres_metadata.attrs['min_dimensions_y'] = 0
+            self.varres_metadata.attrs['min_resolution_x'] = -1
+            self.varres_metadata.attrs['min_resolution_y'] = -1
 
         # min max in refinements
         valid_depths = self.vr_depth[numpy.array(self.vr_depth) != self.fill_value]
         try:
             depth_max = valid_depths.max()
             depth_min = valid_depths.min()
-        except ValueError:
+        except (ValueError, TypeError):
             depth_max = 0.0
             depth_min = 0.0
         self.varres_refinements.attrs["max_depth"] = depth_max
@@ -1037,7 +1084,7 @@ class VRBag(SRBag):
         try:
             uncrt_max = valid_uncrt.max()
             uncrt_min = valid_uncrt.min()
-        except ValueError:
+        except (ValueError, TypeError):
             uncrt_max = 0.0
             uncrt_min = 0.0
         self.varres_refinements.attrs["max_uncrt"] = uncrt_max
@@ -1049,7 +1096,7 @@ class VRBag(SRBag):
         self.varres_refinements[0, idx:idx + refinement.uncertainty.size, self.DEPTH_UNCRT] = refinement.uncertainty.ravel()
         # self.varres_refinements[0, current_size:new_size[1]] = array.ravel()
 
-    def set_refinement(self, i, j, refinement, update_attr=True, elev_func=None, uncert_func=None):
+    def set_refinement(self, i, j, refinement, update_attr=True, elev_func=None, uncert_func=None, local_offset=True):
         # get the index of where to write the data
         if refinement is not None:
             array = refinement.depth
@@ -1082,8 +1129,21 @@ class VRBag(SRBag):
 
             # update the varres_metadata to describe the refinement
             # make sure to pass in a list of tuples for metadata.  list of lists yields the wrong data shape (not sure why)
+            if local_offset:
+                mx = refinement.minx + refinement.cell_size_x / 2.0
+                my = refinement.miny + refinement.cell_size_y / 2.0
+            else:
+                bag_llx = self.minx - self.cell_size_x / 2.0
+                bag_lly = self.miny - self.cell_size_y / 2.0
+                supergrid_x = j * self.cell_size_x
+                supergrid_y = i * self.cell_size_y
+                refinement_llx = bag_llx + supergrid_x
+                refinement_lly = bag_lly + supergrid_y
+                mx = refinement.minx - refinement_llx + refinement.cell_size_x / 2.0
+                my = refinement.miny - refinement_lly + refinement.cell_size_y / 2.0
+
             self.varres_metadata[i, j] = (idx, array.shape[0], array.shape[1],
-                                          refinement.cell_size_x, refinement.cell_size_y, refinement.minx, refinement.miny)
+                                          refinement.cell_size_x, refinement.cell_size_y, mx, my)
 
             # update the elevation and uncertainty overviews
             self.elevation[i, j] = elev_func(refinement.depth[refinement.depth != self.fill_value])
@@ -1154,7 +1214,7 @@ def convert_sr_to_vr_bag(sr_path, vr_path, cells_per_supergrid=16):
                     refinement_uncert = numpy.pad(refinement_uncert, ((0, pad_i), (0, pad_j)), "constant", constant_values=VRBag.fill_value)
                 refinement = Refinement(refinement_depth, refinement_uncert,
                                         refinement_resx, refinement_resy,
-                                        refinement_resx * 0.5, refinement_resy * 0.5)  # SW corner is set in 1/2 of a cell
+                                        0, 0)  # SW corner is set in 1/2 of a cell by default
             vr_tiles[-1].append(refinement)
     bag.set_refinements(vr_tiles)
     # change the resolution to the new supergrid size --
@@ -1447,8 +1507,14 @@ def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN
     # a = numpy.fromfunction(lambda i, j: i + j, a.shape, dtype=numpy.float32)  # add a gradient
 
     ds_cnt = None  # close the count file so it can be deleted
-    os.remove(dst_filename + count_file_ext)
+    ds_val = None  # close the count file so it can be deleted
+    try:
+        pass
+        # os.remove(dst_filename + count_file_ext)
+    except PermissionError:
+        pass
     return bag_supergrid_dx, bag_supergrid_dy, sr_cell_size
+
 
 
 def interpolate_vr_bag(input_file_full_path, dst_filename, sr_cell_size=None, method='linear', use_blocks=True, nodata=numpy.nan):
