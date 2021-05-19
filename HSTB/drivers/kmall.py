@@ -15,7 +15,6 @@ import os
 import re
 import bz2
 import copy
-from pyproj import Proj
 from scipy import stats
 
 
@@ -41,6 +40,8 @@ class kmall():
         self.read_method = None
         self.eof = False
         self.time_buffer = []
+
+        self.datagram_version = None
         self.validate_inputs()
 
     def validate_inputs(self):
@@ -51,6 +52,48 @@ class kmall():
             raise ValueError('File provided does not exist: {}'.format(self.filename))
         if os.path.splitext(self.filename)[1] != '.kmall':
             raise ValueError('File provided does not have the kmall extension: {}'.format(self.filename))
+
+    ###########################################################
+    # Reading datagram utilities
+    ###########################################################
+
+    def scanToDatagram(self):
+        """
+        A method to scan to the next datagram header.
+        """
+        foundDatagram = False
+        bufferSize = 64
+        format_to_unpack = str(bufferSize) + 's'
+        while not foundDatagram:
+            # Get position in the file.
+            # startPtr = FID.tell()
+            # Read some bytes.
+            buffer = self.FID.read(struct.Struct(format_to_unpack).size)
+
+            # If we didn't get a full buffer, we've read to EOF.
+            # Break out of loop next go, and reset the format to unpack
+            # for what we did read.
+            if len(buffer) < bufferSize:
+                foundDatagram = True
+                format_to_unpack = str(len(buffer)) + 's'
+
+            # print(buffer)
+
+            # Search for the datagram header ID.
+            m = re.search(b'\\#[A-Z]{3}',
+                          struct.unpack(format_to_unpack, buffer)[0])
+            if m:
+                print(m)
+                # If a header was found seek to the ID, minus
+                # 4 bytes to get to the start of the datagram.
+                self.FID.seek(-bufferSize + m.span()[0] - 4, 1)
+                foundDatagram = True
+            else:
+                if self.file_size - self.FID.tell() > bufferSize:
+                    # Seek backward 4 bytes if we didn't get a match
+                    # This handles the case when the ID is split
+                    # between two buffer reads.
+                    self.FID.seek(-4, 1)
 
     def decode_datagram(self):
         """
@@ -150,6 +193,10 @@ class kmall():
             print('Unable to find {} in file'.format(datagram_identifier))
         return self.datagram_data
 
+    ###########################################################
+    # Reading datagrams
+    ###########################################################
+
     def read_EMdgmHeader(self):
         """
         Read general datagram header.
@@ -178,6 +225,7 @@ class kmall():
         dg['dgtime'] = fields[5] + fields[6] / 1.0E9
         dg['dgdatetime'] = datetime.datetime.utcfromtimestamp(dg['dgtime'])
 
+        self.datagram_version = dg['dgmVersion']
         if self.verbose > 2:
             self.print_datagram(dg)
 
@@ -292,7 +340,7 @@ class kmall():
         dg['BISTStatus'] = fields[4]
 
         # Result of the BIST. Starts with a synopsis of the result, followed by detailed descriptions.
-        tmp = FID.read(dg['numBytesCmnPart'] - struct.Struct(format_to_unpack).size)
+        tmp = self.FID.read(dg['numBytesCmnPart'] - struct.Struct(format_to_unpack).size)
         bist_text = tmp.decode('UTF-8')
         # print(bist_text)
         dg['BISTText'] = bist_text
@@ -560,7 +608,14 @@ class kmall():
         # LMD tested.
 
         dg = {}
-        format_to_unpack = "4B7f2B1H"
+        # I haven't yet been able to connect the dgmVersion number with the letter version of the datagram format document
+        # but the additional parameters showed up in version G, which seems to be dgmVersion 2
+        if self.datagram_version >= 2:
+            additional_parameters = True
+            format_to_unpack = "4B7f2B1H3f"
+        else:
+            additional_parameters = False
+            format_to_unpack = "4B7f2B1H"
         fields = struct.unpack(format_to_unpack, self.FID.read(struct.Struct(format_to_unpack).size))
 
         # TX sector index number, used in the sounding section. Starts at 0.
@@ -596,6 +651,17 @@ class kmall():
         dg['signalWaveForm'] = fields[12]
         # Byte alignment.
         dg['padding1'] = fields[13]
+
+        if additional_parameters:
+            # 20 log(Measured high voltage power level at TX pulse / Nominal high voltage power level). This parameter
+            # will also include the effect of user selected transmit power reduction (transmitPower_dB) and mammal
+            # protection. Actual SL = txNominalSourceLevel_dB + highVoltageLevel_dB. Unit dB.
+            dg['highVoltageLevel_dB'] = fields[14]
+            # Backscatter correction added in sector tracking mode. Unit dB.
+            dg['sectorTrackingCorr_dB'] = fields[15]
+            # Signal length used for backscatter footprint calculation. This compensates for the TX pulse tapering and
+            # the RX filter bandwidths. Unit second.
+            dg['effectiveSignalLength_sec'] = fields[16]
 
         if self.verbose > 2:
             self.print_datagram(dg)
@@ -835,7 +901,7 @@ class kmall():
             txSectorInfo.append(self.read_EMdgmMRZ_txSectorInfo())
         dg['txSectorInfo'] = self.listofdicts2dictoflists(txSectorInfo)
 
-        # Read reInfo
+        # Read rxInfo
         dg['rxInfo'] = self.read_EMdgmMRZ_rxInfo()
 
         # Read extra detect metadata if they exist.
@@ -1012,7 +1078,7 @@ class kmall():
 
         return dg
 
-    def read_EMdgmMWCrxBeamPhase1(self, numBeams, numSampleData):
+    def read_EMdgmMWCrxBeamPhase1(self, numSampleData):
         """
         Read #MWC - Beam sample phase info, specific for each beam and water column sample.
         numBeams * numSampleData = (Nrx * Ns) entries. Only added to datagram if phaseFlag = 1.
@@ -1021,10 +1087,10 @@ class kmall():
         """
         # LMD added, untested.
         # TODO: Test with water column data, phaseFlag = 1 to complete/test this function.
-        print("WARNING: You are using an incomplete, untested function: read_EMdgmMWCrxBeamPhase1.")
+        # print("WARNING: You are using an incomplete, untested function: read_EMdgmMWCrxBeamPhase1.")
 
         dg = {}
-        format_to_unpack = str(numBeams * numSampleData) + "b"
+        format_to_unpack = str(numSampleData) + "b"
         fields = struct.unpack(format_to_unpack, self.FID.read(struct.Struct(format_to_unpack).size))
 
         # Rx beam phase in 180/128 degree resolution.
@@ -1032,7 +1098,7 @@ class kmall():
 
         return dg
 
-    def read_EMdgmMWCrxBeamPhase2(self, numBeams, numSampleData):
+    def read_EMdgmMWCrxBeamPhase2(self, numSampleData):
         """
         Read #MWC - Beam sample phase info, specific for each beam and water column sample.
         numBeams * numSampleData = (Nrx * Ns) entries. Only added to datagram if phaseFlag = 2.
@@ -1041,10 +1107,10 @@ class kmall():
         """
         # LMD added, untested.
         # TODO: Test with water column data, phaseFlag = 2 to complete/test this function.
-        print("WARNING: You are using an incomplete, untested function: read_EMdgmMWCrxBeamPhase2.")
+        # print("WARNING: You are using an incomplete, untested function: read_EMdgmMWCrxBeamPhase2.")
 
         dg = {}
-        format_to_unpack = str(numBeams * numSampleData) + "h"
+        format_to_unpack = str(numSampleData) + "h"
         fields = struct.unpack(format_to_unpack, self.FID.read(struct.Struct(format_to_unpack).size))
 
         # Rx beam phase in 0.01 degree resolution.
@@ -1101,13 +1167,11 @@ class kmall():
 
             elif dg['rxInfo']['phaseFlag'] == 1:
                 # TODO: Test with water column data, phaseFlag = 1 to complete/test this function.
-                rxPhaseInfo.append(self.read_EMdgmMWCrxBeamPhase1(dg['rxInfo']['numBeams'],
-                                                                  rxBeamData[idx]['numSampleData']))
+                rxPhaseInfo.append(self.read_EMdgmMWCrxBeamPhase1(rxBeamData[idx]['numSampleData']))
 
             elif dg['rxInfo']['phaseFlag'] == 2:
                 # TODO: Test with water column data, phaseFlag = 2 to complete/test this function.
-                rxPhaseInfo.append(self.read_EMdgmMWCrxBeamPhase1(dg['rxInfo']['numBeams'],
-                                                                  rxBeamData[idx]['numSampleData']))
+                rxPhaseInfo.append(self.read_EMdgmMWCrxBeamPhase2(rxBeamData[idx]['numSampleData']))
 
             else:
                 print("ERROR: phaseFlag error in read_EMdgmMWC function.")
@@ -1866,7 +1930,7 @@ class kmall():
 
         return dg
 
-    def read_EMdgmCPOdataBlock(self):
+    def read_EMdgmCPOdataBlock(self, length):
         """
         Read #CPO - Compatibility sensor position compatibility data block. Data from active sensor is referenced to
         position at antenna footprint at water level. Data is corrected for motion ( roll and pitch only) if enabled
@@ -1878,7 +1942,7 @@ class kmall():
         # LMD tested.
 
         dg = {}
-        format_to_unpack = "2I1f"
+        format_to_unpack = "2I1f2d3f"
         fields = struct.unpack(format_to_unpack, self.FID.read(struct.Struct(format_to_unpack).size))
 
         dg['timeFromSensor_sec'] = fields[0]
@@ -1886,21 +1950,21 @@ class kmall():
         dg['datetime'] = datetime.datetime.utcfromtimestamp(dg['timeFromSensor_sec']
                                                             + dg['timeFromSensor_nanosec'] / 1.0E9)
         dg['posFixQuality'] = fields[2]
+        dg['correctedLat_deg'] = fields[3]
+        dg['correctedLong_deg'] = fields[4]
+        dg['speedOverGround_mPerSec'] = fields[5]
+        dg['courseOverGround_deg'] = fields[6]
+        dg['ellipsoidHeightReRefPoint_m'] = fields[7]
 
         # For some reason, it doesn't work to do this all in one step, but it works broken up into two steps. *shrug*
-        format_to_unpack = "2d3f250s"
+        pos_data_len = length - struct.Struct(format_to_unpack).size
+        format_to_unpack = "%ds" % pos_data_len
         fields = struct.unpack(format_to_unpack, self.FID.read(struct.Struct(format_to_unpack).size))
-        dg['correctedLat_deg'] = fields[0]
-        dg['correctedLong_deg'] = fields[1]
-        dg['speedOverGround_mPerSec'] = fields[2]
-        dg['courseOverGround_deg'] = fields[3]
-        dg['ellipsoidHeightReRefPoint_m'] = fields[4]
 
         # TODO: This is an array of(max?) length MAX_CPO_DATALENGTH; do something else here?
         # TODO: Get MAX_CPO_DATALENGTH from datagram instead of hard-coding in format_to_unpack.
         # TODO: This works for now, but maybe there is a smarter way?
-        tmp = fields[5]
-        dg['posDataFromSensor'] = tmp[0:tmp.find(b'\r\n')]
+        dg['posDataFromSensor'] = fields[0]
 
         return dg
 
@@ -1919,7 +1983,10 @@ class kmall():
         dg = {}
         dg['header'] = self.read_EMdgmHeader()
         dg['cmnPart'] = self.read_EMdgmScommon()
-        dg['sensorData'] = self.read_EMdgmCPOdataBlock()
+
+        ## Data block length is balance of datagram minus 4 for the confirmation packet length at end
+        data_block_len =  dg['header']['numBytesDgm'] - 4 -(self.FID.tell()-start)
+        dg['sensorData'] = self.read_EMdgmCPOdataBlock( data_block_len )
 
         # Seek to end of the packet.
         self.FID.seek(start + dg['header']['numBytesDgm'], 0)
@@ -1986,7 +2053,7 @@ class kmall():
         self.write_EMdgmMRZ_rxInfo(dg['rxInfo'])
 
         for detclass in range(dg['rxInfo']['numExtraDetectionClasses']):
-            self.write_EMdgmMRZ_extraDetClassInfo(FID, dg['extraDetClassInfo'], detclass)
+            self.write_EMdgmMRZ_extraDetClassInfo(dg['extraDetClassInfo'], detclass)
 
         Nseabedimage_samples = 0
         for record in range(dg['rxInfo']['numExtraDetections'] +
@@ -2028,7 +2095,7 @@ class kmall():
         for sector in range(dg['pingInfo']['numTxSectors']):
             self.write_EMdgmMRZ_txSectorInfo(dg['txSectorInfo'], sector)
 
-        write_EMdgmMRZ_rxInfo(dg['rxInfo'])
+        self.write_EMdgmMRZ_rxInfo(dg['rxInfo'])
 
         for detclass in range(dg['rxInfo']['numExtraDetectionClasses']):
             self.write_EMdgmMRZ_extraDetClassInfo(dg['extraDetClassInfo'], detclass)
@@ -3145,9 +3212,12 @@ class kmall():
                 # Read the datagram.
                 msg_buffer = self.FID.read(int(self.msgsize[self.pktcnt]) - 4)
             except:
-                print("Error indexing file: %s" % self.filename)
+                print("Error indexing file: %s at byte offset %d" % (self.filename, self.FID.tell()))
+
                 self.msgoffset = self.msgoffset[:-1]
                 self.msgsize = self.msgsize[:-1]
+                self.scanToDatagram()
+
                 continue
 
             # Interpret the header.
@@ -3168,7 +3238,7 @@ class kmall():
             # lisec = nanosec
             # lisec /= 1E6
 
-            # Captue the datagram header timestamp.
+            # Capture the datagram header timestamp.
             self.msgtime.append(sec + nsec / 1.0E9)
 
             if self.verbose:
@@ -3190,6 +3260,13 @@ class kmall():
                                    'MessageType': self.msgtype})
         self.Index.set_index('Time', inplace=True)
         self.Index['MessageType'] = self.Index.MessageType.astype('category')
+
+        unreadBytes = self.file_size - self.Index.MessageSize.sum()
+        if unreadBytes > 0:
+            print()
+            print("   *** WARNING! %d bytes were not interpreted in this file! ***" % unreadBytes)
+            print()
+
         if self.verbose >= 2:
             print(self.Index)
 
@@ -3259,15 +3336,42 @@ class kmall():
             needs_flattening = [k for (k,v) in listofdicts[0].items() if isinstance(v, list)]
             d_of_l = {k: [dic[k] for dic in listofdicts] for k in listofdicts[0]}
             if needs_flattening:
-                print('flattening {}'.format(needs_flattening))
+                # print('flattening {}'.format(needs_flattening))
                 for nf in needs_flattening:
                     d_of_l[nf] = [item for sublist in d_of_l[nf] for item in sublist]
             return d_of_l
         else:
             return None
 
-    def extract_xyz(self):
-        pass
+    def extractLonLatZ(self):
+        """ A method to extract Longitude, Latitude and Depth for each soundings."""
+
+        if self.Index is None:
+            self.index_file()
+
+        if self.FID is None:
+            self.OpenFiletoRead()
+
+        # M = map( lambda x: x=="b'#MRZ'", self.msgtype)
+        # MRZOffsets = self.msgoffset[list(M)]
+
+        # Get the file byte count offset for each MRZ datagram.
+        MRZOffsets = [x for x, y in zip(self.msgoffset, self.msgtype) if y == "b'#MRZ'"]
+
+        # Initialize array to store the data.
+        lat = np.array([])
+        lon = np.array([])
+        z = np.array([])
+
+        for offset in MRZOffsets:
+            self.FID.seek(offset, 0)
+            dg = self.read_EMdgmMRZ()
+
+            z = np.concatenate([z,  np.array(dg['sounding']['z_reRefPoint_m']) - dg['pingInfo']['z_waterLevelReRefPoint_m']])
+            lat = np.concatenate([lat, dg['pingInfo']['latitude_deg'] + np.array(dg['sounding']['deltaLatitude_deg'])])
+            lon = np.concatenate([lon, dg['pingInfo']['longitude_deg'] + np.array(dg['sounding']['deltaLongitude_deg'])])
+
+        return (lon.flatten(),lat.flatten(),z.flatten())
 
     def check_ping_count(self):
         """ A method to check to see that all required MRZ datagrams exist """
@@ -3372,9 +3476,9 @@ class kmall():
                 MissingMRZCount = MissingMRZCount + 1
 
         # Shamelessly creating a data frame just to get a pretty table.
-        res = pd.DataFrame([["File", "NpingsTotal", "Pings Missed", "MissingMRZRecords"],
-                            [self.filename, NpingsMissed + NpingsSeen, NpingsMissed, MissingMRZCount]])
-        print(res.to_string(index=False, header=False))
+        #res = pd.DataFrame([["File", "NpingsTotal", "Pings Missed", "MissingMRZRecords"],
+        #                    [self.filename, NpingsMissed + NpingsSeen, NpingsMissed, MissingMRZCount]])
+        #print(res.to_string(index=False, header=False))
 
         if HaveAllMRZ:
             if self.verbose > 1:
@@ -4064,7 +4168,11 @@ class kmall():
         return {int(sys_id): int(serial_num)}
 
 
-if __name__ == '__main__':
+def main(args=None):
+    ''' Commandline script code.'''
+    if args == None:
+        args = sys.argv[1:]
+
     # Handle input arguments
     parser = argparse.ArgumentParser(description="A python script (and class) "
                                                  "for parsing Kongsberg KMALL "
@@ -4113,7 +4221,7 @@ if __name__ == '__main__':
         filestoprocess = []
 
         if verbose >= 3:
-            print("directory: " + directory)
+            print("directory: " + kmall_directory)
 
         # Recursively work through the directory looking for kmall files.
         for root, subFolders, files in os.walk(kmall_directory):
@@ -4144,7 +4252,9 @@ if __name__ == '__main__':
         pingcheckdata = []
         navcheckdata = []
         if verify:
+
             K.report_packet_types()
+
             pingcheckdata.append([x for x in K.check_ping_count()])
 
             K.extract_attitude()
@@ -4302,3 +4412,6 @@ if __name__ == '__main__':
 
             T.closeFile()
             K.closeFile()
+
+if __name__ == '__main__':
+    sys.exit(main())
