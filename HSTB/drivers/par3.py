@@ -2623,17 +2623,16 @@ class Data73(BaseData):
                                                  '6': 'multicast_2', '7': 'multicast_3', '8': 'attvel_1_udp5',
                                                  '9': 'attvel_2_udp6'}
                                          }
-        self.ky_data73_sonar_translator = {'em122': [None, 'tx', 'rx', None], 'em302': [None, 'tx', 'rx', None],
-                                           'em710': [None, 'tx', 'rx', None], 'em2040': [None, 'tx', 'rx', None],
+        self.ky_data73_sonar_translator = {'em122': [None, 'tx', 'rx', None], 'em302': [None, 'tx', 'rx', None], 'em304': [None, 'tx', 'rx', None],
+                                           'em710': [None, 'tx', 'rx', None], 'em712': [None, 'tx', 'rx', None], 'em2040': [None, 'tx', 'rx', None],
                                            'em2040_dual_rx': [None, 'tx', 'rx_port', 'rx_stbd'],
-                                           'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
-                                           # em2045 is the model number given for EM2040c
-                                           'em2045': [None, 'sonar_head1', None, None],
-                                           'em2045_dual' : [None, 'sonar_head1', 'sonar_head2', None],
-                                           'em3002': [None, 'sonar_head1', 'sonar_head2', None],
-                                           'em3020': [None, 'sonar_head1', 'sonar_head2', None],
-                                           'em2040p': [None, 'sonar_head1', None, None],
-                                           'me70bo': ['transducer', None, None, None]}
+                                           'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', None],
+                                           'em2040_dual_tx_rx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
+                                           # EM2040c is represented in the .all file as em2045
+                                           'em2045': [None, 'txrx', None, None], 'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
+                                           'em3002': [None, 'tx', 'rx', None], 'em2040p': [None, 'txrx', None, None],
+                                           'em3020': [None, 'tx', 'rx', None],
+                                           'me70bo': ['txrx', None, None, None]}
         self.time = POSIXtime
         for entry in temp:
             data = entry.split('=')

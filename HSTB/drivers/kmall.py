@@ -3630,7 +3630,7 @@ class kmall():
                                    'sample.KMdefault.ellipsoidHeight_m'],
                            'IIP': ['header.dgtime', 'install_txt'],
                            'MRZ': ['header.dgtime', 'cmnPart.pingCnt',
-                                   'pingInfo.soundSpeedAtTxDepth_mPerSec', 'pingInfo.numTxSectors', 'header.systemID',
+                                   'pingInfo.soundSpeedAtTxDepth_mPerSec', 'pingInfo.numTxSectors', 'txSectorInfo.txArrNumber',
                                    'txSectorInfo.tiltAngleReTx_deg',
                                    'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
                                    'sounding.beamAngleReRx_deg', 'sounding.txSectorNumb', 'sounding.detectionType',
@@ -3651,7 +3651,7 @@ class kmall():
                                               'cmnPart.pingCnt': [['ping', 'counter']],
                                               'pingInfo.soundSpeedAtTxDepth_mPerSec': [['ping', 'soundspeed']],
                                               'pingInfo.numTxSectors': [['ping', 'ntx']],
-                                              'header.systemID': [['ping', 'serial_num']],
+                                              'txSectorInfo.txArrNumber': [['ping', 'serial_num']],
                                               'txSectorInfo.tiltAngleReTx_deg': [['ping', 'tiltangle']],
                                               'txSectorInfo.sectorTransmitDelay_sec': [['ping', 'delay']],
                                               'txSectorInfo.centreFreq_Hz': [['ping', 'frequency']],
@@ -3697,16 +3697,20 @@ class kmall():
         returns: recs_to_read, dict of dicts finalized
         """
 
-        # ping records aren't sorted for some reason, have to do that here
+        # records aren't sorted for some reason, have to do that here
         idx = np.argsort(recs_to_read['ping']['time'])
+        # flatten the serial number array
+        recs_to_read['ping']['serial_num'] = np.squeeze(recs_to_read['ping']['serial_num'])
 
         # need to force in the serial number, its not in the header anymore with these kmall files...
         if recs_to_read['installation_params']['installation_settings'] is not None:
             inst_params = recs_to_read['installation_params']['installation_settings'][0]
-            if inst_params is not None:
-                recs_to_read['installation_params']['serial_one'] = np.array([int(inst_params['pu_serial_number'])])
-                # currently nothing in the record for identifying the second system in a dual head
-                recs_to_read['installation_params']['serial_two'] = np.array([0])
+            if inst_params is not None and serial_translator is not None:
+                serialnums = list(serial_translator.values())
+                recs_to_read['installation_params']['serial_one'] = serialnums[0]
+                recs_to_read['installation_params']['serial_two'] = serialnums[1]
+                recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 0] = serialnums[0]
+                recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 1] = serialnums[1]
 
         for rec in recs_to_read:
             for dgram in recs_to_read[rec]:
@@ -3737,33 +3741,9 @@ class kmall():
         # kmall no longer has serial number in header, only systemid which is the last octet of the ip address.
         #  translate that number to serial number
         if serial_translator is not None:
-            if len(serial_translator) > 1:
-                raise NotImplementedError(
-                    'Only one serial number can exist for _finalize_records to work, dual head' + \
-                    'not supported in kmall format yet')
             for sysid in serial_translator:
                 id_match = np.where(recs_to_read['ping']['serial_num'] == int(sysid))[0]
                 recs_to_read['ping']['serial_num'][id_match] = int(serial_translator[sysid])
-        
-        # finding spikes in SKM time, have to identify and remove (attitude and navigation come from SKM)
-        dif = np.diff(recs_to_read['attitude']['time'])
-        spikes = np.count_nonzero(dif < 0)
-        if spikes:
-            print('Removing {} spikes found in SKM record...'.format(spikes))
-            spike_index = np.where(dif < 0)[0]
-            for cnt, spk in enumerate(spike_index):
-                if recs_to_read['attitude']['time'][spk - 1] > recs_to_read['attitude']['time'][spk + 1]:
-                    # negative spike
-                    spike_index[cnt] = spk + 1
-                else:
-                    # positive spike
-                    spike_index[cnt] = spk
-            for rec_type in ['time', 'roll', 'pitch', 'heading', 'heave']:
-                recs_to_read['attitude'][rec_type] = np.delete(recs_to_read['attitude'][rec_type], spike_index)
-            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
-                recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], spike_index)
-
-        recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
 
         # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
         #   next chunk might include a duplicate time
@@ -3771,6 +3751,43 @@ class kmall():
             recs_to_read['ping']['time'][0] += 0.000010
             if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
                 recs_to_read['ping']['time'][1] += 0.000010
+
+        # kmall requires you to sort the attitude and navigation records, looking at the time and you get a sawtooth pattern almost
+        if recs_to_read['attitude']['time'].any():
+            att_idx = np.argsort(recs_to_read['attitude']['time'])
+            for rec_type in ['time', 'roll', 'pitch', 'heading', 'heave']:
+                recs_to_read['attitude'][rec_type] = recs_to_read['attitude'][rec_type][att_idx]
+        if recs_to_read['navigation']['time'].any():
+            nav_idx = np.argsort(recs_to_read['navigation']['time'])
+            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+                recs_to_read['navigation'][rec_type] = recs_to_read['navigation'][rec_type][nav_idx]
+
+        # # finding spikes in SKM time, have to identify and remove (attitude and navigation come from SKM)
+        # dif = np.diff(recs_to_read['attitude']['time'])
+        # spikes = np.count_nonzero(dif < 0)
+        # if spikes:
+        #     print('Removing {} spikes found in SKM record...'.format(spikes))
+        #     spike_index = np.where(dif < 0)[0]
+        #     for cnt, spk in enumerate(spike_index):
+        #         if recs_to_read['attitude']['time'][spk - 1] > recs_to_read['attitude']['time'][spk + 1]:
+        #             # negative spike
+        #             spike_index[cnt] = spk + 1
+        #         else:
+        #             # positive spike
+        #             spike_index[cnt] = spk
+        #     for rec_type in ['time', 'roll', 'pitch', 'heading', 'heave']:
+        #         recs_to_read['attitude'][rec_type] = np.delete(recs_to_read['attitude'][rec_type], spike_index)
+        #     for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+        #         recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], spike_index)
+
+        # kmall seems to sometimes include empty blocks of navigation to match attitude logging frequency, eliminate those
+        if recs_to_read['navigation']['time'].any():
+            nav_idx = recs_to_read['navigation']['latitude'] != 0
+            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+                recs_to_read['navigation'][rec_type] = recs_to_read['navigation'][rec_type][nav_idx]
+
+        # empty processing status that we append for Kluster to use later
+        recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
         return recs_to_read
 
     def sequential_read_records(self, start_ptr=0, end_ptr=0, first_installation_rec=False, serial_translator=None):
@@ -3833,6 +3850,8 @@ class kmall():
 
                     # generate new list or append to list for each rec of that dgram type found
                     for translated in recs_categories_translator[self.datagram_ident][subrec]:
+                        if translated[1] == 'serial_num':  # get the first value, don't need serial_number by sector
+                            val = [np.array(val[0][0])]
                         if recs_to_read[translated[0]][translated[1]] is None:
                             recs_to_read[translated[0]][translated[1]] = copy.copy(val)
                         else:
@@ -3940,6 +3959,29 @@ class kmall():
                 translated[key.lstrip().rstrip()] = value.lstrip().rstrip()
         return translated
 
+    def _translate_sonar_model_number(self, settings: dict, model_number: str):
+        sonar_translator = {'em2040': [None, 'tx', 'rx', None],
+                            'em2040_dual_rx': [None, 'tx', 'rx_port', 'rx_stbd'],
+                            'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', None],
+                            'em2040_dual_tx_rx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
+                            # EM2040c is represented in the .all file as em2045
+                            'em2045': [None, 'txrx', None, None],
+                            'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None]}
+        possibles = [sonar for sonar in list(sonar_translator.keys()) if sonar.find(model_number) > -1]
+        if len(possibles) <= 1:  # not a potential dual head system
+            return model_number
+        else:
+            # get here for all the 2040 variants
+            offs = ['transducer_0_along_location', 'transducer_1_along_location', 'transducer_2_along_location',
+                    'transducer_3_along_location']
+            srch_offsets = [(off in settings) for off in offs]
+            for poss in possibles:
+                off_test = [(lvr is not None) for lvr in sonar_translator[poss]]
+                if off_test == srch_offsets:
+                    return poss
+            print('Unable to determine sonar model from {}'.format(model_number))
+            return model_number
+
     def translate_installation_parameters_todict(self, i_text):
         """
         installation parameters text comes from file as a comma delimited string with mix of = and ; separating the
@@ -3965,11 +4007,13 @@ class kmall():
         translate_versions = {'CPU:': 'cpu_software_version', 'VXW:': 'vxw_software_version',
                               'FILTER:': 'filter_software_version', 'CBMF:': 'cbmf_software_version',
                               'TX:': 'tx_software_version', 'RX:': 'rx_software_version'}
-        translate_serial = {'TX:': 'tx_serial_number', 'RX:': 'rx_serial_number'}
+        translate_serial = {'TX:': 'tx_serial_number', 'RX:': 'rx_serial_number', 'TX2:': 'tx_2_serial_number',
+                            'RX2:': 'rx_no2_serial_number'}
         # device translator will use the device identifier plus the values here, ex: 'TRAI_HD1' + '_serial_number'
         translate_device_ident = {'ATTI_1': 'motion_sensor_1', 'ATTI_2': 'motion_sensor_2', 'ATTI_3': 'motion_sensor_3',
                                   'POSI_1': 'position_1', 'POSI_2': 'position_2', 'POSI_3': 'position_3',
-                                  'CLCK': 'clock', 'SVPI': 'sound_velocity_1', 'TRAI_HD1': 'transducer_1'}
+                                  'CLCK': 'clock', 'SVPI': 'sound_velocity_1', 'TRAI_HD1': 'transducer_1',
+                                  'TRAI_TX1': 'transducer_1', 'TRAI_RX1': 'transducer_2'}
         translate_device = {'N=': '_serial_number', 'X=': '_along_location', 'Y=': '_athwart_location',
                             'Z=': '_vertical_location', 'R=': '_roll_angle', 'P=': '_pitch_angle',
                             'H=': '_heading_angle', 'S=': '_sounder_size_deg',
@@ -3978,6 +4022,8 @@ class kmall():
                             'ICX=': '_center_sector_forward', 'ICY=': '_center_sector_starboard',
                             'ICZ=': '_center_sector_down', 'ISX=': '_starboard_sector_forward',
                             'ISY=': '_starboard_sector_starboard', 'ISZ=': '_starboard_sector_down',
+                            'IX=': '_internal_offset_forward', 'IY=': '_internal_offset_starboard',
+                            'IZ=': '_internal_offset_down',
                             'ITX=': '_tx_forward', 'ITY=': '_tx_starboard', 'ITZ=': '_tx_down',
                             'IRX=': '_rx_forward', 'IRY=': '_rx_starboard', 'IRZ=': '_rx_down', 'D=': '_time_delay',
                             'G=': '_datum', 'T=': '_time_stamp', 'C=': '_motion_compensation', 'F=': '_data_format',
@@ -3992,16 +4038,37 @@ class kmall():
 
         translated = {}
         translate = translate_install
+
+        for rec in records_flatten:  # check for dual head and modify the translation to get the kluster standard convention
+            if rec[0][:8] == 'TRAI_RX2' or rec[0][:8] == 'TRAI_TX2':
+                translate_device_ident['TRAI_TX1'] = 'transducer_0'
+                translate_device_ident['TRAI_TX2'] = 'transducer_1'
+                translate_device_ident['TRAI_RX1'] = 'transducer_2'
+                translate_device_ident['TRAI_RX2'] = 'transducer_3'
+                break
+
+        past_rec = []
         for rec in records_flatten:
             # subgroups are parsed here, first rec contains the prefix
             # ex: ['ATTI_1:X=0.000', 'Y=0.000', 'Z=0.000', 'R=0.000', 'P=0.000', 'H=0.000', 'D=0.000'...
             if len(rec) > 1:
+                if rec[0] == '' and past_rec:
+                    # they tacked on the phase center offsets without a header for some reason
+                    # ex: ['', 'IPX=0.0000', 'IPY=-0.05540', 'IPZ=-0.01200', 'ICX=0.00000', 'ICY=0.01315', 'ICZ=-0.00600', 'ISX=0.00000', 'ISY=0.05540', 'ISZ=-0.01200']
+                    if past_rec[0][:4] == 'TRAI':
+                        rec[0] = past_rec[0]
+                    else:
+                        print('unable to read from IIP block {}'.format(rec))
+                        continue
                 prefix, first_rec = rec[0].split(':')
                 try:
-                    prefix = translate_device_ident[prefix]  # if its a prefix we haven't seen before, just pass it through
-                except:
+                    prefix = translate_device_ident[prefix]
+                except KeyError:  # if its a prefix we haven't seen before, just pass it through
                     pass
-                ky, data = first_rec.split('=')
+                try:
+                    ky, data = first_rec.split('=')
+                except ValueError:  # if there is no equals sign, it must be some data that we don't want
+                    continue
                 translated[prefix + translate_device[ky + '=']] = data
                 for subrec in rec[1:]:
                     ky, data = subrec.split('=')
@@ -4028,17 +4095,20 @@ class kmall():
                     translated[translate[key[0]]] = rec[0][len(key[0]):].rstrip()
                 else:
                     raise ValueError('Found multiple entries valid for record {}:{}'.format(rec, key))
+            past_rec = rec
 
         # plug in new keys for active position/motion sensor needed for kluster to identify the right sensor
+
         for mot_sens in ['motion_sensor_1_active_passive', 'motion_sensor_2_active_passive',
                          'motion_sensor_3_active_passive']:
             if mot_sens in translated:
-                if translated[mot_sens] == 'ACTIVE':
+                if translated[mot_sens] in ['ACTIVE', 'ACTIVE_VEL']:
                     translated['active_heading_sensor'] = 'motion_' + mot_sens[14]  # 'motion_1' in most cases
         for pos_sens in ['position_1_active_passive', 'position_2_active_passive', 'position_3_active_passive']:
             if pos_sens in translated:
                 if translated[pos_sens] == 'ACTIVE':
                     translated['active_position_system_number'] = 'position_' + pos_sens[9]  # 'position_1'
+        translated['sonar_model_number'] = self._translate_sonar_model_number(translated, translated['sonar_model_number'].lower())
         return translated
 
     def fast_read_start_end_time(self):
@@ -4129,11 +4199,15 @@ class kmall():
     def fast_read_serial_number_translator(self):
         """
         read the first IIP datagram, translating the install parameters text, and pull out the serial number and system
-        id numbers.  SystemID in kmall terms is the last octet of the system serial number.  That string looks something
+        id numbers.
+
+        Used to use SystemID in kmall, i.e. the last octet of the system ip address.  That string looks something
         like this:
         install_params['install_txt']['ip_address_subnet_mask'] = '157.237.20.40:0xffff0000'
 
-        where the serial number looks like:
+        Now we rely on the TX Arr Number which is a index starting with 0 for the number of systems
+
+        the serial number looks like:
         install_params['install_txt']['pu_serial_number'] = '53011'
 
         the result of this example would be a dictionary like:
@@ -4156,8 +4230,12 @@ class kmall():
         if install_params is None:
             raise ValueError('kmall: Unable to find installation parameters in file {}'.format(self.filename))
 
-        sys_id = install_params['install_txt']['ip_address_subnet_mask'].split('.')[3].split(':')[0]
-        serial_num = install_params['install_txt']['pu_serial_number']
+        try:  # newer systems have these entries (I've actually only seen them with a dual head example provided by kongsberg
+            ser_one = install_params['install_txt']['rx_serial_number']
+            ser_two = install_params['install_txt']['rx_no2_serial_number']
+        except KeyError:  # this is the workflow for older systems, possibly for all non-dual head systems, not sure
+            ser_one = install_params['install_txt']['pu_serial_number']
+            ser_two = 0
 
         self.eof = False
         if current_pointer is not None:
@@ -4165,7 +4243,7 @@ class kmall():
         else:
             self.FID.seek(0)
 
-        return {int(sys_id): int(serial_num)}
+        return {0: int(ser_one), 1: int(ser_two)}
 
 
 def main(args=None):
