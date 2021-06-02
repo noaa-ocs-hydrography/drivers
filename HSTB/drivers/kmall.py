@@ -3686,6 +3686,88 @@ class kmall():
 
         return recs_categories, recs_categories_translator, recs_categories_result
 
+    def _translate_serial_number_record(self, recs_to_read, serial_translator):
+        """
+        Take the serial number record from sequential_read, which is just an array of integer indexes ([0, 1, 0, 1...])
+        and convert those indexes to serial numbers.  See txArrNumber for the source data.  serial_translator is just
+        a dict where the keys are the integer indexes and the values are the serial numbers
+        """
+        # kmall no longer has serial number in header, only systemid which is the last octet of the ip address.
+        #  translate that number to serial number
+        if serial_translator is not None:
+            for sysid in serial_translator:
+                id_match = np.where(recs_to_read['ping']['serial_num'] == int(sysid))[0]
+                recs_to_read['ping']['serial_num'][id_match] = int(serial_translator[sysid])
+        return recs_to_read
+
+    def _ensure_unique_starttime(self, recs_to_read):
+        """
+        A small hack here to ensure that we don't have duplicate times across chunks, modify the first time slightly.
+        The time value added is basically meaningless, just serves to ensure we don't have duplicate times in the database
+        after merging all chunks.
+        """
+
+        if recs_to_read['ping']['time'].any():
+            recs_to_read['ping']['time'][0] += 0.000010
+            # if dual head, modify the first time of the second head as well
+            if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
+                recs_to_read['ping']['time'][1] += 0.000010
+        return recs_to_read
+
+    def _sort_skm_records(self, recs_to_read):
+        """
+        kmall requires you to sort the attitude and navigation records, looking at the time and you get a sawtooth
+        pattern almost after concatenating all skm records.
+        """
+
+        if recs_to_read['attitude']['time'].any():
+            att_idx = np.argsort(recs_to_read['attitude']['time'])
+            for rec_type in ['time', 'roll', 'pitch', 'heading', 'heave']:
+                recs_to_read['attitude'][rec_type] = recs_to_read['attitude'][rec_type][att_idx]
+        if recs_to_read['navigation']['time'].any():
+            nav_idx = np.argsort(recs_to_read['navigation']['time'])
+            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+                recs_to_read['navigation'][rec_type] = recs_to_read['navigation'][rec_type][nav_idx]
+        return recs_to_read
+
+    def _interpolate_skm_time_spikes(self, recs_to_read):
+        """
+        finding spikes in SKM time, have to identify and remove (attitude and navigation come from SKM)
+        only works when time is sorted, which it appears it is not a lot of time.  This will cause major issues if the
+        skm time is not sorted/incremental, so we basically can't use it in production.  Leaving it here in case
+        I am able to use it later.
+        """
+
+        dif = np.diff(recs_to_read['attitude']['time'])
+        spikes = np.count_nonzero(dif < 0)
+        if spikes:
+            print('Removing {} spikes found in SKM record...'.format(spikes))
+            spike_index = np.where(dif < 0)[0]
+            for cnt, spk in enumerate(spike_index):
+                if recs_to_read['attitude']['time'][spk - 1] > recs_to_read['attitude']['time'][spk + 1]:
+                    # negative spike
+                    spike_index[cnt] = spk + 1
+                else:
+                    # positive spike
+                    spike_index[cnt] = spk
+            for rec_type in ['time', 'roll', 'pitch', 'heading', 'heave']:
+                recs_to_read['attitude'][rec_type] = np.delete(recs_to_read['attitude'][rec_type], spike_index)
+            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+                recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], spike_index)
+        return recs_to_read
+
+    def _skm_remove_empty_navigation(self, recs_to_read):
+        """
+        SKM record merges attitude and navigation into one record.  It seems that by doing so, it sometimes includes
+        SKM records that have attitude data but no navigation.  Maybe some difference in logging rates between the two
+        sources?  Either way, we need to filter out any empty records.
+        """
+        if recs_to_read['navigation']['time'].any():
+            nav_idx = recs_to_read['navigation']['latitude'] != 0
+            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+                recs_to_read['navigation'][rec_type] = recs_to_read['navigation'][rec_type][nav_idx]
+        return recs_to_read
+
     def _finalize_records(self, recs_to_read, recs_count, serial_translator=None):
         """
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
@@ -3738,53 +3820,11 @@ class kmall():
                 else:
                     recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
 
-        # kmall no longer has serial number in header, only systemid which is the last octet of the ip address.
-        #  translate that number to serial number
-        if serial_translator is not None:
-            for sysid in serial_translator:
-                id_match = np.where(recs_to_read['ping']['serial_num'] == int(sysid))[0]
-                recs_to_read['ping']['serial_num'][id_match] = int(serial_translator[sysid])
-
-        # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
-        #   next chunk might include a duplicate time
-        if recs_to_read['ping']['time'].any():
-            recs_to_read['ping']['time'][0] += 0.000010
-            if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
-                recs_to_read['ping']['time'][1] += 0.000010
-
-        # kmall requires you to sort the attitude and navigation records, looking at the time and you get a sawtooth pattern almost
-        if recs_to_read['attitude']['time'].any():
-            att_idx = np.argsort(recs_to_read['attitude']['time'])
-            for rec_type in ['time', 'roll', 'pitch', 'heading', 'heave']:
-                recs_to_read['attitude'][rec_type] = recs_to_read['attitude'][rec_type][att_idx]
-        if recs_to_read['navigation']['time'].any():
-            nav_idx = np.argsort(recs_to_read['navigation']['time'])
-            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
-                recs_to_read['navigation'][rec_type] = recs_to_read['navigation'][rec_type][nav_idx]
-
-        # # finding spikes in SKM time, have to identify and remove (attitude and navigation come from SKM)
-        # dif = np.diff(recs_to_read['attitude']['time'])
-        # spikes = np.count_nonzero(dif < 0)
-        # if spikes:
-        #     print('Removing {} spikes found in SKM record...'.format(spikes))
-        #     spike_index = np.where(dif < 0)[0]
-        #     for cnt, spk in enumerate(spike_index):
-        #         if recs_to_read['attitude']['time'][spk - 1] > recs_to_read['attitude']['time'][spk + 1]:
-        #             # negative spike
-        #             spike_index[cnt] = spk + 1
-        #         else:
-        #             # positive spike
-        #             spike_index[cnt] = spk
-        #     for rec_type in ['time', 'roll', 'pitch', 'heading', 'heave']:
-        #         recs_to_read['attitude'][rec_type] = np.delete(recs_to_read['attitude'][rec_type], spike_index)
-        #     for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
-        #         recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], spike_index)
-
-        # kmall seems to sometimes include empty blocks of navigation to match attitude logging frequency, eliminate those
-        if recs_to_read['navigation']['time'].any():
-            nav_idx = recs_to_read['navigation']['latitude'] != 0
-            for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
-                recs_to_read['navigation'][rec_type] = recs_to_read['navigation'][rec_type][nav_idx]
+        recs_to_read = self._translate_serial_number_record(recs_to_read, serial_translator)
+        recs_to_read = self._ensure_unique_starttime(recs_to_read)
+        recs_to_read = self._sort_skm_records(recs_to_read)
+        # recs_to_read = self._interpolate_skm_time_spikes(recs_to_read)
+        recs_to_read = self._skm_remove_empty_navigation(recs_to_read)
 
         # empty processing status that we append for Kluster to use later
         recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
@@ -4016,7 +4056,7 @@ class kmall():
                                   'TRAI_TX1': 'transducer_1', 'TRAI_RX1': 'transducer_2'}
         translate_device = {'N=': '_serial_number', 'X=': '_along_location', 'Y=': '_athwart_location',
                             'Z=': '_vertical_location', 'R=': '_roll_angle', 'P=': '_pitch_angle',
-                            'H=': '_heading_angle', 'S=': '_sounder_size_deg',
+                            'H=': '_heading_angle', 'S=': '_sounding_size_deg',
                             'V=': '_version', 'W=': '_system_description', 'IPX=': '_port_sector_forward',
                             'IPY=': '_port_sector_starboard', 'IPZ=': '_port_sector_down',
                             'ICX=': '_center_sector_forward', 'ICY=': '_center_sector_starboard',
