@@ -3634,7 +3634,7 @@ class kmall():
                                    'txSectorInfo.tiltAngleReTx_deg',
                                    'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
                                    'sounding.beamAngleReRx_deg', 'sounding.txSectorNumb', 'sounding.detectionType',
-                                   'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
+                                   'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
                                    'pingInfo.modeAndStabilisation', 'pingInfo.pulseForm', 'pingInfo.depthMode'],
                            'IOP': ['header.dgtime', 'runtime_txt'],
                            'SVP': ['time_sec', 'sensorData.depth_m', 'sensorData.soundVelocity_mPerSec']}
@@ -3658,6 +3658,7 @@ class kmall():
                                               'sounding.beamAngleReRx_deg': [['ping', 'beampointingangle']],
                                               'sounding.txSectorNumb': [['ping', 'txsector_beam']],
                                               'sounding.detectionType': [['ping', 'detectioninfo']],
+                                              'sounding.detectionMethod': [['ping', 'detectioninfo_two']],
                                               'sounding.qualityFactor': [['ping', 'qualityfactor']],
                                               'sounding.twoWayTravelTime_sec': [['ping', 'traveltime']],
                                               'pingInfo.modeAndStabilisation': [['ping', 'yawpitchstab']],
@@ -3678,8 +3679,8 @@ class kmall():
             'ping': {'time': None, 'counter': None, 'soundspeed': None, 'ntx': None,
                      'serial_num': None, 'tiltangle': None, 'delay': None,
                      'frequency': None, 'beampointingangle': None, 'txsector_beam': None,
-                     'detectioninfo': None, 'qualityfactor': None, 'traveltime': None, 'mode': None,
-                     'modetwo': None, 'yawpitchstab': None},
+                     'detectioninfo': None, 'detectioninfo_two': None, 'qualityfactor': None, 'traveltime': None,
+                     'mode': None, 'modetwo': None, 'yawpitchstab': None},
             'runtime_params': {'time': None, 'runtime_settings': None},
             'profile': {'time': None, 'depth': None, 'soundspeed': None},
             'navigation': {'time': None, 'latitude': None, 'longitude': None, 'altitude': None}}
@@ -3768,6 +3769,24 @@ class kmall():
                 recs_to_read['navigation'][rec_type] = recs_to_read['navigation'][rec_type][nav_idx]
         return recs_to_read
 
+    def _merge_detectioninfo_detectionmethod(self, recs_to_read):
+        """
+        detectioninfo (detectionType) has 0 = normal detection, 1 = extra detection, 2 = rejected detection
+        detectioninfo_two (detectionMethod) has 0 = no valid detection, 1 = amplitude, 2 = phase
+        We want the final detectioninfo to match the .all format where:
+        2 = rejected, 1 = phase detection, 0 = amplitude detection
+        So we merge the relevant parts of the two records
+        """
+        if recs_to_read['ping']['detectioninfo'].any():
+            if recs_to_read['ping']['detectioninfo_two'].any():
+                assert recs_to_read['ping']['detectioninfo_two'].size == recs_to_read['ping']['detectioninfo'].size
+                amp_msk = recs_to_read['ping']['detectioninfo_two'] == 1
+                recs_to_read['ping']['detectioninfo'][amp_msk] = 0
+                phase_msk = recs_to_read['ping']['detectioninfo_two'] == 2
+                recs_to_read['ping']['detectioninfo'][phase_msk] = 1
+                recs_to_read['ping'].pop('detectioninfo_two')
+        return recs_to_read
+
     def _finalize_records(self, recs_to_read, recs_count, serial_translator=None):
         """
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
@@ -3806,7 +3825,7 @@ class kmall():
                 elif rec in ['navigation', 'attitude']:  # these recs have time blocks of data in them, need to be concatenated
                     recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
                 elif rec == 'ping':  # use the argsort indices here to sort by time
-                    if dgram in ['detectioninfo', 'qualityfactor']:
+                    if dgram in ['detectioninfo', 'qualityfactor', 'detectioninfo_two']:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.int32)
                     elif dgram == 'yawpitchstab':
                         recs_to_read[rec][dgram] = self.translate_yawpitch_tostring(np.array(recs_to_read[rec][dgram]))
@@ -3825,6 +3844,7 @@ class kmall():
         recs_to_read = self._sort_skm_records(recs_to_read)
         # recs_to_read = self._interpolate_skm_time_spikes(recs_to_read)
         recs_to_read = self._skm_remove_empty_navigation(recs_to_read)
+        recs_to_read = self._merge_detectioninfo_detectionmethod(recs_to_read)
 
         # empty processing status that we append for Kluster to use later
         recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
