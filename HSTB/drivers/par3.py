@@ -3882,10 +3882,13 @@ class Data110_att(BaseData):
                 self.raw_padding.append(r[Data110_grp.hdr_sz:])
             self.raw_data = Data110_q42(datablock, self.time, read_limit=read_limit)
             self.source = 'binary11'
+        elif first_record[:2] == b'\xe88':
+            raise NotImplementedError('Data110: Found CodaOctopus MCOM format, this is not currently implemented in the par driver')
         else:
             # self.source_data = np.getbuffer(np.ascontiguousarray(raw_arrays))
             self.source_data = np.ascontiguousarray(raw_arrays).tobytes()
             self.source = 'Unknown'
+            raise NotImplementedError('Data110: Found unknown data format, start bytes = {}'.format(first_record[:2]))
 
     @property
     def source_data(self):
