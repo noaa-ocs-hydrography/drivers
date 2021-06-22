@@ -467,7 +467,7 @@ class AllRead:
         if override_type is not None:
             typ = override_type
         else:
-            typ = arr[0].dtype
+            typ = data_list[0].dtype
 
         Z = []
 
@@ -487,6 +487,7 @@ class AllRead:
         or the old type that has the old rangeangle datagram 102
         """
         curptr = self.infile.tell()
+        self.infile.seek(0)
         has_oldstyle = None
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         self.eof = False
@@ -512,7 +513,8 @@ class AllRead:
                 raise ValueError('Unable to read file {}: sonar model number not recognized.  Found {}, expected one of {}'.format(self.infilename, sonarmodelnumber, expectedmodelnumber))
         except:
             raise EnvironmentError('File {} could not be read, no valid packets found'.format(self.infilename))
-        raise EnvironmentError('File {} has no old or new style rangeangle datagrams'.format(self.infilename))
+        # raise EnvironmentError('File {} has no old or new style rangeangle datagrams'.format(self.infilename))
+        return False
 
     def has_data110(self):
         """
@@ -521,6 +523,7 @@ class AllRead:
 
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         curptr = self.infile.tell()
+        self.infile.seek(0)
         found80 = 0
         has_data = False
 
