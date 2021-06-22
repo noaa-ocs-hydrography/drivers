@@ -636,6 +636,35 @@ class AllRead:
         self.start_ptr = startptr
         return [serialnumber, serialnumbertwo, sonarmodel]
 
+    def _only_keep_important_runtime(self, runtime_array: np.array):
+        """
+        Some sonar seem to log a runtime parameters entry almost every couple seconds.  This results in data that is
+        almost unusable, as you are waiting to dump to json thousands of runtime parameter entries.  Here we just isolate
+        the values that seem to change every few seconds (not_important_keys) and only keep the records that change
+        according to the other keys.
+
+        Parameters
+        ----------
+        runtime_array
+            numpy array of dictionaries, each dict is a runtime parameters entry
+
+        Returns
+        -------
+        np.array
+            trimmed array of dicts for only those keys that we have deemed important
+        """
+
+        not_important_keys = ['AbsorptionCoefficent', 'Counter']
+        data_lookup = []
+        for cnt, ra in enumerate(runtime_array):
+            data = ra.copy()
+            [data.pop(ky) for ky in not_important_keys if ky in data]
+            if data not in data_lookup:
+                data_lookup.append(data)
+            else:
+                runtime_array[cnt] = {}
+        return runtime_array
+
     def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber):
         """
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
@@ -696,7 +725,7 @@ class AllRead:
                     if dgram == 'yawpitchstab':
                         recs_to_read[rec][dgram] = translate_yawpitch(np.array(recs_to_read[rec][dgram]))
                     elif dgram == 'mode':
-                        pingmode = sonarmodelnumber in ['em302', 'em710']
+                        pingmode = sonarmodelnumber in ['em302', 'em710', 'em304', 'em712']
                         recs_to_read[rec][dgram] = translate_mode(np.array(recs_to_read[rec][dgram]), pingmode=pingmode)
                     elif dgram == 'modetwo':
                         recs_to_read[rec][dgram] = translate_mode_two(np.array(recs_to_read[rec][dgram]))
@@ -706,6 +735,7 @@ class AllRead:
                     recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
         if recs_to_read['navigation']['altitude'] == []:
             recs_to_read['navigation'].pop('altitude')
+        recs_to_read['runtime_params']['runtime_settings'] = self._only_keep_important_runtime(recs_to_read['runtime_params']['runtime_settings'])
 
         # finding spikes in latitude/longitude that go to 0 (only seen this once with old data), have to identify and remove
         for var in ['latitude', 'longitude']:
@@ -730,7 +760,7 @@ class AllRead:
 
         # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
         #   next chunk might include a duplicate time
-        if recs_to_read['ping']['time'].any():
+        if recs_to_read['ping']['time'].any() and recs_to_read['ping']['time'].size > 1:
             recs_to_read['ping']['time'][0] += 0.000010
             if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
                 recs_to_read['ping']['time'][1] += 0.000010
