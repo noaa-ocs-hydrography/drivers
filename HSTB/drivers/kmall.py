@@ -3784,7 +3784,8 @@ class kmall():
                 recs_to_read['ping']['detectioninfo'][amp_msk] = 0
                 phase_msk = recs_to_read['ping']['detectioninfo_two'] == 2
                 recs_to_read['ping']['detectioninfo'][phase_msk] = 1
-                recs_to_read['ping'].pop('detectioninfo_two')
+        if 'detectioninfo_two' in recs_to_read['ping']:  # ensure it is removed, even if detectioninfo is not in the file
+            recs_to_read['ping'].pop('detectioninfo_two')
         return recs_to_read
 
     def _finalize_records(self, recs_to_read, recs_count, serial_translator=None):
