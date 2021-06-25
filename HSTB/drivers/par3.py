@@ -734,7 +734,7 @@ class AllRead:
                 else:
                     recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
 
-        if recs_to_read['navigation']['altitude'] == []:
+        if recs_to_read['navigation']['altitude'] is None or len(recs_to_read['navigation']['altitude']) == 0:
             recs_to_read['navigation'].pop('altitude')
         recs_to_read['runtime_params']['runtime_settings'] = self._only_keep_important_runtime(recs_to_read['runtime_params']['runtime_settings'])
 
