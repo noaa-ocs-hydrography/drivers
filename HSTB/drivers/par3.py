@@ -775,6 +775,20 @@ class AllRead:
             recs_to_read['ping']['time'][0] += 0.000010
             if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
                 recs_to_read['ping']['time'][1] += 0.000010
+
+        # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
+        for dset_name in ['attitude', 'navigation']:
+            dset = recs_to_read[dset_name]
+            _, index = np.unique(dset['time'], return_index=True)
+            if dset['time'].size != index.size:
+                print('par3: Found duplicate times in {}, removing...'.format(dset_name))
+                for var in dset:
+                    dset[var] = dset[var][index]
+            if not np.all(dset['time'][:-1] <= dset['time'][1:]):
+                print('par3: {} is not sorted, sorting...'.format(dset_name))
+                index = np.argsort(dset['time'])
+                for var in dset:
+                    dset[var] = dset[var][index]
         return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
