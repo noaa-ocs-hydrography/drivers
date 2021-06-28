@@ -762,7 +762,7 @@ class AllRead:
                                 idx += 1
                 except:
                     print('Unable to remove navigation spikes')
-                print('Removing {} {} spikes found in navigation record...'.format(len(remove_these), var))
+                # print('Removing {} {} spikes found in navigation record...'.format(len(remove_these), var))
                 for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
                     if rec_type in recs_to_read['navigation']:
                         recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type], remove_these)
