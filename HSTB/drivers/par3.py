@@ -781,11 +781,11 @@ class AllRead:
             dset = recs_to_read[dset_name]
             _, index = np.unique(dset['time'], return_index=True)
             if dset['time'].size != index.size:
-                print('par3: Found duplicate times in {}, removing...'.format(dset_name))
+                # print('par3: Found duplicate times in {}, removing...'.format(dset_name))
                 for var in dset:
                     dset[var] = dset[var][index]
             if not np.all(dset['time'][:-1] <= dset['time'][1:]):
-                print('par3: {} is not sorted, sorting...'.format(dset_name))
+                # print('par3: {} is not sorted, sorting...'.format(dset_name))
                 index = np.argsort(dset['time'])
                 for var in dset:
                     dset[var] = dset[var][index]
