@@ -373,6 +373,7 @@ def posfiles_to_xarray(posfiles: list, weekstart_year: int = None, weekstart_wee
     newdata = []
     totalposfiles = {}
     for cnt, posf in enumerate(posfiles):
+        print('Reading from {}'.format(posf))
         converted_data = pos_to_xarray(posf, weekstart_year=weekstart_year, weekstart_week=weekstart_week)
         newdata.append(converted_data)
         totalposfiles.update(converted_data.pos_files)
