@@ -160,8 +160,8 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
                                        '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                               'SoundSpeed': [['profile', 'soundspeed']]},
                                        '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
-                                               'Longitude': [['navigation', 'longitude']],
-                                               'Altitude': [['navigation', 'altitude']]}}
+                                              'Longitude': [['navigation', 'longitude']],
+                                              'Altitude': [['navigation', 'altitude']]}}
 
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,

@@ -3713,6 +3713,19 @@ class kmall():
             # if dual head, modify the first time of the second head as well
             if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
                 recs_to_read['ping']['time'][1] += 0.000010
+            # ensure each time is unique
+            timediff = np.diff(recs_to_read['ping']['time'])
+            first_dup = np.where(timediff == 0)[0]
+            if first_dup.any():
+                recs_to_read['ping']['time'][first_dup + 1] += 0.000010
+            try:
+                assert not np.where(np.diff(recs_to_read['ping']['time']) == 0)[0].any()
+            except:
+                # Requires a second pass for some reason
+                timediff = np.diff(recs_to_read['ping']['time'])
+                first_dup = np.where(timediff == 0)[0]
+                if first_dup.any():
+                    recs_to_read['ping']['time'][first_dup + 1] += 0.000010
         return recs_to_read
 
     def _sort_skm_records(self, recs_to_read):
