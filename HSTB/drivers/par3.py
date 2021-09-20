@@ -2689,7 +2689,7 @@ class Data73(BaseData):
                                            # EM2040c is represented in the .all file as em2045
                                            'em2045': [None, 'txrx', None, None], 'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
                                            'em3002': [None, 'tx', 'rx', None], 'em2040p': [None, 'txrx', None, None],
-                                           'em3020': [None, 'tx', 'rx', None],
+                                           'em3020': [None, 'tx', 'rx', None], 'em3020_dual': [None, 'txrx_port', 'txrx_stbd', None],
                                            'me70bo': ['txrx', None, None, None]}
         self.time = POSIXtime
         for entry in temp:
@@ -2707,7 +2707,10 @@ class Data73(BaseData):
         self.settings['sonar_model_number'] = self.return_model_num(str(modelnum))
 
     def return_model_num(self, modelnum):
-        possibles = [sonar for sonar in list(self.ky_data73_sonar_translator) if sonar.find(modelnum) > 0]
+        # possibles are only where the number exactly matches one of the possibilities in the translator
+        translator_keys = list(self.ky_data73_sonar_translator)
+        translator_numbers = [re.sub("[^0-9]", "", x) for x in translator_keys]
+        possibles = [translator_keys[cnt] for cnt, sonar in enumerate(translator_numbers) if sonar == modelnum]
         if len(possibles) == 0:
             print('Unable to determine sonar model from {}'.format(modelnum))
             return modelnum
@@ -2718,10 +2721,26 @@ class Data73(BaseData):
             offs = ['transducer_0_along_location', 'transducer_1_along_location', 'transducer_2_along_location',
                     'transducer_3_along_location']
             srch_offsets = [(off in self.settings) for off in offs]
+            finalpossibles = []
             for poss in possibles:
                 off_test = [(lvr is not None) for lvr in self.ky_data73_sonar_translator[poss]]
                 if off_test == srch_offsets:
-                    return poss
+                    finalpossibles.append(poss)
+            if len(finalpossibles) == 1:
+                return finalpossibles[0]
+            elif len(finalpossibles) > 1:  # this should only be when dual/non-dual have the same placement in sonar translator, see em3020
+                dual_head_option = [f for f in finalpossibles if f.find('_dual') != -1]
+                non_dual_head_option = [f for f in finalpossibles if f.find('_dual') == -1]
+                if len(dual_head_option) == 1 and len(non_dual_head_option) == 1 and len(finalpossibles) == 2:  # this only works when checking dual vs non dual options
+                    rollangles = [float(self.settings[ky]) for ky in ['transducer_0_roll_angle', 'transducer_1_roll_angle', 'transducer_2_roll_angle', 'transducer_3_roll_angle'] if ky in self.settings]
+                    diffangle = max(rollangles) - min(rollangles)
+                    if diffangle > 5:  # this is just a guess really, if the roll angles differ by more than 5 degrees, we guess dual head
+                        return dual_head_option[0]
+                    else:
+                        return non_dual_head_option[0]
+                else:
+                    print('Found multiple sonar model number possibilities for this system: {}'.format(finalpossibles))
+
             print('Unable to determine sonar model from {}'.format(modelnum))
             return modelnum
 
