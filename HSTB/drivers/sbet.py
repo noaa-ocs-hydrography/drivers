@@ -213,40 +213,38 @@ def get_export_info_from_log(logfile):
         with open(logfile, 'r') as lfile:
             lns = lfile.readlines()
             for ln in lns:
-                if ln[0:10] == 'Input file':
-                    infile = ln.split(' : ')[1].rstrip()
-                    infile = os.path.split(infile)[1]
-                    attributes['input_sbet_file'] = infile
-                elif ln[0:11] == 'Output file':
-                    outfile = ln.split(' : ')[1].rstrip()
-                    outfile = os.path.split(outfile)[1]
-                    attributes['exported_sbet_file'] = outfile
-                elif ln[0:13] == 'Time Interval':
-                    samplerate = float(ln.split(' : ')[1].rstrip())
-                    samplerate_hz = str(1 / samplerate)
-                    attributes['sample_rate_hertz'] = samplerate_hz
-                elif ln[0:5] == 'Datum':
+                # if ln[0:10] == 'Input file':
+                #     infile = ln.split(' : ')[1].rstrip()
+                #     infile = os.path.split(infile)[1]
+                #     attributes['input_sbet_file'] = infile
+                # elif ln[0:11] == 'Output file':
+                #     outfile = ln.split(' : ')[1].rstrip()
+                #     outfile = os.path.split(outfile)[1]
+                #     attributes['exported_sbet_file'] = outfile
+                # if ln[0:13] == 'Time Interval':
+                #     samplerate = float(ln.split(' : ')[1].rstrip())
+                #     samplerate_hz = str(1 / samplerate)
+                #     attributes['sbet_sample_rate_hertz'] = samplerate_hz
+                if ln[0:5] == 'Datum':
                     dtm = ln.split(' : ')[1].rstrip().upper()
                     if dtm.find('NAD83') != -1:
                         dtm = 'NAD83'
                     elif dtm.find('WGS84') != -1:
                         dtm = 'WGS84'
-                    attributes['datum'] = dtm
-                elif ln[0:4] == 'Zone':
-                    attributes['zone'] = ln.split(' : ')[1].rstrip()
-                elif ln[0:4] == 'Grid':
-                    attributes['grid'] = ln.split(' : ')[1].rstrip()
+                    attributes['sbet_datum'] = dtm
+                # elif ln[0:4] == 'Zone':
+                #     attributes['sbet_zone'] = ln.split(' : ')[1].rstrip()
+                # elif ln[0:4] == 'Grid':
+                #     attributes['sbet_grid'] = ln.split(' : ')[1].rstrip()
                 elif ln[0:9] == 'Ellipsoid':
-                    attributes['ellipsoid'] = ln.split(' : ')[1].rstrip()
+                    attributes['sbet_ellipsoid'] = ln.split(' : ')[1].rstrip()
                 elif ln[0:7] == 'Mission':
-                    attributes['mission_date'] = ln.split(' : ')[1].rstrip()
-                    if attributes['mission_date']:
-                        attributes['mission_date'] = datetime.strptime(attributes['mission_date'], '%m/%d/%Y')
-        if 'datum' not in attributes:
+                    attributes['sbet_mission_date'] = ln.split(' : ')[1].rstrip()
+                    if attributes['sbet_mission_date']:
+                        attributes['sbet_mission_date'] = datetime.strptime(attributes['sbet_mission_date'], '%m/%d/%Y')
+        if 'sbet_datum' not in attributes:
             print('{}: Not a valid export log file, unable to find the "Datum" line'.format(logfile))
             return None
-        if 'sample_rate_hertz' not in attributes:  # no sample rate specified, full 200 hz sbet
-            attributes['sample_rate_hertz'] = '200'
         return attributes
     except TypeError:
         print('Expected a string path to the logfile, got {}'.format(logfile))
@@ -327,13 +325,13 @@ def _sbet_convert(sbetfile, weekstart_year, weekstart_week):
 
     # found this to be necessary for smrmsg, sorting here as well just in case
     time_indices = sbet_data[:, 0].argsort()
-    sbetdat = xr.Dataset({'latitude': (['time'], np.rad2deg(sbet_data[:, 1][time_indices])),
-                          'longitude': (['time'], np.rad2deg(sbet_data[:, 2][time_indices])),
-                          'altitude': (['time'], alt[time_indices])},
+    sbetdat = xr.Dataset({'sbet_latitude': (['time'], np.rad2deg(sbet_data[:, 1][time_indices])),
+                          'sbet_longitude': (['time'], np.rad2deg(sbet_data[:, 2][time_indices])),
+                          'sbet_altitude': (['time'], alt[time_indices])},
                          coords={'time': sbet_data[:, 0][time_indices]},
-                         attrs={'reference': {'latitude': 'reference point', 'longitude': 'reference point',
-                                              'altitude': 'reference point'},
-                                'units': {'latitude': 'degrees', 'longitude': 'degrees', 'altitude': 'meters'}})
+                         attrs={'reference': {'sbet_latitude': 'reference point', 'sbet_longitude': 'reference point',
+                                              'sbet_altitude': 'reference point'},
+                                'units': {'sbet_latitude': 'degrees', 'sbet_longitude': 'degrees', 'sbet_altitude': 'meters'}})
     return sbetdat
 
 
@@ -378,17 +376,17 @@ def _smrmsg_convert(smrmsgfile, weekstart_year, weekstart_week):
 
     # sort by time, i'm finding smrmsg files that are all over the place
     time_indices = smrmsg_data[:, 0].argsort()
-    smrmsgdat = xr.Dataset({'north_position_error': (['time'], npe[time_indices]), 'east_position_error': (['time'], epe[time_indices]),
-                            'down_position_error': (['time'], dpe[time_indices]), 'roll_error': (['time'], roll_error[time_indices]),
-                            'pitch_error': (['time'], pitch_error[time_indices]), 'heading_error': (['time'], heading_error[time_indices])},
+    smrmsgdat = xr.Dataset({'sbet_north_position_error': (['time'], npe[time_indices]), 'sbet_east_position_error': (['time'], epe[time_indices]),
+                            'sbet_down_position_error': (['time'], dpe[time_indices]), 'sbet_roll_error': (['time'], roll_error[time_indices]),
+                            'sbet_pitch_error': (['time'], pitch_error[time_indices]), 'sbet_heading_error': (['time'], heading_error[time_indices])},
                            coords={'time': smrmsg_data[:, 0][time_indices]},
-                           attrs={'reference': {'north_position_error': 'None', 'east_position_error': 'None',
-                                                'down_position_error': 'None', 'roll_error': 'None',
-                                                'pitch_error': 'None', 'heading_error': 'None'},
-                                  'units': {'north_position_error': 'meters (1 sigma)',
-                                            'east_position_error': 'meters (1 sigma)',
-                                            'down_position_error': 'meters (1 sigma)', 'roll_error': 'degrees (1 sigma)',
-                                            'pitch_error': 'degrees (1 sigma)', 'heading_error': 'degrees (1 sigma)'}})
+                           attrs={'reference': {'sbet_north_position_error': 'None', 'sbet_east_position_error': 'None',
+                                                'sbet_down_position_error': 'None', 'sbet_roll_error': 'None',
+                                                'sbet_pitch_error': 'None', 'sbet_heading_error': 'None'},
+                                  'units': {'sbet_north_position_error': 'meters (1 sigma)',
+                                            'sbet_east_position_error': 'meters (1 sigma)',
+                                            'sbet_down_position_error': 'meters (1 sigma)', 'sbet_roll_error': 'degrees (1 sigma)',
+                                            'sbet_pitch_error': 'degrees (1 sigma)', 'sbet_heading_error': 'degrees (1 sigma)'}})
     return smrmsgdat
 
 
@@ -410,9 +408,9 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
         Coordinates:
           * time       (time) float64 1.507e+09 1.507e+09 ... 1.507e+09 1.507e+09
         Data variables:
-            latitude   (time) float64 36.93 36.93 36.93 36.93 ... 36.94 36.94 36.94
-            longitude  (time) float64 -76.34 -76.34 -76.34 ... -76.37 -76.37 -76.37
-            altitude   (time) float64 -37.49 -37.49 -37.49 ... -36.98 -36.98 -36.98
+            sbet_latitude   (time) float64 36.93 36.93 36.93 36.93 ... 36.94 36.94 36.94
+            sbet_longitude  (time) float64 -76.34 -76.34 -76.34 ... -76.37 -76.37 -76.37
+            sbet_altitude   (time) float64 -37.49 -37.49 -37.49 ... -36.98 -36.98 -36.98
         Attributes:
             mission_date:       2017-10-05 00:00:00
             grid:               Universal Transverse Mercator
@@ -430,9 +428,9 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
         Coordinates:
           * time       (time) float64 1.507e+09 1.507e+09 ... 1.507e+09 1.507e+09
         Data variables:
-            latitude   (time) float64 36.93 36.93 36.93 36.93 ... 36.94 36.94 36.94
-            longitude  (time) float64 -76.34 -76.34 -76.34 ... -76.37 -76.37 -76.37
-            altitude   (time) float64 -37.49 -37.49 -37.49 ... -36.98 -36.98 -36.98
+            sbet_latitude   (time) float64 36.93 36.93 36.93 36.93 ... 36.94 36.94 36.94
+            sbet_longitude  (time) float64 -76.34 -76.34 -76.34 ... -76.37 -76.37 -76.37
+            sbet_altitude   (time) float64 -37.49 -37.49 -37.49 ... -36.98 -36.98 -36.98
         Attributes:
             logging rate (hz):  50
             mission_date:       2017-10-01 00:00:00
@@ -441,6 +439,7 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
     Parameters
     ----------
     sbetfile: str, full file path to the sbet file
+    smrmsgfile: str, full file path to the sbet file
     logfile: str, full file path to the sbet export log file
     weekstart_year: int, if you aren't providing a logfile, must provide the year of the sbet here
     weekstart_week: int, if you aren't providing a logfile, must provide the week of the sbet here
@@ -461,17 +460,16 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
 
     if logfile is not None:
         attrs = get_export_info_from_log(logfile)
-        if not attrs['datum'] or attrs['mission_date'] is None:
+        if not attrs['sbet_datum'] or attrs['sbet_mission_date'] is None:
             raise ValueError('Provided log does not seem to have either a datum or a mission date: {}'.format(logfile))
-        weekstart_year, weekstart_week, weekstart_day = attrs['mission_date'].isocalendar()
-        attrs['mission_date'] = attrs['mission_date'].strftime('%Y-%m-%d %H:%M:%S')
+        weekstart_year, weekstart_week, weekstart_day = attrs['sbet_mission_date'].isocalendar()
+        attrs['sbet_mission_date'] = attrs['sbet_mission_date'].strftime('%Y-%m-%d %H:%M:%S')
     elif weekstart_year is not None and weekstart_week is not None and override_datum is not None:
-        attrs = {'mission_date': datetime.fromisocalendar(weekstart_year, weekstart_week, 1).strftime('%Y-%m-%d %H:%M:%S')}
+        attrs = {'sbet_mission_date': datetime.fromisocalendar(weekstart_year, weekstart_week, 1).strftime('%Y-%m-%d %H:%M:%S')}
     else:
         raise ValueError('Expected either a log file to be provided or a year/week representing the start of the week and a datum.')
 
     sbetdat = _sbet_convert(sbetfile, weekstart_year, weekstart_week)
-    sbet_rate = np.round(int(1 / (sbetdat.time[1] - sbetdat.time[0])), -1)  # nearest ten hz
     if smrmsgfile is not None:
         smrmsgdat = _smrmsg_convert(smrmsgfile, weekstart_year, weekstart_week)
         if smrmsgdat is not None:
@@ -479,23 +477,24 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
             smrmsgdat = smrmsgdat.interp_like(sbetdat)
 
             # interp_like auto switches to float64 in order to provide NaNs where needed, according to docs
-            smrmsgdat['north_position_error'] = smrmsgdat['north_position_error'].astype(np.float32)
-            smrmsgdat['east_position_error'] = smrmsgdat['east_position_error'].astype(np.float32)
-            smrmsgdat['down_position_error'] = smrmsgdat['down_position_error'].astype(np.float32)
-            smrmsgdat['roll_error'] = smrmsgdat['roll_error'].astype(np.float32)
-            smrmsgdat['pitch_error'] = smrmsgdat['pitch_error'].astype(np.float32)
-            smrmsgdat['heading_error'] = smrmsgdat['heading_error'].astype(np.float32)
+            smrmsgdat['sbet_north_position_error'] = smrmsgdat['sbet_north_position_error'].astype(np.float32)
+            smrmsgdat['sbet_east_position_error'] = smrmsgdat['sbet_east_position_error'].astype(np.float32)
+            smrmsgdat['sbet_down_position_error'] = smrmsgdat['sbet_down_position_error'].astype(np.float32)
+            smrmsgdat['sbet_roll_error'] = smrmsgdat['sbet_roll_error'].astype(np.float32)
+            smrmsgdat['sbet_pitch_error'] = smrmsgdat['sbet_pitch_error'].astype(np.float32)
+            smrmsgdat['sbet_heading_error'] = smrmsgdat['sbet_heading_error'].astype(np.float32)
             sbetdat = xr.merge([sbetdat, smrmsgdat])
 
     if override_datum is not None:
-        attrs['datum'] = override_datum
+        attrs['sbet_datum'] = override_datum
     if override_ellipsoid is not None:
-        attrs['ellipsoid'] = override_ellipsoid
+        attrs['sbet_ellipsoid'] = override_ellipsoid
     if override_grid is not None:
-        attrs['grid'] = override_grid
+        attrs['sbet_grid'] = override_grid
     if override_zone is not None:
-        attrs['zone'] = override_zone
-    attrs['logging rate (hz)'] = str(sbet_rate)
+        attrs['sbet_zone'] = override_zone
+    sbet_rate = np.round(int(1 / (sbetdat.time[1] - sbetdat.time[0])), -1)  # nearest ten hz
+    attrs['sbet_logging rate (hz)'] = str(sbet_rate)
     attrs['nav_files'] = {os.path.split(sbetfile)[1]: sbet_fast_read_start_end_time(sbetfile)}
     if smrmsgfile is not None:
         attrs['nav_error_files'] = {os.path.split(smrmsgfile)[1]: smrmsg_fast_read_start_end_time(smrmsgfile)}
@@ -514,10 +513,12 @@ def sbets_to_xarray(sbetfiles: list, smrmsgfiles: list = None, logfiles: list = 
 
     Parameters
     ----------
-    sbetfile
-        full file path to the sbet files
-    logfile
-        full file path to the sbet export log files
+    sbetfiles
+        list of full file paths to the sbet files
+    smrmsgfiles
+        list of full file paths to the smrmsg files
+    logfiles
+        list of full file paths to the sbet export log files
     weekstart_year
         if you aren't providing a logfile, must provide the year of the sbet here
     weekstart_week
@@ -542,10 +543,17 @@ def sbets_to_xarray(sbetfiles: list, smrmsgfiles: list = None, logfiles: list = 
     totalsbetfiles = {}
     totalerrorfiles = {}
     for cnt, sbet in enumerate(sbetfiles):
-        converted_data = sbet_to_xarray(sbet, smrmsgfile=smrmsgfiles[cnt], logfile=logfiles[cnt], weekstart_year=weekstart_year,
-                                        weekstart_week=weekstart_week, override_datum=override_datum,
-                                        override_grid=override_grid, override_zone=override_zone,
-                                        override_ellipsoid=override_ellipsoid)
+        if smrmsgfiles:
+            sfile = smrmsgfiles[cnt]
+        else:
+            sfile = None
+        if logfiles:
+            lfile = logfiles[cnt]
+        else:
+            lfile = None
+        converted_data = sbet_to_xarray(sbet, smrmsgfile=sfile, logfile=lfile, weekstart_year=weekstart_year,
+                                        weekstart_week=weekstart_week, override_datum=override_datum, override_grid=override_grid,
+                                        override_zone=override_zone, override_ellipsoid=override_ellipsoid)
         newdata.append(converted_data)
         totalsbetfiles.update(converted_data.nav_files)
         totalerrorfiles.update(converted_data.nav_error_files)
@@ -577,9 +585,9 @@ def smrmsg_to_xarray(smrmsgfile, logfile=None, weekstart_year=None, weekstart_we
     """
     if logfile is not None:
         attrs = get_export_info_from_log(logfile)
-        if attrs['mission_date'] is None:
+        if attrs['sbet_mission_date'] is None:
             raise ValueError('Provided log does not seem to have a mission date: {}'.format(logfile))
-        weekstart_year, weekstart_week, weekstart_day = attrs['mission_date'].isocalendar()
+        weekstart_year, weekstart_week, weekstart_day = attrs['sbet_mission_date'].isocalendar()
     elif weekstart_year is not None and weekstart_week is not None:
         attrs = {}
     else:
@@ -590,11 +598,11 @@ def smrmsg_to_xarray(smrmsgfile, logfile=None, weekstart_year=None, weekstart_we
         smrmsg_rate = int(1 / (smrmsgdat.time[1] - smrmsgdat.time[0]))
 
         final_attrs = {}
-        if 'mission_date' not in attrs:
-            attrs = {'mission_date': datetime.fromisocalendar(weekstart_year, weekstart_week, 1).strftime('%Y-%m-%d %H:%M:%S')}
-        final_attrs['mission_date'] = attrs['mission_date']
-        final_attrs['logging rate (hz)'] = smrmsg_rate
-        final_attrs['source_file'] = smrmsgfile
+        if 'sbet_mission_date' not in attrs:
+            attrs = {'sbet_mission_date': datetime.fromisocalendar(weekstart_year, weekstart_week, 1).strftime('%Y-%m-%d %H:%M:%S')}
+        final_attrs['sbet_mission_date'] = attrs['mission_date']
+        final_attrs['sbet_logging rate (hz)'] = smrmsg_rate
+        final_attrs['sbet_source_file'] = smrmsgfile
         smrmsgdat.attrs = final_attrs
     else:
         smrmsgdat = None
