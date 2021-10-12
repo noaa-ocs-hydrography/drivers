@@ -217,15 +217,15 @@ def get_export_info_from_log(logfile):
                 #     infile = ln.split(' : ')[1].rstrip()
                 #     infile = os.path.split(infile)[1]
                 #     attributes['input_sbet_file'] = infile
-                # elif ln[0:11] == 'Output file':
-                #     outfile = ln.split(' : ')[1].rstrip()
-                #     outfile = os.path.split(outfile)[1]
-                #     attributes['exported_sbet_file'] = outfile
+                if ln[0:11] == 'Output file':
+                    outfile = ln.split(' : ')[1].rstrip()
+                    outfile = os.path.split(outfile)[1]
+                    attributes['exported_sbet_file'] = outfile
                 # if ln[0:13] == 'Time Interval':
                 #     samplerate = float(ln.split(' : ')[1].rstrip())
                 #     samplerate_hz = str(1 / samplerate)
                 #     attributes['sbet_sample_rate_hertz'] = samplerate_hz
-                if ln[0:5] == 'Datum':
+                elif ln[0:5] == 'Datum':
                     dtm = ln.split(' : ')[1].rstrip().upper()
                     if dtm.find('NAD83') != -1:
                         dtm = 'NAD83'
@@ -242,9 +242,11 @@ def get_export_info_from_log(logfile):
                     attributes['sbet_mission_date'] = ln.split(' : ')[1].rstrip()
                     if attributes['sbet_mission_date']:
                         attributes['sbet_mission_date'] = datetime.strptime(attributes['sbet_mission_date'], '%m/%d/%Y')
-        if 'sbet_datum' not in attributes:
-            print('{}: Not a valid export log file, unable to find the "Datum" line'.format(logfile))
-            return None
+        req_keys = ['sbet_mission_date', 'sbet_ellipsoid', 'sbet_datum', 'exported_sbet_file']
+        for ky in req_keys:
+            if ky not in attributes:
+                print('{}: Not a valid export log file, unable to find the {} line'.format(logfile, ky))
+                return None
         return attributes
     except TypeError:
         print('Expected a string path to the logfile, got {}'.format(logfile))
@@ -460,6 +462,9 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
 
     if logfile is not None:
         attrs = get_export_info_from_log(logfile)
+        if attrs is None:
+            raise ValueError('Log file invalid, does not contain the correct lines.')
+        attrs.pop('exported_sbet_file')
         if not attrs['sbet_datum'] or attrs['sbet_mission_date'] is None:
             raise ValueError('Provided log does not seem to have either a datum or a mission date: {}'.format(logfile))
         weekstart_year, weekstart_week, weekstart_day = attrs['sbet_mission_date'].isocalendar()
