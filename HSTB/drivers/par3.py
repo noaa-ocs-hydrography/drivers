@@ -224,7 +224,7 @@ class AllRead:
         self.error = False
         self.start_ptr = start_ptr
         self.end_ptr = end_ptr
-        self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122, 302]
+        self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122, 124, 302, 304]
         self.ems_with_oldrangeangle = [3020, 1020, 120, 2000]
         self.time_buffer = []
 
