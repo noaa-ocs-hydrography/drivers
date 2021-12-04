@@ -374,6 +374,13 @@ class AllRead:
         if self.packet_read and not self.packet.decoded:
             try:
                 self.packet.decode()
+                if self.packet.dtype == 73:
+                    if self.packet.subpack.fix_byte_offset:
+                        # if you end up in here, it means we found an installation parameters entry that was too short
+                        # we had to move back fix_byte_offset bytes, so adjust the file pointer accordingly
+                        self.infile.seek(-self.packet.subpack.fix_byte_offset, 1)
+                        self.at_right_byte = False
+                        self.seek_next_startbyte()
             except NotImplementedError as err:
                 print(err)
             self.packet_read = False
@@ -2591,7 +2598,18 @@ class Data73(BaseData):
         the decoder for the rest of the record.
         """
         super(Data73, self).__init__(datablock, byteswap=byteswap)
-        temp = datablock[self.hdr_sz:].rstrip(b'\x00').decode('utf8').split(',')
+        self.fix_byte_offset = 0
+        try:
+            temp = datablock[self.hdr_sz:].rstrip(b'\x00').decode('utf8').split(',')
+        # I found one example of an early 2040 file where the installation parameters record was too short.  Try and find the actual
+        # end and alter the file pointer post decoding, see AllRead.get()
+        except UnicodeDecodeError:
+            actual_end = datablock[-20:].find(b'\x03')
+            if actual_end == -1:
+                raise ValueError("ERROR: Found installation parameters record that cannot be decoded")
+            self.fix_byte_offset = 20 - actual_end
+            temp = datablock[self.hdr_sz:-self.fix_byte_offset].rstrip(b'\x00').decode('utf8').split(',')
+            print('WARNING: Found unexpected length to the installation parameters record, had to find the actual end of the record')
         self.settings = {}
         self.ky_data73_translator = {'WLZ': 'waterline_vertical_location', 'SMH': 'system_main_head_serial_number',
                                      'HUN': 'hull_unit', 'HUT': 'hull_unit_offset', 'TXS': 'tx_serial_number',
