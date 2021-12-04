@@ -289,7 +289,10 @@ class AllRead:
 
         emsrchs = []
         for em in self.ems_with_rangeangle + self.ems_with_oldrangeangle:
-            sonartype = struct.pack('H', em)
+            if em == 124:
+                sonartype = b'\|\x00'  # have to escape the special character so the regex looks for it
+            else:
+                sonartype = struct.pack('H', em)
             if sonartype == b'.\x01':
                 sonartype = b'\.\x01'
             em_search_exp = search_exp + sonartype
