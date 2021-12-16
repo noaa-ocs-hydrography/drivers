@@ -499,7 +499,7 @@ def sbet_to_xarray(sbetfile, smrmsgfile=None, logfile=None, weekstart_year=None,
     if override_zone is not None:
         attrs['sbet_zone'] = override_zone
     sbet_rate = np.round(int(1 / (sbetdat.time[1] - sbetdat.time[0])), -1)  # nearest ten hz
-    attrs['sbet_logging rate (hz)'] = str(sbet_rate)
+    attrs['sbet_logging_rate_hz'] = str(sbet_rate)
     attrs['nav_files'] = {os.path.split(sbetfile)[1]: sbet_fast_read_start_end_time(sbetfile)}
     if smrmsgfile is not None:
         attrs['nav_error_files'] = {os.path.split(smrmsgfile)[1]: smrmsg_fast_read_start_end_time(smrmsgfile)}
