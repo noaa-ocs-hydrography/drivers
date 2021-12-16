@@ -119,7 +119,9 @@ class kmall():
                 # now compare dgram identifier with the last three letters of each read method to find the right one
                 self.datagram_ident = dgram[-3:].decode()
                 read_method = [rm for rm in self.read_methods if rm[-3:] == self.datagram_ident]
-                if not len(read_method) > 1:
+                if len(read_method) == 0:
+                    self.read_method = None
+                elif len(read_method) == 1:
                     self.read_method = read_method[0]
                 else:
                     raise ValueError('Found multiple valid read methods for {}: {}'.format(dgram, read_method))
@@ -3570,7 +3572,16 @@ class kmall():
                 m = self.datagram_ident_search.search(datchk, 0)
                 if m:
                     self.FID.seek(possible_start - 4)
-                    return True
+                    self.decode_datagram()
+                    if self.read_method:
+                        try:
+                            self.read_datagram()
+                            self.FID.seek(possible_start - 4)
+                            return True
+                        except:
+                            self.FID.seek(possible_start + 1)
+                    else:
+                        self.FID.seek(possible_start + 1)
 
     def _populate_rec(self, rec: dict):
         """
@@ -3625,9 +3636,7 @@ class kmall():
         below.
         """
         recs_categories = {'SKM': ['sample.KMdefault.dgtime', 'sample.KMdefault.roll_deg', 'sample.KMdefault.pitch_deg',
-                                   'sample.KMdefault.heave_m', 'sample.KMdefault.heading_deg',
-                                   'sample.KMdefault.latitude_deg', 'sample.KMdefault.longitude_deg',
-                                   'sample.KMdefault.ellipsoidHeight_m'],
+                                   'sample.KMdefault.heave_m', 'sample.KMdefault.heading_deg'],
                            'IIP': ['header.dgtime', 'install_txt'],
                            'MRZ': ['header.dgtime', 'cmnPart.pingCnt',
                                    'pingInfo.soundSpeedAtTxDepth_mPerSec', 'pingInfo.numTxSectors', 'txSectorInfo.txArrNumber',
@@ -3635,19 +3644,17 @@ class kmall():
                                    'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
                                    'sounding.beamAngleReRx_deg', 'sounding.txSectorNumb', 'sounding.detectionType',
                                    'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
-                                   'pingInfo.modeAndStabilisation', 'pingInfo.pulseForm', 'pingInfo.depthMode'],
+                                   'pingInfo.modeAndStabilisation', 'pingInfo.pulseForm', 'pingInfo.depthMode',
+                                   'pingInfo.latitude_deg', 'pingInfo.longitude_deg', 'pingInfo.ellipsoidHeightReRefPoint_m'],
                            'IOP': ['header.dgtime', 'runtime_txt'],
                            'SVP': ['time_sec', 'sensorData.depth_m', 'sensorData.soundVelocity_mPerSec']}
 
-        recs_categories_translator = {'SKM': {'sample.KMdefault.dgtime': [['attitude', 'time'], ['navigation', 'time']],
+        recs_categories_translator = {'SKM': {'sample.KMdefault.dgtime': [['attitude', 'time']],
                                               'sample.KMdefault.roll_deg': [['attitude', 'roll']],
                                               'sample.KMdefault.pitch_deg': [['attitude', 'pitch']],
                                               'sample.KMdefault.heave_m': [['attitude', 'heave']],
-                                              'sample.KMdefault.heading_deg': [['attitude', 'heading']],
-                                              'sample.KMdefault.latitude_deg': [['navigation', 'latitude']],
-                                              'sample.KMdefault.longitude_deg': [['navigation', 'longitude']],
-                                              'sample.KMdefault.ellipsoidHeight_m': [['navigation', 'altitude']]},
-                                      'MRZ': {'header.dgtime': [['ping', 'time']],
+                                              'sample.KMdefault.heading_deg': [['attitude', 'heading']]},
+                                      'MRZ': {'header.dgtime': [['ping', 'time'], ['navigation', 'time']],
                                               'cmnPart.pingCnt': [['ping', 'counter']],
                                               'pingInfo.soundSpeedAtTxDepth_mPerSec': [['ping', 'soundspeed']],
                                               'pingInfo.numTxSectors': [['ping', 'ntx']],
@@ -3663,7 +3670,10 @@ class kmall():
                                               'sounding.twoWayTravelTime_sec': [['ping', 'traveltime']],
                                               'pingInfo.modeAndStabilisation': [['ping', 'yawpitchstab']],
                                               'pingInfo.pulseForm': [['ping', 'mode']],
-                                              'pingInfo.depthMode': [['ping', 'modetwo']]},
+                                              'pingInfo.depthMode': [['ping', 'modetwo']],
+                                              'pingInfo.latitude_deg': [['navigation', 'latitude']],
+                                              'pingInfo.longitude_deg': [['navigation', 'longitude']],
+                                              'pingInfo.ellipsoidHeightReRefPoint_m': [['navigation', 'altitude']]},
                                       'IIP': {'header.dgtime': [['installation_params', 'time']],
                                               'install_txt': [['installation_params', 'installation_settings']]},
                                       'IOP': {'header.dgtime': [['runtime_params', 'time']],
@@ -3836,7 +3846,7 @@ class kmall():
                     else:
                         # found no records, empty array of strings for the mode/stab records
                         recs_to_read[rec][dgram] = np.zeros(0, 'U2')
-                elif rec in ['navigation', 'attitude']:  # these recs have time blocks of data in them, need to be concatenated
+                elif rec in ['attitude']:  # these recs have time blocks of data in them, need to be concatenated
                     recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
                 elif rec == 'ping':  # use the argsort indices here to sort by time
                     if dgram in ['detectioninfo', 'qualityfactor', 'detectioninfo_two']:
@@ -4185,6 +4195,30 @@ class kmall():
         translated['sonar_model_number'] = self._translate_sonar_model_number(translated, translated['sonar_model_number'].lower())
         return translated
 
+    def _seek_start_byte_by_chunks(self, chunksize):
+        """
+        If we are in the middle of a file, we can use this to seek the start of the closest previous datagram.  We get the datagram
+        closest to the current file pointer by seeking forward in chunks of size chunksize.  End result is self.FID set
+        to the file pointer of the closest previous datagram.
+
+        Parameters
+        ----------
+        chunksize
+            size of the working chunk in bytes
+        """
+
+        self.FID.seek(-chunksize, 2)
+        found_start = False
+        attempts = 1
+        try:
+            while not found_start:
+                found_start = self.seek_next_startbyte(chunksize, self.FID.tell())
+                if not found_start:  # no datagram found in this chunk, generally happens because you hit a particularly big MRZ record
+                    attempts += 1
+                    self.FID.seek(-chunksize * attempts, 2)
+        except OSError:
+            raise OSError('fast_read_start_end_time: unable to find a valid end datagram to get the end time')
+
     def fast_read_start_end_time(self):
         """
         Get the start and end time for the file without mapping the file
@@ -4212,13 +4246,12 @@ class kmall():
             except:
                 continue
 
-        # pick 100k of reading just to make sure you get some valid records, or the filelength if it is less than that
-        # (used to be 10k, but MRZ is a huge datagram)
+        # pick 5k of reading just to make sure you get some valid records, or the filelength if it is less than that
         self.eof = False
         self.FID.seek(0, 2)
-        chunksize = min(100 * 1024, self.FID.tell())
-        self.FID.seek(-chunksize, 2)
-        self.seek_next_startbyte(chunksize, self.FID.tell())
+        filsize = self.FID.tell()
+        chunksize = min(10 * 1024, filsize)
+        self._seek_start_byte_by_chunks(chunksize)
         while not self.eof:
             try:
                 self.decode_datagram()
