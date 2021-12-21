@@ -505,6 +505,12 @@ class Datagram:
 
     def decode(self):
         """Calls the correct class to read the data part of the data frame"""
+        # elif self.datatype == 1003:
+        #     self.subpack = Data1003(self.infile)
+        # elif self.datatype == 1012:
+        #     self.subpack = Data1012(self.infile)
+        # elif self.datatype == 1013:
+        #     self.subpack = Data1013(self.infile)
         if self.dtype == 7000:
             self.subpack = Data7000(self.datablock, self.time)
         elif self.dtype == 7001:
@@ -543,12 +549,6 @@ class Datagram:
             self.subpack = Data7200(self.datablock, self.time)
         # elif self.datatype == 7503:
         #     self.subpack = Data7503(self.infile)
-        # elif self.datatype == 1003:
-        #     self.subpack = Data1003(self.infile)
-        # elif self.datatype == 1012:
-        #     self.subpack = Data1012(self.infile)
-        # elif self.datatype == 1013:
-        #     self.subpack = Data1013(self.infile)
         else:
             raise NotImplementedError("Data record " + str(self.dtype) + " decoding is not yet supported.")
         self.decoded = True
@@ -811,10 +811,10 @@ class Data7000(BaseData):
                           ('BottomDetectionFilterMinDepth', 'f4'), ('BottomDetectionFilterMaxDepth', 'f4'),
                           ('Absorption', 'f4'), ('SoundVelocity', 'f4'), ('Spreading', 'f4'), ('ReservedFlag', 'u2')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False):
+    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data7000, self).__init__(datablock, byteswap=byteswap)
+        super(Data7000, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
         self.time = POSIXtime
 
 
@@ -824,10 +824,10 @@ class Data7001(BaseData):
     """
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('NumberOfDevices', 'u4')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False):
+    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data7001, self).__init__(datablock, byteswap=byteswap)
+        super(Data7001, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
         self.time = POSIXtime
         self.device_header = np.dtype([('DeviceIdentifier', 'u4'), ('DeviceDescription', 'S60'), ('DeviceAlphaDataCard', 'u4'),
                                        ('DeviceSerialNumber', 'u8'), ('DeviceInfoLength', 'u4')])
@@ -863,10 +863,10 @@ class Data7002(BaseData):
                           ('StopFrequency', 'f4'), ('WindowType', 'u4'), ('ShadingValue', 'f4'),
                           ('EffectivePulseWidth', 'f4'), ('Reserved', '13u4')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False):
+    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data7002, self).__init__(datablock, byteswap=byteswap)
+        super(Data7002, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
         self.time = POSIXtime
 
 
@@ -900,8 +900,8 @@ class Data7004(BasePlottableData):
     """
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('NumberOfBeams', 'u4')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False):
-        super(Data7004, self).__init__(datablock, byteswap=byteswap)
+    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+        super(Data7004, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
         self.time = POSIXtime
         self.data = None
         self.read(datablock[self.hdr_sz:])
@@ -1625,8 +1625,8 @@ class Data7200(BaseData):
                           ('RecordDataSize', 'u4'), ('NumberOfDevices', 'u4'), ('RecordingName', 'S64'),
                           ('RecordingProgramVersion', 'S16'), ('UserDefinedName', 'S64'), ('Notes', 'S128')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False):
-        super(Data7200, self).__init__(datablock, byteswap=byteswap)
+    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+        super(Data7200, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
         # the strings are 'null terminated' so strip the bytes from those messages
         self.header[6] = self.header[6].rstrip(b'\xff').rstrip(b'\x00').decode()
         self.header[7] = self.header[6].rstrip(b'\xff').rstrip(b'\x00').decode()
@@ -1764,17 +1764,17 @@ class MapPack:
         self.packdir = {}
         self.sizedir = {}
 
-    def add(self, type, location=0, time=0, ping=0, size=0):
+    def add(self, typ, location=0, time=0, ping=0, size=0):
         """Adds the location, time and ping to the tuple for the value type"""
-        self.type = type
-        self.store = [location, time, ping]
-        if self.type in self.packdir:
-            self.packdir[self.type].append(self.store)
-            self.sizedir[self.type] += size
+        typ = typ
+        store = [location, time, ping]
+        if type in self.packdir:
+            self.packdir[typ].append(store)
+            self.sizedir[typ] += size
         else:
-            self.packdir[self.type] = []
-            self.packdir[self.type].append(self.store)
-            self.sizedir[self.type] = size
+            self.packdir[typ] = []
+            self.packdir[typ].append(store)
+            self.sizedir[typ] = size
 
     def finalize(self):
         for key in self.packdir.keys():
@@ -1828,32 +1828,6 @@ class MapPack:
         plt.legend(keys, loc='lower right')
 
     def save(self, outfilename):
-        self.outfile = open(outfilename + '.prr', 'wb')
-        pickle.dump(self.packdir, self.outfile)
-
-    def load(self, infilename):
-        self.infile = open(infilename + '.prr', 'r+b')
-        pickle.load(self.infile)
-
-
-def main():
-    print('\n prr V-0.1 (for experimental use)')
-    print('This script is for reading files containing the Reson 7k format.')
-    print('Enter the name of the file containing the data:')
-
-    infilename = sys.stdin.readline()[0:-1]
-    print('Filename read as: %s\n' % (infilename))
-    reader = X7kRead(infilename)
-    # reader.extract()
-    reader.mapfile()
-    firstping = reader.map.packdir['7000'][0][1]
-    print('Packet summary:')
-    reader.map.printmap()
-    reader.close()
-
-    print("Press 'Enter' to exit")
-    sys.stdin.readline()
-
-
-if __name__ == '__main__':
-    main()
+        outfile = open(outfilename + '.prr', 'wb')
+        pickle.dump(self.packdir, outfile)
+        outfile.close()
