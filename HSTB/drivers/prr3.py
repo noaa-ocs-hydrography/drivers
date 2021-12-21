@@ -22,24 +22,22 @@ class X7kRead:
         """
         opens and memory maps the file
         """
-        # format info for reading 7K files
-        self.hypack_sz = 4  # hypack header size
-        self.hypack_fmt = '<I'
-        self.netfrm_sz = 36  # Reson Network Frames size
-        self.netfrm_fmt = '<HHIHH4IHHI'
 
+        if start_ptr > end_ptr:
+            raise ValueError(f'prr3: start pointer ({start_ptr}) must be greater than end pointer ({end_ptr})')
         # initialize flags for reading methods
         self.eof = False  # end of file reached
-        self.start_ptr = start_ptr
-        self.end_ptr = end_ptr
         self.hdr_read = False  # header read status
         self.data_read = False  # data read status
-        self.hypack_hdr = 0  # size of the hypack block remaining
-        self.netfrm_hdr = 0  # size of the Reson block remaining
         self.last_record_sz = 0  # size of the last record
         self.corrupt_record = False  # status of the current record is corrupt
         self.split_record = False  # split record
         self.mapped = False  # status of the mapping
+
+        self.start_ptr = start_ptr
+        self.end_ptr = end_ptr
+        self.at_right_byte = False
+        self.protocol_version = None
 
         # find file type and open file
         self.infilename = infilename
@@ -48,14 +46,37 @@ class X7kRead:
         self.tempread = True
         if self.intype in ('7k', 's7k'):
             self.infile = open(infilename, 'rb')
+            if end_ptr:  # file length is only from start to end pointer
+                self.filelen = int(self.end_ptr - self.start_ptr)
+            else:  # file length is the whole file
+                self.infile.seek(-self.start_ptr, 2)
+                self.filelen = self.infile.tell()
+            self.infile.seek(0, 2)
+            self.max_filelen = self.infile.tell()  # max file length is useful when you use end pointer/start pointer
+            self.infile.seek(self.start_ptr, 0)
         else:
+            self.infile = None
+            self.filelen = 0
+            self.max_filelen = 0
             print(f'invalid file type: {self.intype}')
-        self.infile.seek(0, 2)
-        self.filelen = self.infile.tell()
-        self.infile.seek(0)
 
         self.packet = None  # the last decoded datagram
         self.map = None  # the mappack object generated on mapfile
+        self._get_protocol_version()
+
+    def _get_protocol_version(self):
+        curptr = self.infile.tell()
+        if self.intype == '7k':
+            self.infile.seek(44, 0)
+        else:
+            self.infile.seek(4, 0)
+        syncpattern = self.infile.read(4)
+        assert syncpattern == b'\xff\xff\x00\x00'
+        self.infile.seek(-8, 1)
+        self.protocol_version = np.frombuffer(self.infile.read(2), dtype='u2')[0]
+        if self.protocol_version < 5:
+            print(f'prr3: Warning, found protocol version = {self.protocol_version}, only version 5 is tested')
+        self.infile.seek(curptr)
 
     def read(self, verbose=False):
         """
@@ -82,46 +103,56 @@ class X7kRead:
                 self.hdr_read = False
                 self.data_read = False
 
-    def reads7k(self, verbose):
+    def reads7k(self, verbose=True):
         """Processes data block according to the s7k format"""
         # read data record frame
+        if not self.at_right_byte:
+            self.seek_next_startbyte()
         packetsize = self.checkfile(verbose)
         if self.tempread:
             if packetsize is None:
                 print('Unable to find packet size in header!')
             else:
                 start_of_datagram = self.infile.tell()
+                self.last_record_sz = packetsize
                 self.packet = Datagram(self.infile.read(packetsize), start_of_datagram)
 
     def read7k(self, verbose=True):
         """Removes the Hypack Header and the Reson Network Frames and then assumes s7k format."""
+        # format info for reading 7K files
+        hypack_hdr = 0  # size of the hypack block remaining
+        hypack_sz = 4  # hypack header size
+        netfrm_sz = 36  # Reson Network Frames size
+        hypack_fmt = '<I'
+        netfrm_fmt = '<HHIHH4IHHI'
+
         if self.split_record:
-            self.infile.seek(36, 1)  # this takes into account the netframe header for the next read, but doesn't fix the problem
-            self.hypack_hdr -= 36
+            self.infile.seek(netfrm_sz, 1)  # this takes into account the netframe header for the next read, but doesn't fix the problem
+            hypack_hdr -= netfrm_sz
             self.split_record = False
-        if self.hypack_hdr < 0:  # this happens when a hypack header falls inside of a record
-            if np.abs(self.hypack_hdr) > self.last_record_sz:  # I don't know why this happens
-                self.hypack_hdr = 0
+        if hypack_hdr < 0:  # this happens when a hypack header falls inside of a record
+            if np.abs(hypack_hdr) > self.last_record_sz:  # I don't know why this happens
+                hypack_hdr = 0
             else:  # this goes back into the corrupted record to find the hypack header
-                self.infile.seek(self.hypack_hdr, 1)
-                temp = struct.unpack(self.hypack_fmt, self.infile.read(self.hypack_sz))[0]
-                self.infile.seek(-self.hypack_hdr, 1)
-                self.hypack_hdr += temp
-        if self.hypack_hdr == 0:
-            temp = self.infile.read(self.hypack_sz)
-            if len(temp) == self.hypack_sz:
-                [self.hypack_hdr] = struct.unpack(self.hypack_fmt, temp)
-        temp = self.infile.read(self.netfrm_sz)
+                self.infile.seek(hypack_hdr, 1)
+                temp = struct.unpack(hypack_fmt, self.infile.read(hypack_sz))[0]
+                self.infile.seek(-hypack_hdr, 1)
+                hypack_hdr += temp
+        if hypack_hdr == 0:
+            temp = self.infile.read(hypack_sz)
+            if len(temp) == hypack_sz:
+                [hypack_hdr] = struct.unpack(hypack_fmt, temp)
+        temp = self.infile.read(netfrm_sz)
         self.reads7k(verbose=verbose)
-        if len(temp) == self.netfrm_sz:
-            self.netfrm_hdr = struct.unpack(self.netfrm_fmt, temp)
-            self.last_record_sz = self.packet.header[3] + self.netfrm_sz
-            self.hypack_hdr = self.hypack_hdr - self.last_record_sz
-            if self.hypack_hdr < 0:
+        if len(temp) == netfrm_sz:
+            netfrm_hdr = struct.unpack(netfrm_fmt, temp)
+            self.last_record_sz = self.packet.header[3] + netfrm_sz
+            hypack_hdr = hypack_hdr - self.last_record_sz
+            if hypack_hdr < 0:
                 self.corrupt_record = True
             else:
                 self.corrupt_record = False
-            if self.netfrm_hdr[5] < self.netfrm_hdr[6]:  # this is when records are broken up
+            if netfrm_hdr[5] < netfrm_hdr[6]:  # this is when records are broken up
                 self.split_record = True
 
     def skip(self):
@@ -150,12 +181,13 @@ class X7kRead:
     def reset(self):
         """Resets to the beginning of the file."""
         self.infile.seek(0)
+        self.eof = False
         self.hdr_read = False
         self.data_read = False
-        self.hypack_hdr = 0
         self.tempread = True
         self.corrupt_record = False
         self.last_record_sz = 0
+        self.split_record = False
 
     def findpacket(self, datatype, verbose=True):
         """Finds the requested packet type and reads the packet"""
@@ -186,7 +218,6 @@ class X7kRead:
                     count += 1
                     self.hdr_read = False
                     self.data_read = False
-                    self.hypack_hdr = 0
                     self.last_record_sz = 0
             except AssertionError:
                 # print "End of file"
@@ -195,6 +226,41 @@ class X7kRead:
             if verbose:
                 print("reset " + str(count) + " bytes to " + str(self.infile.tell()))
         return packetsize
+
+    def seek_next_startbyte(self):
+        """
+        Determines if current pointer is at the start of a record.  If not, finds the next valid one.
+        """
+        # check is to continue on until you find the header pattern, which surrounds the sync pattern sequence.  Can't just
+        #   search for \x00\x00\xff\xff, need to also find protocol version to get it all matched up correctly
+        while not self.at_right_byte:
+            cur_ptr = self.infile.tell()
+            if cur_ptr >= self.start_ptr + self.filelen:
+                self.eof = True
+                raise ValueError('prr3: Unable to find sonar startbyte, is this sonar supported?')
+            # consider start bytes right at the end of the given filelength as valid, even if they extend
+            # over to the next chunk
+            srchdat = self.infile.read(min(20, (self.start_ptr + self.filelen) - cur_ptr))
+            stx_idx = 1
+            # First loop through is mandatory to find a startbyte
+            while stx_idx >= 0:
+                stx_idx = srchdat.find(b'\xff\xff\x00\x00')  # -1 if there is no sync pattern
+                if stx_idx >= 0:
+                    possible_start = cur_ptr + stx_idx
+                    self.infile.seek(possible_start - 4)  # go to protocol version
+                    datchk = np.frombuffer(self.infile.read(2), dtype='u2')[0]
+                    if datchk == self.protocol_version:
+                        self.infile.seek(-2, 1)  # found a valid start, go to the start of the record
+                        self.at_right_byte = True
+                        break
+                if stx_idx < 0:
+                    self.infile.seek(-4, 1)  # get ready for the next search, allow for edge case where sync pattern is across chunks
+                if not self.at_right_byte:   # continue search in this srchdat chunk of the file
+                    try:
+                        srchdat = srchdat[stx_idx + 1:]  # Start after that invalid start byte, look for the next in the chunk
+                        cur_ptr += stx_idx + 1
+                    except:  # must be at the end of the chunk, so the next .find will return -1 anyway
+                        pass
 
     def mapfile(self, verbose=False, show_progress=True):
         """Maps the location of all the packets in the file.
@@ -248,12 +314,15 @@ class X7kRead:
             self.mapfile()
         self.intype = 's7k'
         recordtype = str(recordtype)
-        loc = int(self.map.packdir[recordtype][numrecord][0])
-        self.infile.seek(loc)
-        self.hdr_read = False
-        self.data_read = False
-        self.eof = False
-        self.get()
+        if recordtype in self.map.packdir:
+            loc = int(self.map.packdir[recordtype][numrecord][0])
+            self.infile.seek(loc)
+            self.hdr_read = False
+            self.data_read = False
+            self.eof = False
+            self.get()
+        else:
+            print(f'Unable to find record {recordtype} in file')
         return self.packet.subpack
 
     def getping(self, numping):
@@ -383,7 +452,6 @@ class X7kRead:
         print('header read status: ' + str(self.hdr_read))
         print('data read status: ' + str(self.data_read))
         print('map status: ' + str(self.mapped))
-        print('size of hypack block remaining: ' + str(self.hypack_hdr))
         print('size of last record: ' + str(self.last_record_sz))
         print('split record: ' + str(self.split_record))
         print('status of the current record is corrupt: ' + str(self.corrupt_record))
@@ -1714,9 +1782,26 @@ class MapPack:
             tempindx = temp[:, 1].argsort()
             self.packdir[key] = temp[tempindx, :]
 
-    def find(self, valtype, val):
-        """Finds the desired packet either by time stamp or by ping number"""
-        pass
+    def find_nearest(self, file_loc: int, mode: str = 'next'):
+        """Finds the nearest packet to the given file location in bytes"""
+        cur_closest = None
+        rectype = None
+        recdata = None
+        for typ in list(self.packdir.keys()):
+            locs = self.packdir[typ][:, 0]
+            if mode == 'nearest':
+                diff = np.abs(locs - file_loc)
+            elif mode == 'next':
+                diff = locs - file_loc
+                diff[diff < 0] = np.nan
+            try:
+                closest_index = np.nanargmin(diff)
+                if (cur_closest is None) or (diff[closest_index] < cur_closest):
+                    cur_closest = diff[closest_index]
+                    rectype, recdata = typ, int(self.packdir[typ][closest_index, 0])
+            except ValueError:
+                pass
+        return rectype, recdata
 
     def printmap(self):
         keys = []
