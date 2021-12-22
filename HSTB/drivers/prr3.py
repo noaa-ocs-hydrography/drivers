@@ -13,6 +13,51 @@ import matplotlib.pyplot as plt
 from datetime import timedelta, timezone, datetime
 
 
+recs_categories_7006 = {'1012': ['time', 'Roll', 'Pitch', 'Heave'],
+                        '1013': ['time', 'Heading'],
+                        '7503': ['time', 'header'],
+                      '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
+                             'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
+                             'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
+                      '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
+                      '85': ['time', 'data.Depth', 'data.SoundSpeed'],
+                      '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
+
+recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                        'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
+                                        'Heading': [['attitude', 'heading']]},
+                                 '73': {'time': [['installation_params', 'time']],
+                                        'Serial#': [['installation_params', 'serial_one']],
+                                        'Serial#2': [['installation_params', 'serial_two']],
+                                        'settings': [['installation_params', 'installation_settings']]},
+                                 '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
+                                        'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                        'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
+                                        'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
+                                        'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
+                                        'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                 '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
+                                        'ReceiverFixedGain': [['runtime_params', 'modetwo']],
+                                        'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
+                                        'settings': [['runtime_params', 'runtime_settings']]},
+                                 '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                        'SoundSpeed': [['profile', 'soundspeed']]},
+                                 '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                        'Longitude': [['navigation', 'longitude']],
+                                        'Altitude': [['navigation', 'altitude']]}}
+recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
+                          'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
+                                                  'installation_settings': None},
+                          'ping': {'time': None, 'counter': None, 'soundspeed': None, 'ntx': None, 'serial_num': None,
+                                   'tiltangle': None, 'delay': None, 'frequency': None,
+                                   'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
+                                   'qualityfactor': None, 'traveltime': None},
+                          'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
+                                             'runtime_settings': None},
+                          'profile': {'time': None, 'depth': None, 'soundspeed': None},
+                          'navigation': {'time': None, 'latitude': None, 'longitude': None, 'altitude': None}}
+
+
 class X7kRead:
     """
     Open a file in binary mode and give a packet reader the proper data blocks to read the data packets
@@ -321,9 +366,10 @@ class X7kRead:
             self.data_read = False
             self.eof = False
             self.get()
+            return self.packet.subpack
         else:
             print(f'Unable to find record {recordtype} in file')
-        return self.packet.subpack
+            self.packet = None
 
     def getping(self, numping):
         """This method is designed to read all records that are available for
@@ -505,53 +551,13 @@ class Datagram:
 
     def decode(self):
         """Calls the correct class to read the data part of the data frame"""
-        # elif self.datatype == 1003:
-        #     self.subpack = Data1003(self.infile)
-        # elif self.datatype == 1012:
-        #     self.subpack = Data1012(self.infile)
-        # elif self.datatype == 1013:
-        #     self.subpack = Data1013(self.infile)
-        if self.dtype == 7000:
-            self.subpack = Data7000(self.datablock, self.time)
-        elif self.dtype == 7001:
-            self.subpack = Data7001(self.datablock, self.time)
-        elif self.dtype == 7004:
-            self.subpack = Data7004(self.datablock, self.time)
-        # elif self.datatype == 7006:
-        #     datablock = self.infile.read(self.datasize)
-        #     self.subpack = Data7006(datablock)
-        # elif self.datatype == 7007:
-        #     self.subpack = Data7007(self.infile)
-        # elif self.datatype == 7008:
-        #     datablock = self.infile.read(self.datasize)
-        #     self.subpack = Data7008(datablock)
-        # elif self.datatype == 7010:
-        #     self.subpack = Data7010(self.infile)
-        # elif self.datatype == 7017:
-        #     datablock = self.infile.read(self.datasize)
-        #     self.subpack = Data7017(datablock)
-        # elif self.datatype == 7018:
-        #     datablock = self.infile.read(self.datasize)
-        #     self.subpack = Data7018(datablock, self.header[13], self.header[6])
-        # elif self.datatype == 7027:
-        #     datablock = self.infile.read(self.datasize)
-        #     self.subpack = Data7027(datablock)
-        # elif self.datatype == 7028:
-        #     self.subpack = Data7028(self.infile)
-        # elif self.datatype == 7038:
-        #     datablock = self.infile.read(self.datasize)
-        #     self.subpack = Data7038(datablock)
-        # elif self.datatype == 7041:
-        #     self.subpack = Data7041(self.infile)
-        # elif self.datatype == 7058:
-        #     self.subpack = Data7058(self.infile)
-        elif self.dtype == 7200:
-            self.subpack = Data7200(self.datablock, self.time)
-        # elif self.datatype == 7503:
-        #     self.subpack = Data7503(self.infile)
+        dgram = get_datagram_by_number(self.dtype)
+        if dgram is not None:
+            self.subpack = dgram(self.datablock, self.time)
+            self.decoded = True
         else:
-            raise NotImplementedError("Data record " + str(self.dtype) + " decoding is not yet supported.")
-        self.decoded = True
+            self.subpack = None
+            self.decoded = False
 
     def maketime(self):
         """
@@ -777,19 +783,159 @@ class BaseData(object, metaclass=BaseMeta):
             self.header[ky2] = value
 
 
-class BasePlottableData(BaseData):
-    def display(self):
-        super(BasePlottableData, self).display()
-        self.plot()
+def get_datagram_by_number(datagram_number: int):
+    try:
+        return sys.modules[__name__].__dict__[f'Data{datagram_number}']
+    except KeyError:
+        print(f'prr3: Unable to find datagram class for Data{datagram_number}')
+        return None
 
-    def plot(self):
-        fig, ax = plt.subplots(len(self.header.dtype.names), 1)
-        for n, a in enumerate(ax):
-            name = self.header.dtype.names[n]
-            a.plot(self.header[name])
-            a.set_title(name)
-            a.set_xlim((0, len(self.header[name])))
-            # a.set_xlabel('index')
+
+class Data1000(BaseData):
+    """
+    Reference Point Datagram
+    """
+    hdr_dtype = np.dtype([('XRefPointToGravity', 'f4'), ('YRefPointToGravity', 'f4'), ('ZRefPointToGravity', 'f4'),
+                          ('WaterLevelToGravity', 'f4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1000, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+
+
+class Data1003(BaseData):
+    """
+    Position Datagram
+    """
+    hdr_dtype = np.dtype([('DatumIdentifier', 'u4'), ('Latency', 'f4'), ('LatitudeNorthing', 'f8'),
+                          ('LongitudeEasting', 'f8'), ('Height', 'f8'), ('PositionFlag', 'u1'), ('UtmZone', 'u1'),
+                          ('QualityFlag', 'u1'), ('PositionMethod', 'u1'), ('NumberOfSatellites', 'u1')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        if len(datablock) == 37:  # it includes numberofsatellites
+            super(Data1003, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        elif len(datablock) == 36:
+            self.hdr_dtype = np.dtype([('DatumIdentifier', 'u4'), ('Latency', 'f4'), ('LatitudeNorthing', 'f8'),
+                                       ('LongitudeEasting', 'f8'), ('Height', 'f8'), ('PositionFlag', 'u1'),
+                                       ('UtmZone', 'u1'), ('QualityFlag', 'u1'), ('PositionMethod', 'u1')])
+            self.hdr_sz = self.hdr_dtype.itemsize
+            super(Data1003, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        else:
+            raise NotImplementedError('prr3: Found a Data1003 datablock that is neither 36 nor 37 long, not sure what it is')
+        self.time = utctime
+
+
+class Data1008(BaseData):
+    """
+    Depth Datagram
+    """
+    hdr_dtype = np.dtype([('DepthDescriptor', 'u1'), ('CorrectionFlag', 'u1'), ('Reserved', 'u2'),
+                          ('Depth', 'f4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1008, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+
+
+class Data1009(BaseData):
+    """
+    Sound Velocity Profile Datagram
+    """
+    hdr_dtype = np.dtype([('PositionFlag', 'u1'), ('ReservedOne', 'u1'), ('ReservedTwo', 'u2'),
+                          ('Latitude', 'f8'), ('Longitude', 'f8'), ('NumberOfLayers', 'u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1009, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.profile_depth = []
+        self.profile_data = []
+        self.position = (self.header['Latitude'], self.header['Longitude'])
+        self.numlayers = self.header['NumberOfLayers']
+        self.read_data(datablock[self.hdr_sz:])
+
+    def read_data(self, datablock):
+        self.profile_depth = []
+        self.profile_data = []
+        layer_dtype = np.dtype([('depth', 'f4'), ('sv', 'f4')])
+        datapointer = 0
+        for i in range(self.numlayers):
+            device_data = list(np.frombuffer(datablock[datapointer:datapointer + layer_dtype.itemsize], dtype=layer_dtype)[0])
+            datapointer += layer_dtype.itemsize
+            self.profile_depth.append(device_data[0])
+            self.profile_data.append(device_data[1])
+
+
+class Data1010(BaseData):
+    """
+    CTD Datagram
+    """
+    hdr_dtype = np.dtype([('Frequency', 'f4'), ('SoundVelocitySourceFlag', 'u1'), ('SoundVelocityAlgorithm', 'u1'),
+                          ('ConductivityFlag', 'u1'), ('PressureFlag', 'u1'), ('PositionFlag', 'u1'),
+                          ('SampleContentValidity', 'u1'), ('Reserved', 'u2'), ('Latitude', 'f8'), ('Longitude', 'f8'),
+                          ('SampleRate', 'f4'), ('NumberOfLayers', 'u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        super(Data1010, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.profile_conductivity = []
+        self.profile_temperature = []
+        self.profile_depth = []
+        self.profile_soundvelocity = []
+        self.profile_absorption = []
+        self.position = (self.header['Latitude'], self.header['Longitude'])
+        self.numlayers = self.header['NumberOfLayers']
+        self.read_data(datablock[self.hdr_sz:])
+
+    def read_data(self, datablock):
+        self.profile_conductivity = []
+        self.profile_temperature = []
+        self.profile_depth = []
+        self.profile_soundvelocity = []
+        self.profile_absorption = []
+        layer_dtype = np.dtype([('cond', 'f4'), ('temp', 'f4'), ('depth', 'f4'), ('sv', 'f4'), ('absorp', 'f4')])
+        datapointer = 0
+        for i in range(self.numlayers):
+            device_data = list(np.frombuffer(datablock[datapointer:datapointer + layer_dtype.itemsize], dtype=layer_dtype)[0])
+            datapointer += layer_dtype.itemsize
+            self.profile_conductivity.append(device_data[0])
+            self.profile_temperature.append(device_data[1])
+            self.profile_depth.append(device_data[2])
+            self.profile_soundvelocity.append(device_data[3])
+            self.profile_absorption.append(device_data[4])
+
+
+class Data1012(BaseData):
+    """
+    Roll Pitch Heave Datagram
+    """
+    hdr_dtype = np.dtype([('Roll', 'f4'), ('Pitch', 'f4'), ('Heave', 'f4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1012, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+
+
+class Data1013(BaseData):
+    """
+    Heading Datagram
+    """
+    hdr_dtype = np.dtype([('Heading', 'f4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1013, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
 
 
 class Data7000(BaseData):
@@ -811,11 +957,11 @@ class Data7000(BaseData):
                           ('BottomDetectionFilterMinDepth', 'f4'), ('BottomDetectionFilterMaxDepth', 'f4'),
                           ('Absorption', 'f4'), ('SoundVelocity', 'f4'), ('Spreading', 'f4'), ('ReservedFlag', 'u2')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
         super(Data7000, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
-        self.time = POSIXtime
+        self.time = utctime
 
 
 class Data7001(BaseData):
@@ -824,11 +970,11 @@ class Data7001(BaseData):
     """
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('NumberOfDevices', 'u4')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
         super(Data7001, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
-        self.time = POSIXtime
+        self.time = utctime
         self.device_header = np.dtype([('DeviceIdentifier', 'u4'), ('DeviceDescription', 'S60'), ('DeviceAlphaDataCard', 'u4'),
                                        ('DeviceSerialNumber', 'u8'), ('DeviceInfoLength', 'u4')])
         self.devices = []
@@ -863,11 +1009,11 @@ class Data7002(BaseData):
                           ('StopFrequency', 'f4'), ('WindowType', 'u4'), ('ShadingValue', 'f4'),
                           ('EffectivePulseWidth', 'f4'), ('Reserved', '13u4')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
         super(Data7002, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
-        self.time = POSIXtime
+        self.time = utctime
 
 
 class Data7004BeamsNew(BaseData):
@@ -887,667 +1033,525 @@ class Data7004BeamsOld(BaseData):
     The by-beam variables within 7004
     Expects you to update hdr_dtype from the Data7004 before initialization
     """
-    hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', 'f'), ('BeamHorizontalDirectionAngle', 'f'),
-                          ('BeamWidthAlongTrack', 'f'), ('BeamWidthAcrossTrack', 'f')])
+    hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', 'f4'), ('BeamHorizontalDirectionAngle', 'f4'),
+                          ('BeamWidthAlongTrack', 'f4'), ('BeamWidthAcrossTrack', 'f4')])
 
     def __init__(self, datablock, byteswap=False, read_limit=None):
         super(Data7004BeamsOld, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
 
 
-class Data7004(BasePlottableData):
+class Data7004(BaseData):
     """
     Beam Geometry
     """
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('NumberOfBeams', 'u4')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
         super(Data7004, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
-        self.time = POSIXtime
+        self.time = utctime
+        self.numbeams = self.header[1]
         self.data = None
+        self.fig = None
         self.read(datablock[self.hdr_sz:])
 
     def read(self, datablock):
-        numbeams = self.header[1]
-        if len(datablock) == numbeams * 4 * 4:
+        if len(datablock) == self.numbeams * 4 * 4:
             dgram = Data7004BeamsOld
-            dgram.hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', f'{numbeams}f'),
-                                        ('BeamHorizontalDirectionAngle', f'{numbeams}f'),
-                                        ('BeamWidthAlongTrack', f'{numbeams}f'),
-                                        ('BeamWidthAcrossTrack', f'{numbeams}f')])
-        elif len(datablock) == numbeams * 5 * 4:
+            dgram.hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', f'{self.numbeams}f'),
+                                        ('BeamHorizontalDirectionAngle', f'{self.numbeams}f'),
+                                        ('BeamWidthAlongTrack', f'{self.numbeams}f'),
+                                        ('BeamWidthAcrossTrack', f'{self.numbeams}f')])
+        elif len(datablock) == self.numbeams * 5 * 4:
             dgram = Data7004BeamsNew
-            dgram.hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', f'{numbeams}f'),
-                                        ('BeamHorizontalDirectionAngle', f'{numbeams}f'),
-                                        ('BeamWidthAlongTrack', f'{numbeams}f'),
-                                        ('BeamWidthAcrossTrack', f'{numbeams}f'), ('TxDelay', f'{numbeams}f')])
+            dgram.hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', f'{self.numbeams}f'),
+                                        ('BeamHorizontalDirectionAngle', f'{self.numbeams}f'),
+                                        ('BeamWidthAlongTrack', f'{self.numbeams}f'),
+                                        ('BeamWidthAcrossTrack', f'{self.numbeams}f'), ('TxDelay', f'{self.numbeams}f')])
         else:
             print('Datagram 7004: expected either 4 or 5 variable records, could not determine datagram version')
             return
         dgram.hdr_sz = dgram.hdr_dtype.itemsize
         self.data = dgram(datablock)
 
-    # def plot(self):
-    #     """Plots the 7004 record as one plot with four subplots."""
-    #     numbeams = self.header[1]
-    #     self.fig = plt.figure()
-    #     ax1 = self.fig.add_subplot(411, xlim=(0, numbeams), autoscalex_on=False)
-    #     ax1.plot(np.rad2deg(self.data[0, :]))
-    #     ax1.set_ylabel('Along Track Angle (deg)')
-    #     ax1.set_title('Beam Configuration Information')
-    #     ax2 = self.fig.add_subplot(412, sharex=ax1, autoscalex_on=False)
-    #     ax2.plot(np.rad2deg(self.data[1, :]))
-    #     ax2.set_ylabel('Across Track Angle (deg)')
-    #     ax3 = self.fig.add_subplot(413, sharex=ax1, autoscalex_on=False)
-    #     ax3.plot(np.rad2deg(self.data[2, :]))
-    #     ax3.set_ylabel('Along Track Beamwidth (deg)')
-    #     ax4 = self.fig.add_subplot(414, sharex=ax1, autoscalex_on=False)
-    #     ax4.plot(np.rad2deg(self.data[3, :]))
-    #     ax4.set_ylabel('Across Track Beamwidth (deg)')
-    #     ax4.set_xlabel('Beam Number')
+    def plot(self):
+        """Plots the 7004 record as one plot with four subplots."""
+        self.fig = plt.figure()
+        ax1 = self.fig.add_subplot(411, xlim=(0, self.numbeams), autoscalex_on=False)
+        ax1.plot(np.rad2deg(self.data.BeamVerticalDirectionAngle[0]))
+        ax1.set_ylabel('Along Track Angle (deg)')
+        ax1.set_title('Beam Configuration Information')
+        ax2 = self.fig.add_subplot(412, sharex=ax1, autoscalex_on=False)
+        ax2.plot(np.rad2deg(self.data.BeamHorizontalDirectionAngle[0]))
+        ax2.set_ylabel('Across Track Angle (deg)')
+        ax3 = self.fig.add_subplot(413, sharex=ax1, autoscalex_on=False)
+        ax3.plot(np.rad2deg(self.data.BeamWidthAlongTrack[0]))
+        ax3.set_ylabel('Along Track Beamwidth (deg)')
+        ax4 = self.fig.add_subplot(414, sharex=ax1, autoscalex_on=False)
+        ax4.plot(np.rad2deg(self.data.BeamWidthAcrossTrack[0]))
+        ax4.set_ylabel('Across Track Beamwidth (deg)')
+        ax4.set_xlabel('Beam Number')
 
-#
-# class Data7006(BasePlottableData):
-#     fmt_hdr = '<QIHI2Bf'
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Multi-ping Sequence',
-#              'Number of Beams',
-#              'Flags',
-#              'Sound Velocity Flag',
-#              'Sound Velocity')
-#
-#     def __init__(self, datablock):
-#         """This gets the format for each block type and then reads the block"""
-#         super(Data7006, self).__init__(datablock)
-#         self.datapointer = self.hdr_sz
-#         self.read_data(datablock)
-#
-#     def read_data(self, datablock):
-#         self.numbeams = self.header[3]
-#         self.fmt_data = '<' + str(self.numbeams) + 'f' + str(self.numbeams) + 'B' + str(3 * self.numbeams) + 'f'
-#         self.data_sz = 17 * self.numbeams  # one U8 plus four f32 is 17
-#         self.data = np.array(struct.unpack(self.fmt_data, datablock[self.datapointer: self.datapointer + self.data_sz]))
-#         self.data.shape = (5, self.numbeams)
-#         self.detect = np.zeros((self.numbeams, 3))
-#         for i in range(self.numbeams):
-#             temp = (int(self.data[1, i]) & 12) / 4  # 12 is the mask to get the bottom detect type
-#             # and divide by four to get to those bits
-#             if temp == 1:
-#                 self.detect[i, :] = [1, 0, 0]
-#             elif temp == 2:
-#                 self.detect[i, :] = [0, 1, 0]
-#             elif temp == 3:
-#                 self.detect[i, :] = [0, 0, 1]
-#
-#     def plot(self):
-#         rngplot = plt.scatter(range(self.numbeams), self.data[0].T, c=self.detect, edgecolor=self.detect)
-#         plt.xlim((0, self.numbeams))
-#         plt.ylim((self.data[0].max(), 0))
-#         plt.xlabel('Beam Number')
-#         plt.ylabel('Time (s)')
-#         plt.draw()
-#
-#
-# class Data7007(BaseData):
-#     fmt_hdr = '<QIHf2I8f2H2B'
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Multi-ping Sequence',
-#              'Beam Position',
-#              'Reserved',
-#              'Samples Per Side',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Number of Beams Per Side',
-#              'Current Beam Number',
-#              'Number of Bytes Per Sample',
-#              'Reserved')
-#
-#     def __init__(self, infile):
-#         """This gets the format for each block type and then reads the block"""
-#         super(Data7007, self).__init__(infile)
-#         self.read_data(infile)
-#
-#     def read_data(self, infile):
-#         self.fmt_data = '<' + str(self.header[5] * self.header[16]) + 'B'
-#         self.data_sz = self.header[5] * self.header[16]
-#         self.port = np.array(struct.unpack(self.fmt_data, infile.read(self.data_sz)))
-#         self.stbd = np.array(struct.unpack(self.fmt_data, infile.read(self.data_sz)))
-#
-#
-# class Data7008:
-#     hdr_dtype = np.dtype([('SonarID', 'Q'), ('PingNumber', 'I'), ('Multiping#', 'H'),
-#                           ('Beams', 'H'), ('Reserved1', 'H'), ('Samples', 'I'), ('RecordSubsetFlag', 'B'),
-#                           ('RowColumnFlag', 'B'), ('Reserved2', 'H'), ('DataSampleSize', 'I')])
-#     data_dtype = np.dtype([('Amp', 'H'), ('Phs', 'h')])
-#
-#     def __init__(self, datablock):
-#         """This gets the format for each block type and then reads the block"""
-#         self.numbeams = None
-#         self.beams = None
-#         self.numsnip = None
-#         self.mag = None
-#         self.phase = None
-#         self.iele = None
-#         self.qele = None
-#         hdr_sz = Data7008.hdr_dtype.itemsize
-#         self.header = np.frombuffer(datablock[:hdr_sz], Data7008.hdr_dtype)[0]
-#         self.read_data(datablock[hdr_sz:])
-#
-#     def read_data(self, datablock):
-#         """Reading the original snippet message.
-#         This is reading the snippet data and is
-#         dependant on the information from the
-#         header. The steps 1)read each beam
-#         snippet size 2)read in the data for each
-#         beam, which could consist of magnitude,
-#         phase, I&Q, for each beam or element."""
-#
-#         # define the format string and size for snippet data through bitwise ops
-#         # Thanks to Tom Weber and Les Peabody for helping figure this out
-#         fmt_flags = self.header['DataSampleSize']
-#         magval = 7 & fmt_flags
-#         phaseval = (240 & fmt_flags) >> 4
-#         iqval = (3840 & fmt_flags) >> 8
-#         elementflag = (28672 & fmt_flags) >> 12
-#         fmt = []
-#         if magval == 2:
-#             fmt.append(('Magnitude', 'H'))
-#         elif magval == 3:
-#             fmt.append(('Magnitude', 'I'))
-#         if phaseval == 2:
-#             fmt.append(('Phase', 'H'))
-#         elif phaseval == 3:
-#             fmt.append(('Phase', 'I'))
-#         if iqval == 1:
-#             fmt.append(('I', 'H'), ('Q', 'H'))
-#         elif iqval == 2:
-#             fmt.append(('I', 'I'), ('Q', 'I'))
-#         snip_fmt = np.dtype(fmt)
-#         beam_fmt = np.dtype([('BeamNumber', 'H'), ('FirstSample', 'I'), ('LastSample', 'I')])
-#         # read the beam snippet sizes (zones)
-#         self.numbeams = self.header['Beams']
-#         block_sz = self.numbeams * beam_fmt.itemsize
-#         self.beams = np.frombuffer(datablock[:block_sz], beam_fmt)
-#         temp = (self.beams['LastSample'] - self.beams['FirstSample']).max() + 1
-#         self.numsnip = temp.max()
-#         if not (self.numsnip == temp).all():
-#             print("Warning: number of snippets is not consistent.")
-#
-#         # read snippet data as columns for each data type (mag/phase/i/q)
-#         snip = np.frombuffer(datablock[block_sz:], snip_fmt)
-#         # separate types out to different arrays
-#         ordertype = self.header[7]
-#         if magval != 0:
-#             self.mag = snip['Magnitude'].astype(np.float64)
-#             if ordertype == 0:
-#                 self.mag.shape = (self.numbeams, self.numsnip)
-#                 self.mag = self.mag.transpose()
-#             elif ordertype == 1:
-#                 self.mag.shape = (self.numsnip, self.numbeams)
-#         if phaseval != 0:
-#             self.phase = snip['Phase'].astype(np.float64)
-#             if self.header[7] == 0:
-#                 self.phase.shape = (self.numbeams, self.numsnip)
-#                 self.phase = self.phase.transpose()
-#             elif self.header[7] == 1:
-#                 self.phase.shape = (self.numsnip, self.numbeams)
-#         if iqval != 0:
-#             self.iele = snip['I'].astype(np.float64)
-#             self.qele = snip['Q'].astype(np.float64)
-#             if self.header[7] == 0:
-#                 self.iele.shape = (self.numbeams, self.numsnip)
-#                 self.iele = self.iele.transpose()
-#                 self.qele.shape = (self.numbeams, self.numsnip)
-#                 self.qele = self.qele.transpose()
-#             elif self.header[7] == 1:
-#                 self.iele.shape = (self.numsnip, self.numbeams)
-#                 self.qele.shape = (self.numsnip, self.numbeams)
-#
-#     def plot(self):
-#         """plot any snippet data collected"""
-#         if hasattr(self, 'mag'):
-#             # plt.figure()
-#             magplot = plt.imshow(20 * np.log10(self.mag), aspect='auto')
-#             plt.title('7008 20*log10*Magnitude')
-#             plt.xlabel('Beam number')
-#             plt.ylabel('Sample number in window')
-#         if hasattr(self, 'phase'):
-#             plt.figure()
-#             phaseplot = plt.imshow(self.phase, aspect='auto')
-#             plt.title('7008 Phase')
-#             plt.xlabel('Beam number')
-#             plt.ylabel('Sample number in window')
-#         plt.draw()
-#
-#     def display(self):
-#         for n, name in enumerate(self.header.dtype.names):
-#             print(name + ' : ' + str(self.header[n]))
-#         print('Size of snippet window: ' + str(self.numsnip))
-#         self.plot()
-#
-#
-# class Data7010(BaseData):
-#     fmt_hdr = '<QIH2I'
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Multi-ping Sequence',
-#              'Samples',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved')
-#
-#     def __init__(self, infile):
-#         """This gets the format for each block type and then reads the block"""
-#         super(Data7010, self).__init__(infile)
-#         self.read_data(infile)
-#
-#     def read_data(self, infile):
-#         self.fmt_data = '<' + str(self.header[4] - 1) + 'I'
-#         self.data_sz = self.header[4] * 4
-#         self.data = struct.unpack(self.fmt_data, infile.read(self.data_sz))
-#
-#
-# class Data7017(BasePlottableData):
-#     fmt_hdr = '<QIH2IBI6fB2f14I'
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Multi-ping Sequence',
-#              'Number of Beams',
-#              'Data Block Size',
-#              'Detection algorithm',
-#              'Flags',
-#              'Min Depth',
-#              'Max Depth',
-#              'Min Range',
-#              'Max Range',
-#              'Min Nadir Search',
-#              'Max Nadir Search',
-#              'Automatic Filter Window',
-#              'Applied Roll',
-#              'Depth Gate Tilt',
-#              'Reserved')
-#
-#     def __init__(self, datablock):
-#         """This gets the format for each block type and then reads the block.
-#         Format was created from Reson DFD Version 2.2"""
-#         super(Data7017, self).__init__(datablock)
-#         self.datapointer = self.hdr_sz
-#         self.read_data(datablock)
-#
-#     def read_data(self, datablock):
-#         self.numbeams = self.header[3]
-#         fmt_base = 'HfI4fIf'
-#         if self.numbeams > 0:
-#             self.fmt_data = '<' + self.numbeams * fmt_base
-#             self.data_sz = struct.calcsize(self.fmt_data)
-#             self.data = np.array(
-#                 struct.unpack(self.fmt_data, datablock[self.datapointer: self.datapointer + self.data_sz]))
-#             self.datapointer += self.data_sz
-#             self.data.shape = (self.numbeams, -1)
-#             self.detect = np.zeros((self.numbeams, 3))
-#             for i in range(self.numbeams):
-#                 temp = (int(self.data[i, 3]) & 3)  # 3 is the mask to get the bottom detect type
-#                 if temp == 1:
-#                     self.detect[i, :] = [1, 0, 0]
-#                 elif temp == 2:
-#                     self.detect[i, :] = [0, 1, 0]
-#                 elif temp == 3:
-#                     self.detect[i, :] = [0, 0, 1]
-#         else:
-#             self.data = None
-#             self.detect = None
-#
-#     def plot(self):
-#         if self.data is not None:
-#             rngplot = plt.scatter(self.data[:, 0], self.data[:, 1], c=self.detect, edgecolor=self.detect)
-#             plt.xlim((0, self.numbeams))
-#             plt.ylim((self.data[1].max(), 0))
-#             plt.xlabel('Beam Number')
-#             plt.ylabel('?')
-#             plt.draw()
-#         else:
-#             print("No beams in record.")
-#
-#
-# class Data7018:
-#     """This record had two versions, one for the 7111 and one for the 7125.
-#     In the beginning of 2011 the 7111 was brought in alignment with the 7125
-#     version."""
-#     hdr_dtype = np.dtype([('SonarID', 'Q'), ('PingNumber', 'I'), ('Multiping#', 'H'),
-#                           ('Beams', 'H'), ('Samples', 'I'), ('Reserved', '8I')])
-#     data_dtype = np.dtype([('Amp', 'H'), ('Phs', 'h')])
-#
-#     def __init__(self, datablock, sonar_type, year):
-#         self.mag = None
-#         self.phase = None
-#         if sonar_type == 7111 and year < 2011:
-#             print("This is old 7111 data and is no longer supported by this module.")
-#         else:
-#             hdr_sz = Data7018.hdr_dtype.itemsize
-#             self.header = np.frombuffer(datablock[:hdr_sz], dtype=Data7018.hdr_dtype)[0]
-#             self.read_data(datablock[hdr_sz:])
-#
-#     def read_data(self, subdatablock):
-#         """
-#         Read the data into a numpy array.
-#         """
-#         beams = self.header['Beams']
-#         data = np.frombuffer(subdatablock, dtype=Data7018.data_dtype)
-#         self.mag = data['Amp'].astype('f')
-#         self.mag.shape = (-1, beams)
-#         self.phase = data['Phs'].astype('f')
-#         self.phase.shape = (-1, beams)
-#
-#     def plot(self):
-#         """plot water column data"""
-#         plt.subplot(1, 2, 1)
-#         magplot = plt.imshow(20 * np.log10(self.mag), aspect='auto')
-#         plt.title('7018 Magnitude')
-#         plt.xlabel('Beam number')
-#         plt.ylabel('Sample number')
-#         # plt.colorbar()
-#         plt.subplot(1, 2, 2)
-#         # plt.figure()
-#         phaseplot = plt.imshow(self.phase, aspect='auto')
-#         plt.title('7018 Phase')
-#         plt.xlabel('Beam number')
-#         plt.ylabel('Sample number')
-#         # plt.colorbar()
-#         plt.suptitle(('Ping number ' + str(self.header[1])))
-#         plt.draw()
-#
-#     def display(self):
-#         for n, name in enumerate(self.header.dtype.names):
-#             print(name + ' : ' + str(self.header[n]))
-#         self.plot()
-#
-#
-# class Data7027(BasePlottableData):
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Multi-ping Sequence',
-#              'Number of Beams',
-#              'Data Field Size',
-#              'Detection algorithm',
-#              'Flags',
-#              'Sampling Rate',
-#              'Tx angle',
-#              'Reserved')
-#     fmt_hdr = '<QIH2IBI2f16I'
-#
-#     def __init__(self, datablock):
-#         """This gets the format for each block type and then reads the block.
-#         Format was created from Reson DFD Version 2.2"""
-#         super(Data7027, self).__init__(datablock)
-#         self.datapointer = self.hdr_sz
-#         self.read_data(datablock)
-#
-#     def read_data(self, datablock):
-#         self.numbeams = self.header[3]
-#         datafieldsize = self.header[4]
-#         if datafieldsize == 22:
-#             fmt_base = 'H2f2If'
-#         elif datafieldsize == 26:
-#             fmt_base = 'H2f2I2f'
-#         if self.numbeams > 0:
-#             self.fmt_data = '<' + self.numbeams * fmt_base
-#             self.data_sz = struct.calcsize(self.fmt_data)
-#             self.data = np.array(
-#                 struct.unpack(self.fmt_data, datablock[self.datapointer: self.datapointer + self.data_sz]))
-#             self.datapointer += self.data_sz
-#             self.data.shape = (self.numbeams, -1)
-#             self.detect = np.zeros((self.numbeams, 3))
-#             for i in range(self.numbeams):
-#                 temp = (int(self.data[i, 3]) & 3)  # 3 is the mask to get the bottom detect type
-#                 if temp == 1:
-#                     self.detect[i, :] = [1, 0, 0]
-#                 elif temp == 2:
-#                     self.detect[i, :] = [0, 1, 0]
-#                 elif temp == 3:
-#                     self.detect[i, :] = [0, 0, 1]
-#         else:
-#             self.data = None
-#             self.detect = None
-#
-#     def plot(self):
-#         if self.data is not None:
-#             rngplot = plt.scatter(self.data[:, 0], self.data[:, 1], c=self.detect, edgecolor=self.detect)
-#             plt.xlim((0, self.numbeams))
-#             plt.ylim((self.data[1].max(), 0))
-#             plt.xlabel('Beam Number')
-#             plt.ylabel('Sample Number')
-#             plt.draw()
-#         else:
-#             print("No beams in record.")
-#
-#
-# class Data7028(BasePlottableData):
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Multi-ping Sequence',
-#              'Number of Beams',
-#              'Error flag',
-#              'Control flags',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved')
-#     fmt_hdr = '<QI2H2B7I'
-#
-#     def __init__(self, infile):
-#         """This gets the format for each block type and then reads the block"""
-#         super(Data7028, self).__init__(infile)
-#         self.fmt_descriptor = '<H3I'
-#         self.descriptor_sz = struct.calcsize(self.fmt_descriptor)
-#         self.read_data(infile)
-#
-#     def read_data(self, infile):
-#         self.numpoints = self.header[3]
-#         if self.header[4] == 0:
-#             self.descriptor = np.zeros((self.numpoints, 4))
-#             for beam in range(self.numpoints):
-#                 self.descriptor[beam, :] = struct.unpack(self.fmt_descriptor, infile.read(self.descriptor_sz))
-#             self.beamwindow = self.descriptor[:, 3] - self.descriptor[:, 1] + 1
-#             self.maxbeam = int(self.descriptor[:, 0].max()) + 1
-#             self.maxwindow = self.beamwindow.max()
-#             self.snippets = np.zeros((self.maxbeam, self.maxwindow))
-#             for beam in range(self.numpoints):
-#                 self.fmt_data = '<' + str(int(self.beamwindow[beam])) + 'H'
-#                 self.data_sz = struct.calcsize(self.fmt_data)
-#                 self.startoffset = int((self.maxwindow - self.beamwindow[beam]) / 2)
-#                 self.snippets[int(self.descriptor[beam, 0]), self.startoffset: self.startoffset + self.beamwindow[beam]] = struct.unpack(self.fmt_data, infile.read(self.data_sz))
-#         else:
-#             # Error flag indicates no data.
-#             self.beamwindow = None
-#             self.maxbeam = None
-#             self.maxwindow = None
-#             self.snippets = None
-#
-#     def plot(self):
-#         if self.snippets is not None:
-#             plt.figure()
-#             self.aspect = float(self.numpoints) / self.beamwindow.max()
-#             magplot = plt.imshow(20 * np.log10(self.snippets.T), aspect=self.aspect)
-#             plt.title('7028 20*log10*Magnitude')
-#             plt.xlabel('Beam number')
-#             plt.ylabel('Sample number in window')
-#             plt.draw()
-#         else:
-#             print("No snippets to plot")
-#
-#
-# class Data7038(BasePlottableData):
-#     fmt_hdr = '<QI2HIH2IH7I'
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Reserved',
-#              'Elements',
-#              'Samples',
-#              'Element Reduction',
-#              'Start Sample',
-#              'Stop Sample',
-#              'Sample Type',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved')
-#
-#     def __init__(self, datablock):
-#         """This gets the format for each block type and then reads the block"""
-#         super(Data7038, self).__init__(datablock)
-#         self.datapointer = self.hdr_sz
-#         self.read_data(datablock)
-#
-#     def read_data(self, datablock):
-#         self.numelements = self.header[5]
-#         self.numsamples = self.header[7] - self.header[6] + 1  # plus one to include last sample?
-#         self.sample_sz = self.header[8]
-#
-#         self.fmt_elements = '<' + str(self.numelements) + 'H'
-#         endread = struct.calcsize(self.fmt_elements) + self.datapointer
-#         self.elements = struct.unpack(self.fmt_elements, datablock[self.datapointer:endread])
-#         self.datapointer = endread
-#
-#         if self.sample_sz == 8:
-#             self.sample_fmt = 'B'
-#         elif self.sample_sz == 12:
-#             self.sample_fmt = 'H'
-#         elif self.sample_sz == 16:
-#             self.sample_fmt = 'H'
-#         elif self.sample_sz == 32:
-#             self.sample_fmt = 'I'
-#         else:
-#             self.sample_fmt = 'unknown'
-#         if self.sample_fmt != 'unknown':
-#             self.fmt_data = '<' + str(2 * self.numsamples * self.numelements) + self.sample_fmt
-#             endread = struct.calcsize(self.fmt_data) + self.datapointer
-#             self.data = np.array(struct.unpack(self.fmt_data, datablock[self.datapointer:endread]))
-#             self.datapointer = endread
-#             self.r = np.zeros(self.numsamples * self.numelements, complex)
-#             self.phase = np.zeros(self.numsamples * self.numelements)
-#             self.data.shape = (-1, 2)
-#             for c in range(len(self.data)):
-#                 self.r[c] = complex(self.data[c, 0], self.data[c, 1])
-#                 self.phase[c] = math.atan2(self.data[c, 1], self.data[c, 0])
-#         else:
-#             print('unknown sample size to unpack')
-#
-#     def plot(self):
-#         # reshape arrays for plotting
-#         self.phase.shape = (self.numsamples, self.numelements)
-#         self.r.shape = (self.numsamples, self.numelements)
-#         # for plot 1&2
-#         self.amp = abs(self.r)
-#         # for plot 3, take fft...
-#         ampfft = abs(np.fft.fft(self.r))
-#         # ...and swap the sides to center the 0 freq
-#         ampfft2 = np.zeros(ampfft.shape)
-#         ampfft2[:, self.numelements / 2:] = ampfft[:, :self.numelements / 2]
-#         ampfft2[:, :self.numelements / 2] = ampfft[:, self.numelements / 2:]
-#
-#         f = plt.figure()
-#         # f.text(0.5, 0.975, 'From file ' + self.infilename,horizontalalignment = 'center', verticalalignment = 'top')
-#         plt.subplot(2, 2, 1)
-#         plt.imshow(self.amp, aspect='auto')
-#         plt.title('Element Amplitude')
-#         plt.ylabel('Samples')
-#
-#         plt.subplot(2, 2, 2)
-#         plt.imshow(20 * np.log10(self.amp), aspect='auto')
-#         plt.title('20*log10(Element Amplitude)')
-#         plt.ylabel('Samples')
-#
-#         plt.subplot(2, 2, 3)
-#         plt.imshow(20 * np.log10(ampfft2), aspect='auto')
-#         plt.title('20*log10(fft(Element Amplitude)')
-#         plt.ylabel('Samples')
-#         plt.xlabel('Element Number')
-#
-#         plt.subplot(2, 2, 4)
-#         plt.imshow(self.phase, aspect='auto')
-#         plt.title('Element Phase')
-#         plt.ylabel('Samples')
-#         plt.xlabel('Element Number')
-#
-#         plt.draw()
-#
-#
-# class Data7041(BasePlottableData):
-#     """This record is the compressed beam formed magnitude data as of 8/8/2011."""
-#     fmt_hdr = '<QI3Hf4I'
-#     label = ('SonarID',
-#              'Ping Number',
-#              'Multi-ping Sequence',
-#              'Number of Beams',
-#              'Flags',
-#              'Sample Rate',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved')
-#
-#     def __init__(self, infile):
-#         """This gets the format for each block type and then reads the block"""
-#         super(Data7041, self).__init__(infile)
-#         self.read_data(infile)
-#
-#     def read_data(self, infile):
-#         self.numbeams = self.header[3]
-#         self.flags = self.header[4]
-#         if (self.flags & 1) == 1:
-#             self.dtype = 'H'
-#         else:
-#             self.dtype = 'B'
-#         if (self.flags & 128) == 128:
-#             self.beamid = 'f'
-#         else:
-#             self.beamid = 'H'
-#         self.data_fmt = '<' + self.beamid + 'I'
-#         self.data_sz = struct.calcsize(self.data_fmt)
-#         tempdata = []
-#         maxlen = 0
-#         for i in range(self.numbeams):
-#             self.beaminfo = struct.unpack(self.data_fmt, infile.read(self.data_sz))
-#             if self.beaminfo[1] > maxlen:
-#                 maxlen = self.beaminfo[1]
-#             self.data2_fmt = '<' + str(self.beaminfo[1]) + self.dtype
-#             self.data2_sz = struct.calcsize(self.data2_fmt)
-#             tempdata.append(struct.unpack(self.data2_fmt, infile.read(self.data2_sz)))
-#         self.beamdata = np.zeros((self.numbeams, maxlen))
-#         for i, beam in enumerate(tempdata):
-#             self.beamdata[i, :len(beam)] = beam
-#         self.beamdata = self.beamdata.T
-#
-#     def plot(self):
-#         """plot water column data"""
-#         fig = plt.figure()
-#         ax = fig.add_subplot(111, aspect='equal')
-#         magplot = plt.imshow(20 * np.log10(self.beamdata), aspect='auto')
-#         plt.title('7041 record - 20 * log10(Compressed Magnitude)')
-#         plt.xlabel('Beam number')
-#         plt.ylabel('Sample number')
-#         plt.colorbar()
-#         plt.draw()
-#
-#
+
+class Data7006Beams(BaseData):
+    """
+    The by-beam variables within 7006
+    Expects you to update hdr_dtype from the Data7006 before initialization
+    """
+    hdr_dtype = np.dtype([('Range', 'f4'), ('Quality', 'u1'), ('Intensity', 'f4'),
+                          ('MinTravelTimeToFilter', 'f4'), ('MaxTravelTimeToFilter', 'f4')])
+
+    def __init__(self, datablock, byteswap=False, read_limit=None):
+        super(Data7006Beams, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+
+
+class Data7006(BaseData):
+    """
+    SUPERSEDED BY 7027
+    Bathymetric Data, sonar bottom detection results
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultiPingSequence', 'u2'), ('NumberOfBeams', 'u4'),
+                          ('Flags', 'u1'), ('SoundVelocityFlag', 'u1'), ('SoundVelocity', 'f4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7006, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numbeams = self.header[3]
+        self.data = None
+        self.fig = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        if len(datablock) == self.numbeams * 17:
+            dgram = Data7006Beams
+            dgram.hdr_dtype = np.dtype([('Range', f'{self.numbeams}f4'), ('Quality', f'{self.numbeams}u1'),
+                                        ('Intensity', f'{self.numbeams}f4'), ('MinTravelTimeToFilter', f'{self.numbeams}f4'),
+                                        ('MaxTravelTimeToFilter', f'{self.numbeams}f4')])
+        else:
+            print(f'Datagram 7006: Unexpected Datablock size, {len(datablock)} not equal to {self.numbeams} * 17')
+            return
+        dgram.hdr_sz = dgram.hdr_dtype.itemsize
+        self.data = dgram(datablock)
+
+
+class Data7007Beams(BaseData):
+    """
+    The by-beam variables within 7007
+    Expects you to update hdr_dtype from the Data7007 before initialization
+    """
+    hdr_dtype = np.dtype([('PortBeams', 'f4'), ('StarboardBeams', 'f4')])
+
+    def __init__(self, datablock, byteswap=False, read_limit=None):
+        super(Data7007Beams, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+
+
+class Data7007(BaseData):
+    """
+    Side Scan Record
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultiPingSequence', 'u2'), ('BeamPosition', 'f4'),
+                          ('ControlFlags', 'u4'), ('SamplesPerSide', 'u4'), ('NadirDepth', 'u4'), ('Reserved', '7f4'),
+                          ('NumberOfBeams', 'u2'), ('CurrentBeamNumber', 'u2'), ('NumberOfBytes', 'u1'), ('DataTypes', 'u1')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7007, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numbeams = self.header[8]
+        self.numbytes = self.header[10]
+        self.data = None
+        self.fig = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        dtyp = f'{self.numbeams}f{self.numbytes}'
+        if len(datablock) == self.numbeams * self.numbytes * 2:
+            dgram = Data7007Beams
+            dgram.hdr_dtype = np.dtype([('PortBeams', dtyp), ('StarboardBeams', dtyp)])
+        else:
+            print(f'Datagram 7006: Unexpected Datablock size, {len(datablock)} not equal to {self.numbeams} * {self.numbytes} * 2')
+            return
+        dgram.hdr_sz = dgram.hdr_dtype.itemsize
+        self.data = dgram(datablock)
+
+
+class Data7008(BaseData):
+    """
+    DEPRECATED Generic Water Column Data, superseded by 7018 and 7028
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
+                          ('NumberOfBeams', 'u2'), ('ReservedOne', 'u2'), ('Samples', 'u4'), ('RecordSubsetFlag', 'u1'),
+                          ('RowColumnFlag', 'u1'), ('ReservedTwo', 'u2'), ('DataSampleSize', 'u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7008, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numbeams = self.header[3]
+        self.beams = None
+        self.numsnip = None
+        self.mag = None
+        self.phase = None
+        self.iele = None
+        self.qele = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        """
+        Reading the original snippet message. This is reading the snippet data and is dependant on the information
+        from the header. The steps 1) read each beam snippet size 2)read in the data for each beam, which could consist
+        of magnitude, phase, I&Q, for each beam or element.
+        """
+
+        # define the format string and size for snippet data through bitwise ops
+        # Thanks to Tom Weber and Les Peabody for helping figure this out
+        fmt_flags = self.header['DataSampleSize']
+        magval = 7 & fmt_flags
+        phaseval = (240 & fmt_flags) >> 4
+        iqval = (3840 & fmt_flags) >> 8
+        elementflag = (28672 & fmt_flags) >> 12
+        fmt = []
+        if magval == 2:
+            fmt.append(('Magnitude', 'H'))
+        elif magval == 3:
+            fmt.append(('Magnitude', 'I'))
+        if phaseval == 2:
+            fmt.append(('Phase', 'H'))
+        elif phaseval == 3:
+            fmt.append(('Phase', 'I'))
+        if iqval == 1:
+            fmt.append(('I', 'H'))
+            fmt.append(('Q', 'H'))
+        elif iqval == 2:
+            fmt.append(('I', 'I'))
+            fmt.append(('Q', 'I'))
+        snip_fmt = np.dtype(fmt)
+        beam_fmt = np.dtype([('BeamNumber', 'H'), ('FirstSample', 'I'), ('LastSample', 'I')])
+        # read the beam snippet sizes (zones)
+        block_sz = self.numbeams * beam_fmt.itemsize
+        self.beams = np.frombuffer(datablock[:block_sz], beam_fmt)
+        temp = (self.beams['LastSample'] - self.beams['FirstSample']).max() + 1
+        self.numsnip = temp.max()
+        if not (self.numsnip == temp).all():
+            print("Warning: number of snippets is not consistent.")
+
+        # read snippet data as columns for each data type (mag/phase/i/q)
+        snip = np.frombuffer(datablock[block_sz:], snip_fmt)
+        # separate types out to different arrays
+        ordertype = self.header['RowColumnFlag']
+        if magval != 0:
+            self.mag = snip['Magnitude'].astype(np.float64)
+            if ordertype == 0:
+                self.mag.shape = (self.numbeams, self.numsnip)
+                self.mag = self.mag.transpose()
+            elif ordertype == 1:
+                self.mag.shape = (self.numsnip, self.numbeams)
+        if phaseval != 0:
+            self.phase = snip['Phase'].astype(np.float64)
+            if self.header[7] == 0:
+                self.phase.shape = (self.numbeams, self.numsnip)
+                self.phase = self.phase.transpose()
+            elif self.header[7] == 1:
+                self.phase.shape = (self.numsnip, self.numbeams)
+        if iqval != 0:
+            self.iele = snip['I'].astype(np.float64)
+            self.qele = snip['Q'].astype(np.float64)
+            if self.header[7] == 0:
+                self.iele.shape = (self.numbeams, self.numsnip)
+                self.iele = self.iele.transpose()
+                self.qele.shape = (self.numbeams, self.numsnip)
+                self.qele = self.qele.transpose()
+            elif self.header[7] == 1:
+                self.iele.shape = (self.numsnip, self.numbeams)
+                self.qele.shape = (self.numsnip, self.numbeams)
+
+    def plot(self):
+        """plot any snippet data collected"""
+        if self.mag is not None:
+            plt.figure()
+            mg = self.mag.copy()
+            mg[mg == 0] = np.nan  # force NAN to get over divide by zero issues
+            magplot = plt.imshow(20 * np.log10(mg), aspect='auto')
+            plt.title('7008 20*log10*Magnitude')
+            plt.xlabel('Beam number')
+            plt.ylabel('Sample number in window')
+            plt.colorbar()
+        if self.phase is not None:
+            plt.figure()
+            phaseplot = plt.imshow(self.phase, aspect='auto')
+            plt.title('7008 Phase')
+            plt.xlabel('Beam number')
+            plt.ylabel('Sample number in window')
+        plt.draw()
+
+    def display(self):
+        for n, name in enumerate(self.header.dtype.names):
+            print(name + ' : ' + str(self.header[n]))
+        print('Size of snippet window: ' + str(self.numsnip))
+        self.plot()
+
+
+class Data7010Beams(BaseData):
+    """
+    The by-beam variables within 7007
+    Expects you to update hdr_dtype from the Data7007 before initialization
+    """
+    hdr_dtype = np.dtype([('Gain', 'f4')])
+
+    def __init__(self, datablock, byteswap=False, read_limit=None):
+        super(Data7010Beams, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+
+
+class Data7010(BaseData):
+    """
+    TVG Values, one for each sample in the ping
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
+                          ('Samples', 'u4'), ('Reserved', '8u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7010, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numsamples = self.header[3]
+        self.data = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        if len(datablock) == self.numsamples * 4:
+            dgram = Data7010Beams
+            dgram.hdr_dtype = np.dtype([('Gain', f'{self.numsamples}f4')])
+        else:
+            print(f'Datagram 7010: Unexpected Datablock size, {len(datablock)} not equal to {self.numsamples} * 4')
+            return
+        dgram.hdr_sz = dgram.hdr_dtype.itemsize
+        self.data = dgram(datablock)
+
+
+class Data7012(BaseData):
+    """
+    Ping Motion Data
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
+                          ('Samples', 'u4'), ('Flags', 'u2'), ('ErrorFlags', 'u4'), ('SamplingRate', 'f4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7012, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numsamples = self.header[3]
+        self.pitch = None
+        self.roll = None
+        self.heading = None
+        self.heave = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        cur_counter = 0
+        if self.header['Flags'] & 1:
+            self.pitch = np.frombuffer(datablock[cur_counter:4], np.dtype([('Pitch', 'f4')]))
+            cur_counter += 4
+        if self.header['Flags'] & 2:
+            self.roll = np.frombuffer(datablock[cur_counter:4 * self.numsamples], np.dtype([('Roll', f'{self.numsamples}f4')]))
+            cur_counter += 4 * self.numsamples
+        if self.header['Flags'] & 4:
+            self.heading = np.frombuffer(datablock[cur_counter:4 * self.numsamples], np.dtype([('Heading', f'{self.numsamples}f4')]))
+            cur_counter += 4 * self.numsamples
+        if self.header['Flags'] & 8:
+            self.heave = np.frombuffer(datablock[cur_counter:4 * self.numsamples], np.dtype([('Heave', f'{self.numsamples}f4')]))
+            cur_counter += 4 * self.numsamples
+
+
+class Data7014(BaseData):
+    """
+    Adaptive Gate Record
+    """
+    hdr_dtype = np.dtype([('RecordHeaderSize', 'u2'), ('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
+                          ('NumberOfGates', 'u4'), ('GateDescriptorSize', 'u2')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7014, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numgates = self.header[4]
+        self.data = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        strt_counter = 0
+        gate_dtype = np.dtype([('Angle', 'f4'), ('MinLimit', 'f4'), ('MaxLimit', 'f4')])
+        gate_dsize = gate_dtype.itemsize
+        for i in range(self.numgates):
+            gate_data = np.frombuffer(datablock[strt_counter:strt_counter + gate_dsize], gate_dtype)
+            self.data.append(gate_data)
+            strt_counter += gate_dsize
+
+
+class Data7021Board(BaseData):
+    """
+    BITE record data by Board
+    """
+    hdr_dtype = np.dtype([('SourceName', 'S64'), ('SourceAddress', 'u1'), ('ReservedOne', 'f4'), ('ReservedTwo', 'u2'),
+                          ('DownlinkTimeSentYear', 'u2'), ('DownlinkTimeSentDay', 'u2'), ('DownlinkTimeSentSeconds', 'f4'),
+                          ('DownlinkTimeSentHours', 'u1'), ('DownlinkTimeSentMinutes', 'u1'), ('UplinkTimeSentYear', 'u2'),
+                          ('UplinkTimeSentDay', 'u2'), ('UplinkTimeSentSeconds', 'f4'), ('UplinkTimeSentHours', 'u1'),
+                          ('UplinkTimeSentMinutes', 'u1'), ('BiteTimeReceivedYear', 'u2'), ('BiteTimeReceivedDay', 'u2'),
+                          ('BiteTimeReceivedSeconds', 'f4'), ('BiteTimeReceivedHours', 'u1'), ('BiteTimeReceivedMinutes', 'u1'),
+                          ('Status', 'u1'), ('NumberOfFields', 'u2'), ('BiteStatusBits', '4u8')])
+
+    def __init__(self, datablock, byteswap=False, read_limit=1):
+        super(Data7021Board, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.numfields = self.header['NumberOfFields']
+        self.field_dtype = np.dtype([('FieldNumber', 'u2'), ('NameValueRangeText', 'S64'), ('SensorType', 'u1'),
+                                     ('Minimum', 'f4'), ('Maximum', 'f4'), ('Value', 'f4')])
+        self.field_sz = self.field_dtype.itemsize
+        self.data = None
+        self.read(datablock[self.hdr_sz:])
+        self.totalsize = self.hdr_sz + (self.numfields * self.field_sz)
+
+    def read(self, datablock):
+        strt_counter = 0
+        for i in range(self.numfields):
+            gate_data = np.frombuffer(datablock[strt_counter:strt_counter + self.field_sz], self.field_dtype)
+            self.data.append(gate_data)
+            strt_counter += self.field_sz
+
+
+class Data7021(BaseData):
+    """
+    BITE record, Built in Test Environment, contains troubleshooting data
+    """
+    hdr_dtype = np.dtype([('NumberOfBoards', 'u2')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7021, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numboards = self.header[0]
+        self.data = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        strt_counter = 0
+        for board in range(self.numboards):
+            data = Data7021Board(datablock[strt_counter:])
+            strt_counter += data.totalsize
+            self.data.append(data)
+
+
+class Data7022(BaseData):
+    """
+    Sonar Source Version
+    """
+    hdr_dtype = np.dtype([('VersionString', 'S32')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7022, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+
+
+class Data7027(BaseData):
+    """
+    SUPERSEDED BY 7047
+    Raw Detection Data
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
+                          ('Detections', 'u4'), ('DataFieldSize', 'u4'), ('DetectionAlgorithm', 'u1'), ('Flags', 'u4'),
+                          ('SamplingRate', 'f4'), ('TxAngle', 'f4'), ('AppliedRoll', 'f4'), ('Reserved', '15u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7027, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numdetections = self.header[3]
+        self.data = None
+        self.detect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
+                                      ('Quality', 'u4'), ('Uncertainty', 'f4'), ('Intensity', 'f4'), ('MinLimit', 'f4'), ('MaxLimit', 'f4')])
+        self.detect_dsize = self.detect_dtype.itemsize
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        strt_counter = 0
+        for i in range(self.numdetections):
+            data = np.frombuffer(datablock[strt_counter:], self.detect_dtype)
+            strt_counter += self.detect_dsize
+            self.data.append(data)
+
+
+class Data7028(BaseData):
+    """
+    Snippet Data, sonar snippet imagery data
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
+                          ('Detections', 'u2'), ('ErrorFlags', 'u1'), ('ControlFlags', 'u1'), ('Flags', 'u4'),
+                          ('SamplingRate', 'f4'), ('Reserved', '5u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7028, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numdetections = self.header[3]
+        self.descriptor = None
+        self.beamwindow = None
+        self.maxbeam = None
+        self.maxwindow = None
+        self.snippets = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        if self.header['ErrorFlags'] == 0:
+            self.descriptor = np.zeros((self.numpoints, 4))
+            strt_counter = 0
+            fmt_descriptor = '<H3I'
+            descriptor_sz = struct.calcsize(fmt_descriptor)
+            for beam in range(self.numpoints):
+                self.descriptor[beam, :] = struct.unpack(fmt_descriptor, datablock[strt_counter:strt_counter + descriptor_sz])
+                strt_counter += descriptor_sz
+            self.beamwindow = self.descriptor[:, 3] - self.descriptor[:, 1] + 1
+            self.maxbeam = int(self.descriptor[:, 0].max()) + 1
+            self.maxwindow = self.beamwindow.max()
+            self.snippets = np.zeros((self.maxbeam, self.maxwindow))
+            for beam in range(self.numpoints):
+                fmt_data = '<' + str(int(self.beamwindow[beam])) + 'H'
+                data_sz = struct.calcsize(fmt_data)
+                startoffset = int((self.maxwindow - self.beamwindow[beam]) / 2)
+                beam_data = struct.unpack(fmt_data, datablock[strt_counter:strt_counter + data_sz])
+                strt_counter += data_sz
+                self.snippets[int(self.descriptor[beam, 0]), startoffset: startoffset + self.beamwindow[beam]] = beam_data
+
+
+class Data7041(BaseData):
+    """
+    Compressed Beamformed Intensity Data
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
+                          ('Beams', 'u2'), ('Flags', 'u2'), ('SampleRate', 'f4'), ('Reserved', '4u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+        super(Data7041, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.time = utctime
+        self.numbeams = self.header[3]
+        self.data = None
+        self.beam_identifiers = None
+        self.read(datablock[self.hdr_sz:])
+
+    def read(self, datablock):
+        self.data = []
+        self.beam_identifiers = []
+        flags = self.header[4]
+        if (flags & 256) == 256:
+            beamid = 'f4'
+        else:
+            beamid = 'u2'
+        cur_pointer = 0
+        for i in range(self.numbeams):
+            data_fmt = np.dtype(beamid)
+            data_sz = data_fmt.itemsize
+            beaminfo = np.frombuffer(datablock[cur_pointer:cur_pointer + data_sz], data_fmt)[0]
+            cur_pointer += data_sz
+            data_fmt = np.dtype('u4')
+            data_sz = data_fmt.itemsize
+            numsamples = np.frombuffer(datablock[cur_pointer:cur_pointer + data_sz], data_fmt)[0]
+            cur_pointer += data_sz
+            self.beam_identifiers.append(beaminfo)
+            data_fmt = np.dtype(f'{int(numsamples)}{beamid}')
+            data_sz = data_fmt.itemsize
+            beamdata = np.frombuffer(datablock[cur_pointer:cur_pointer + data_sz], data_fmt)[0]
+            cur_pointer += data_sz
+            self.data.append(beamdata)
+
+
 # class Data7058(BasePlottableData):
 #     fmt_hdr = '<QI2HBI7I'
 #     label = ('SonarID',
@@ -1625,15 +1629,15 @@ class Data7200(BaseData):
                           ('RecordDataSize', 'u4'), ('NumberOfDevices', 'u4'), ('RecordingName', 'S64'),
                           ('RecordingProgramVersion', 'S16'), ('UserDefinedName', 'S64'), ('Notes', 'S128')])
 
-    def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
         super(Data7200, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
         # the strings are 'null terminated' so strip the bytes from those messages
-        self.header[6] = self.header[6].rstrip(b'\xff').rstrip(b'\x00').decode()
-        self.header[7] = self.header[6].rstrip(b'\xff').rstrip(b'\x00').decode()
-        self.header[8] = self.header[6].rstrip(b'\xff').rstrip(b'\x00').decode()
-        self.header[9] = self.header[6].rstrip(b'\xff').rstrip(b'\x00').decode()
+        self.header['RecordingName'] = self.header['RecordingName'][0].rstrip(b'\xff').rstrip(b'\x00').decode()
+        self.header['RecordingProgramVersion'] = self.header['RecordingProgramVersion'][0].rstrip(b'\xff').rstrip(b'\x00').decode()
+        self.header['UserDefinedName'] = self.header['UserDefinedName'][0].rstrip(b'\xff').rstrip(b'\x00').decode()
+        self.header['Notes'] = self.header['Notes'][0].rstrip(b'\xff').rstrip(b'\x00').decode()
 
-        self.time = POSIXtime
+        self.time = utctime
         self.record_data = []
         self.record_data_header = np.dtype([('DeviceIdentifier', 'u4'), ('SystemEnumerator', 'u2')])
         self.optional_data = []
@@ -1642,8 +1646,8 @@ class Data7200(BaseData):
         self.read(datablock[self.hdr_sz:])
 
     def read(self, datablock):
-        numdevices = self.header[5]
-        has_record_data = self.header[4] != 0
+        numdevices = int(self.header['NumberOfDevices'])
+        has_record_data = int(self.header['RecordDataSize']) != 0
         datapointer = 0
         if has_record_data and datablock:
             data_sz = self.record_data_header.itemsize
@@ -1656,103 +1660,71 @@ class Data7200(BaseData):
                 data = list(np.frombuffer(datablock[datapointer:datapointer + data_sz], dtype=self.optional_data_header)[0])
                 datapointer += data_sz
                 self.optional_data.append(data)
-#
-#
-# class Data7503(BaseData):
-#     """Up through version 2.0 of the data format definition document this
-#     record is reported incorrectly.  There is no multiping sequence."""
-#     fmt_hdr = '<QI4f2IfI5f2I5fIf3IfI7fH6fI2H2f2dH2IfIf4B7I'
-#     label = ('Sonar ID',
-#              'Ping Number',
-#              'Frequency',
-#              'Sample rate',
-#              'Receiver bandwidth',
-#              'Tx pulse width',
-#              'Tx pulse type identifier',
-#              'Tx pulse envelope identifier',
-#              'Tx pulse envelope parameter',
-#              'Tx pulse reserved',
-#              'Max ping rate',
-#              'Ping period',
-#              'Range selection',
-#              'Power selection',
-#              'Gain selection',
-#              'Control flags',
-#              'Projector ID',
-#              'Projector beam steering angle vertical',
-#              'Projector beam steering angle horizontal',
-#              'Projector beam -3dB beam width vertical',
-#              'Projector beam -3dB beam width horizontal',
-#              'Projector beam focal point',
-#              'Projector beam weighting window type',
-#              'Projector beam weighting window parameter',
-#              'Transmit flags',
-#              'Hydrophone ID',
-#              'Receive beam weighting window',
-#              'Receive beam weighting parameter',
-#              'Receive flags',
-#              'Bottom detection filter min range',
-#              'Bottom detection filter max range',
-#              'Bottom detection filter min depth',
-#              'Bottom detection filter max depth',
-#              'Absorption',
-#              'Sound Velocity',
-#              'Spreading',
-#              'Reserved',
-#              'Tx array position offset X',
-#              'Tx array position offset Y',
-#              'Tx array position offset Z',
-#              'Head tilt X',
-#              'Head tilt Y',
-#              'Head tilt Z',
-#              'Ping state',
-#              'Equiangle/Equidistant Mode',
-#              '7kCenter mode',
-#              'Adaptive gate bottom filter min depth',
-#              'Adaptive gate bottom filter max depth',
-#              'Trigger out width',
-#              'Trigger out offset',
-#              '81xx series projector Selection',
-#              'Reserved',
-#              'Reserved',
-#              '81xx series alternate gain',
-#              'Reserved',
-#              'Coverage angle',
-#              'Coverage mode',
-#              'Quality filter flags',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved',
-#              'Reserved')
-#
-#
-# class Data1003(BaseData):
-#     label = ('DatumID',
-#              'Latency',
-#              'Northing (Lat)',
-#              'Easting (Lon)',
-#              'Height (m)',
-#              'Position Type',
-#              'UTM Zone',
-#              'Quality Flag',
-#              'Positioning Method',
-#              'Positioning Method (cont)')
-#     fmt_hdr = '<If3d5B'
-#
-#
-# class Data1012(BaseData):
-#     label = ('Roll', 'Pitch', 'Heave')
-#     fmt_hdr = '<3f'
-#
-#
-# class Data1013(BaseData):
-#     label = ('Heading')
-#     fmt_hdr = '<f'
+
+
+class Data7503(BaseData):
+    """
+    Remote Control Sonar Settings Datagram, one is produced with each ping
+    """
+    hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('Frequency', 'f4'),
+                          ('SampleRate', 'f4'), ('ReceiverBandwidth', 'f4'), ('TXPulseWidth', 'f4'),
+                          ('TXPulseTypeID', 'u4'), ('TXPulseEnvelope', 'u4'), ('TXPulseEnvelopeParameter', 'f4'),
+                          ('TXPulseMode', 'u2'), ('TXPulseReserved', 'u2'), ('MaxPingRate', 'f4'), ('PingPeriod', 'f4'),
+                          ('RangeSelection', 'f4'), ('PowerSelection', 'f4'), ('GainSelection', 'f4'), ('ControlFlags', 'u4'),
+                          ('ProjectorIdentifier', 'u4'), ('ProjectorBeamSteeringAngleVertical', 'f4'),
+                          ('ProjectorBeamSteeringAngleHorizontal', 'f4'), ('ProjectorBeamWidthVertical', 'f4'),
+                          ('ProjectorBeamWidthHorizontal', 'f4'), ('ProjectorBeamFocalPoint', 'f4'),
+                          ('ProjectorBeamWeightingWindowType', 'u4'), ('ProjectorBeamWeightingWindowParameter', 'f4'),
+                          ('TransmitFlags', 'u4'), ('HydrophoneIdentifier', 'u4'), ('ReceiveBeamWeightingWindow', 'u4'),
+                          ('ReceiveBeamWeightingParamter', 'f4'), ('ReceiveFlags', 'u4'),
+                          ('BottomDetectionFilterMinRange', 'f4'), ('BottomDetectionFilterMaxRange', 'f4'),
+                          ('BottomDetectionFilterMinDepth', 'f4'), ('BottomDetectionFilterMaxDepth', 'f4'),
+                          ('Absorption', 'f4'), ('SoundVelocity', 'f4'), ('Spreading', 'f4'), ('VernierOperationMode', 'u1'),
+                          ('AutomaticFilterWindow', 'u1'), ('TxArrayPositionOffsetX', 'f4'), ('TxArrayPositionOffsetY', 'f4'),
+                          ('TxArrayPositionOffsetZ', 'f4'), ('HeadTiltX', 'f4'), ('HeadTiltY', 'f4'), ('HeadTiltZ', 'f4'),
+                          ('PingState', 'u4'), ('BeamSpacingMode', 'u2'), ('SonarSourceMode', 'u2'), ('AdaptiveGateBottomMinDepth', 'f4'),
+                          ('AdaptiveGateBottomMaxDepth', 'f4'), ('TriggerOutWidth', 'f8'), ('TriggerOutOffset', 'f8'),
+                          ('EightSeriesProjectorSelection', 'u2'), ('ReservedOne', '2u4'), ('EightSeriesAlternateGain', 'f4'),
+                          ('VernierFilter', 'u1'), ('ReservedTwo', 'u1'), ('CustomBeams', 'u2'), ('CoverageAngle', 'f4'),
+                          ('CoverageMode', 'u1'), ('QualityFilterFlags', 'u1'), ('HorizontalReceiverBeamSteeringAngle', 'f4'),
+                          ('FlexModeSectorCoverage', 'f4'), ('FlexModeSectorSteering', 'f4'), ('ConstantSpacing', 'f4'),
+                          ('BeamModeSelection', 'u2'), ('DepthGateTilt', 'f4'), ('AppliedFrequency', 'f4'),
+                          ('ElementNumber', 'u4'), ('MaxImageHeight', 'u4'), ('BytesPerPixel', 'u4')])
+
+    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        if len(datablock) == 268:
+            super(Data7503, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        elif len(datablock) == 260:
+            self.hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('Frequency', 'f4'),
+                                       ('SampleRate', 'f4'), ('ReceiverBandwidth', 'f4'), ('TXPulseWidth', 'f4'),
+                                       ('TXPulseTypeID', 'u4'), ('TXPulseEnvelope', 'u4'), ('TXPulseEnvelopeParameter', 'f4'),
+                                       ('TXPulseMode', 'u2'), ('TXPulseReserved', 'u2'), ('MaxPingRate', 'f4'), ('PingPeriod', 'f4'),
+                                       ('RangeSelection', 'f4'), ('PowerSelection', 'f4'), ('GainSelection', 'f4'), ('ControlFlags', 'u4'),
+                                       ('ProjectorIdentifier', 'u4'), ('ProjectorBeamSteeringAngleVertical', 'f4'),
+                                       ('ProjectorBeamSteeringAngleHorizontal', 'f4'), ('ProjectorBeamWidthVertical', 'f4'),
+                                       ('ProjectorBeamWidthHorizontal', 'f4'), ('ProjectorBeamFocalPoint', 'f4'),
+                                       ('ProjectorBeamWeightingWindowType', 'u4'), ('ProjectorBeamWeightingWindowParameter', 'f4'),
+                                       ('TransmitFlags', 'u4'), ('HydrophoneIdentifier', 'u4'), ('ReceiveBeamWeightingWindow', 'u4'),
+                                       ('ReceiveBeamWeightingParamter', 'f4'), ('ReceiveFlags', 'u4'),
+                                       ('BottomDetectionFilterMinRange', 'f4'), ('BottomDetectionFilterMaxRange', 'f4'),
+                                       ('BottomDetectionFilterMinDepth', 'f4'), ('BottomDetectionFilterMaxDepth', 'f4'),
+                                       ('Absorption', 'f4'), ('SoundVelocity', 'f4'), ('Spreading', 'f4'), ('VernierOperationMode', 'u1'),
+                                       ('AutomaticFilterWindow', 'u1'), ('TxArrayPositionOffsetX', 'f4'), ('TxArrayPositionOffsetY', 'f4'),
+                                       ('TxArrayPositionOffsetZ', 'f4'), ('HeadTiltX', 'f4'), ('HeadTiltY', 'f4'), ('HeadTiltZ', 'f4'),
+                                       ('PingState', 'u4'), ('BeamSpacingMode', 'u2'), ('SonarSourceMode', 'u2'), ('AdaptiveGateBottomMinDepth', 'f4'),
+                                       ('AdaptiveGateBottomMaxDepth', 'f4'), ('TriggerOutWidth', 'f8'), ('TriggerOutOffset', 'f8'),
+                                       ('EightSeriesProjectorSelection', 'u2'), ('ReservedOne', '2u4'), ('EightSeriesAlternateGain', 'f4'),
+                                       ('VernierFilter', 'u1'), ('ReservedTwo', 'u1'), ('CustomBeams', 'u2'), ('CoverageAngle', 'f4'),
+                                       ('CoverageMode', 'u1'), ('QualityFilterFlags', 'u1'), ('HorizontalReceiverBeamSteeringAngle', 'f4'),
+                                       ('FlexModeSectorCoverage', 'f4'), ('FlexModeSectorSteering', 'f4'), ('ConstantSpacing', 'f4'),
+                                       ('BeamModeSelection', 'u2'), ('DepthGateTilt', 'f4'), ('AppliedFrequency', 'f4'),
+                                       ('ElementNumber', 'u4')])
+            self.hdr_sz = self.hdr_dtype.itemsize
+            super(Data7503, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        self.settings = {}
+        self.time = utctime
 
 
 class MapPack:
@@ -1768,7 +1740,7 @@ class MapPack:
         """Adds the location, time and ping to the tuple for the value type"""
         typ = typ
         store = [location, time, ping]
-        if type in self.packdir:
+        if typ in self.packdir:
             self.packdir[typ].append(store)
             self.sizedir[typ] += size
         else:
@@ -1812,7 +1784,7 @@ class MapPack:
         keys.sort()
         for key in keys:
             percent = 10000 * self.sizedir[str(key[0])] / totalsize
-            print('message ' + str(key[0]) + ' has ' + str(key[1]) + ' packets and ' + str(0.01 * percent) + '% of file')
+            print('message ' + str(key[0]) + ' has ' + str(key[1]) + ' packets and ' + str(round(0.01 * percent, 2)) + '% of file')
 
     def plotmap(self):
         """
