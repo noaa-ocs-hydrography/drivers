@@ -15,7 +15,8 @@ from datetime import timedelta, timezone, datetime
 
 recs_categories_7006 = {'1012': ['time', 'Roll', 'Pitch', 'Heave'],
                         '1013': ['time', 'Heading'],
-                        '7503': ['time', 'header'],
+                        '7001': ['time', 'serial_one', 'serial_two'],
+                        '7503': ['time', 'settings'],
                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
                              'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                              'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
@@ -654,8 +655,8 @@ class BaseData(object, metaclass=BaseMeta):
          hdr_dtype = np.dtype([('StatusDatagramCount','H'),('SystemSerialNum','H'), ('PingRate',"f")])
          raw_dtype = np.dtype([('StatusDatagramCount','H'),('SystemSerialNum','H'), ('PingRate',"H")])
          conversions = {'PingRate': 0.01} #ping rate was in integer hundreths
-         def __init__(self, datablock, byteswap=False):
-            super(Data003, self).__init__(datablock, byteswap=byteswap)
+         def __init__(self, datablock):
+            super(Data003, self).__init__(datablock)
             # the conversions declared above has the effect of -- self.header['PingRate'] *= 0.01
             # you can still modify values here if need be -- addition or linear
             self.header['SystemSerialNum'] += 5
@@ -687,7 +688,7 @@ class BaseData(object, metaclass=BaseMeta):
     """
     conversions = {}
 
-    def __init__(self, datablock, byteswap=False, read_limit=1):
+    def __init__(self, datablock, read_limit=1):
         """This gets the format for each block type and then reads the block
         read_limit is used to determine how much data is read, like a slice index.
           # By default it will read one record and read it as a single instance of the datatype (everything else will be like slices and be an array)
@@ -771,13 +772,13 @@ class BaseData(object, metaclass=BaseMeta):
         try:
             ky2 = self._data_keys[key]  # try to access the subfield
             return self.header[ky2]
-        except:
+        except KeyError:
             raise AttributeError(key + " not in " + str(self.__class__))
 
     def __setattr__(self, key, value):  # Get the value from the underlying subfield (perform any conversion necessary)
         try:
             ky2 = self._data_keys[key]  # try to access the subfield
-        except:
+        except KeyError:
             super(BaseData, self).__setattr__(key, value)
         else:
             self.header[ky2] = value
@@ -798,10 +799,10 @@ class Data1000(BaseData):
     hdr_dtype = np.dtype([('XRefPointToGravity', 'f4'), ('YRefPointToGravity', 'f4'), ('ZRefPointToGravity', 'f4'),
                           ('WaterLevelToGravity', 'f4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data1000, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data1000, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
 
 
@@ -813,17 +814,17 @@ class Data1003(BaseData):
                           ('LongitudeEasting', 'f8'), ('Height', 'f8'), ('PositionFlag', 'u1'), ('UtmZone', 'u1'),
                           ('QualityFlag', 'u1'), ('PositionMethod', 'u1'), ('NumberOfSatellites', 'u1')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
         if len(datablock) == 37:  # it includes numberofsatellites
-            super(Data1003, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+            super(Data1003, self).__init__(datablock, read_limit=read_limit)
         elif len(datablock) == 36:
             self.hdr_dtype = np.dtype([('DatumIdentifier', 'u4'), ('Latency', 'f4'), ('LatitudeNorthing', 'f8'),
                                        ('LongitudeEasting', 'f8'), ('Height', 'f8'), ('PositionFlag', 'u1'),
                                        ('UtmZone', 'u1'), ('QualityFlag', 'u1'), ('PositionMethod', 'u1')])
             self.hdr_sz = self.hdr_dtype.itemsize
-            super(Data1003, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+            super(Data1003, self).__init__(datablock, read_limit=read_limit)
         else:
             raise NotImplementedError('prr3: Found a Data1003 datablock that is neither 36 nor 37 long, not sure what it is')
         self.time = utctime
@@ -836,10 +837,10 @@ class Data1008(BaseData):
     hdr_dtype = np.dtype([('DepthDescriptor', 'u1'), ('CorrectionFlag', 'u1'), ('Reserved', 'u2'),
                           ('Depth', 'f4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data1008, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data1008, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
 
 
@@ -850,10 +851,10 @@ class Data1009(BaseData):
     hdr_dtype = np.dtype([('PositionFlag', 'u1'), ('ReservedOne', 'u1'), ('ReservedTwo', 'u2'),
                           ('Latitude', 'f8'), ('Longitude', 'f8'), ('NumberOfLayers', 'u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data1009, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data1009, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.profile_depth = []
         self.profile_data = []
@@ -882,8 +883,8 @@ class Data1010(BaseData):
                           ('SampleContentValidity', 'u1'), ('Reserved', 'u2'), ('Latitude', 'f8'), ('Longitude', 'f8'),
                           ('SampleRate', 'f4'), ('NumberOfLayers', 'u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
-        super(Data1010, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=None):
+        super(Data1010, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.profile_conductivity = []
         self.profile_temperature = []
@@ -918,10 +919,10 @@ class Data1012(BaseData):
     """
     hdr_dtype = np.dtype([('Roll', 'f4'), ('Pitch', 'f4'), ('Heave', 'f4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data1012, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data1012, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
 
 
@@ -931,10 +932,10 @@ class Data1013(BaseData):
     """
     hdr_dtype = np.dtype([('Heading', 'f4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data1013, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data1013, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
 
 
@@ -957,10 +958,10 @@ class Data7000(BaseData):
                           ('BottomDetectionFilterMinDepth', 'f4'), ('BottomDetectionFilterMaxDepth', 'f4'),
                           ('Absorption', 'f4'), ('SoundVelocity', 'f4'), ('Spreading', 'f4'), ('ReservedFlag', 'u2')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data7000, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data7000, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
 
 
@@ -970,14 +971,16 @@ class Data7001(BaseData):
     """
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('NumberOfDevices', 'u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
+    def __init__(self, datablock, utctime, read_limit=1):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data7001, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data7001, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.device_header = np.dtype([('DeviceIdentifier', 'u4'), ('DeviceDescription', 'S60'), ('DeviceAlphaDataCard', 'u4'),
                                        ('DeviceSerialNumber', 'u8'), ('DeviceInfoLength', 'u4')])
         self.devices = []
+        self.serial_one = 0
+        self.serial_two = 0
         self.read_data(datablock[self.hdr_sz:])
 
     def read_data(self, datablock):
@@ -991,6 +994,12 @@ class Data7001(BaseData):
             info_data = list(np.frombuffer(datablock[datapointer: datapointer + variable_length], np.dtype([('DeviceInfo', f'S{variable_length}')]))[0])
             datapointer += data_sz
             device_data += info_data
+            if i == 0:
+                self.serial_one = device_data[2]
+            elif i == 1:
+                self.serial_two = device_data[2]
+            else:
+                print('WARNING: Found a sonar with more than two devices, which is not supported in Kluster')
             self.devices.append(device_data)
 
     def display(self):
@@ -1009,10 +1018,10 @@ class Data7002(BaseData):
                           ('StopFrequency', 'f4'), ('WindowType', 'u4'), ('ShadingValue', 'f4'),
                           ('EffectivePulseWidth', 'f4'), ('Reserved', '13u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        super(Data7002, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        super(Data7002, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
 
 
@@ -1024,8 +1033,8 @@ class Data7004BeamsNew(BaseData):
     hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', 'f'), ('BeamHorizontalDirectionAngle', 'f'),
                           ('BeamWidthAlongTrack', 'f'), ('BeamWidthAcrossTrack', 'f'), ('TxDelay', 'f')])
 
-    def __init__(self, datablock, byteswap=False, read_limit=None):
-        super(Data7004BeamsNew, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, read_limit=None):
+        super(Data7004BeamsNew, self).__init__(datablock, read_limit=read_limit)
 
 
 class Data7004BeamsOld(BaseData):
@@ -1036,8 +1045,8 @@ class Data7004BeamsOld(BaseData):
     hdr_dtype = np.dtype([('BeamVerticalDirectionAngle', 'f4'), ('BeamHorizontalDirectionAngle', 'f4'),
                           ('BeamWidthAlongTrack', 'f4'), ('BeamWidthAcrossTrack', 'f4')])
 
-    def __init__(self, datablock, byteswap=False, read_limit=None):
-        super(Data7004BeamsOld, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, read_limit=None):
+        super(Data7004BeamsOld, self).__init__(datablock, read_limit=read_limit)
 
 
 class Data7004(BaseData):
@@ -1046,8 +1055,8 @@ class Data7004(BaseData):
     """
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('NumberOfBeams', 'u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7004, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7004, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numbeams = self.header[1]
         self.data = None
@@ -1100,8 +1109,8 @@ class Data7006Beams(BaseData):
     hdr_dtype = np.dtype([('Range', 'f4'), ('Quality', 'u1'), ('Intensity', 'f4'),
                           ('MinTravelTimeToFilter', 'f4'), ('MaxTravelTimeToFilter', 'f4')])
 
-    def __init__(self, datablock, byteswap=False, read_limit=None):
-        super(Data7006Beams, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, read_limit=None):
+        super(Data7006Beams, self).__init__(datablock, read_limit=read_limit)
 
 
 class Data7006(BaseData):
@@ -1112,8 +1121,8 @@ class Data7006(BaseData):
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultiPingSequence', 'u2'), ('NumberOfBeams', 'u4'),
                           ('Flags', 'u1'), ('SoundVelocityFlag', 'u1'), ('SoundVelocity', 'f4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7006, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7006, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numbeams = self.header[3]
         self.data = None
@@ -1140,8 +1149,8 @@ class Data7007Beams(BaseData):
     """
     hdr_dtype = np.dtype([('PortBeams', 'f4'), ('StarboardBeams', 'f4')])
 
-    def __init__(self, datablock, byteswap=False, read_limit=None):
-        super(Data7007Beams, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, read_limit=None):
+        super(Data7007Beams, self).__init__(datablock, read_limit=read_limit)
 
 
 class Data7007(BaseData):
@@ -1152,8 +1161,8 @@ class Data7007(BaseData):
                           ('ControlFlags', 'u4'), ('SamplesPerSide', 'u4'), ('NadirDepth', 'u4'), ('Reserved', '7f4'),
                           ('NumberOfBeams', 'u2'), ('CurrentBeamNumber', 'u2'), ('NumberOfBytes', 'u1'), ('DataTypes', 'u1')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7007, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7007, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numbeams = self.header[8]
         self.numbytes = self.header[10]
@@ -1181,8 +1190,8 @@ class Data7008(BaseData):
                           ('NumberOfBeams', 'u2'), ('ReservedOne', 'u2'), ('Samples', 'u4'), ('RecordSubsetFlag', 'u1'),
                           ('RowColumnFlag', 'u1'), ('ReservedTwo', 'u2'), ('DataSampleSize', 'u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7008, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7008, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numbeams = self.header[3]
         self.beams = None
@@ -1206,7 +1215,7 @@ class Data7008(BaseData):
         magval = 7 & fmt_flags
         phaseval = (240 & fmt_flags) >> 4
         iqval = (3840 & fmt_flags) >> 8
-        elementflag = (28672 & fmt_flags) >> 12
+        # elementflag = (28672 & fmt_flags) >> 12
         fmt = []
         if magval == 2:
             fmt.append(('Magnitude', 'H'))
@@ -1268,14 +1277,14 @@ class Data7008(BaseData):
             plt.figure()
             mg = self.mag.copy()
             mg[mg == 0] = np.nan  # force NAN to get over divide by zero issues
-            magplot = plt.imshow(20 * np.log10(mg), aspect='auto')
+            plt.imshow(20 * np.log10(mg), aspect='auto')
             plt.title('7008 20*log10*Magnitude')
             plt.xlabel('Beam number')
             plt.ylabel('Sample number in window')
             plt.colorbar()
         if self.phase is not None:
             plt.figure()
-            phaseplot = plt.imshow(self.phase, aspect='auto')
+            plt.imshow(self.phase, aspect='auto')
             plt.title('7008 Phase')
             plt.xlabel('Beam number')
             plt.ylabel('Sample number in window')
@@ -1295,8 +1304,8 @@ class Data7010Beams(BaseData):
     """
     hdr_dtype = np.dtype([('Gain', 'f4')])
 
-    def __init__(self, datablock, byteswap=False, read_limit=None):
-        super(Data7010Beams, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, read_limit=None):
+        super(Data7010Beams, self).__init__(datablock, read_limit=read_limit)
 
 
 class Data7010(BaseData):
@@ -1306,8 +1315,8 @@ class Data7010(BaseData):
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
                           ('Samples', 'u4'), ('Reserved', '8u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7010, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7010, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numsamples = self.header[3]
         self.data = None
@@ -1331,8 +1340,8 @@ class Data7012(BaseData):
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
                           ('Samples', 'u4'), ('Flags', 'u2'), ('ErrorFlags', 'u4'), ('SamplingRate', 'f4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7012, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7012, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numsamples = self.header[3]
         self.pitch = None
@@ -1364,8 +1373,8 @@ class Data7014(BaseData):
     hdr_dtype = np.dtype([('RecordHeaderSize', 'u2'), ('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
                           ('NumberOfGates', 'u4'), ('GateDescriptorSize', 'u2')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7014, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7014, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numgates = self.header[4]
         self.data = None
@@ -1393,8 +1402,8 @@ class Data7021Board(BaseData):
                           ('BiteTimeReceivedSeconds', 'f4'), ('BiteTimeReceivedHours', 'u1'), ('BiteTimeReceivedMinutes', 'u1'),
                           ('Status', 'u1'), ('NumberOfFields', 'u2'), ('BiteStatusBits', '4u8')])
 
-    def __init__(self, datablock, byteswap=False, read_limit=1):
-        super(Data7021Board, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, read_limit=1):
+        super(Data7021Board, self).__init__(datablock, read_limit=read_limit)
         self.numfields = self.header['NumberOfFields']
         self.field_dtype = np.dtype([('FieldNumber', 'u2'), ('NameValueRangeText', 'S64'), ('SensorType', 'u1'),
                                      ('Minimum', 'f4'), ('Maximum', 'f4'), ('Value', 'f4')])
@@ -1417,8 +1426,8 @@ class Data7021(BaseData):
     """
     hdr_dtype = np.dtype([('NumberOfBoards', 'u2')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7021, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7021, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numboards = self.header[0]
         self.data = None
@@ -1438,8 +1447,8 @@ class Data7022(BaseData):
     """
     hdr_dtype = np.dtype([('VersionString', 'S32')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7022, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7022, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
 
 
@@ -1452,8 +1461,8 @@ class Data7027(BaseData):
                           ('Detections', 'u4'), ('DataFieldSize', 'u4'), ('DetectionAlgorithm', 'u1'), ('Flags', 'u4'),
                           ('SamplingRate', 'f4'), ('TxAngle', 'f4'), ('AppliedRoll', 'f4'), ('Reserved', '15u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7027, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7027, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numdetections = self.header[3]
         self.data = None
@@ -1478,8 +1487,8 @@ class Data7028(BaseData):
                           ('Detections', 'u2'), ('ErrorFlags', 'u1'), ('ControlFlags', 'u1'), ('Flags', 'u4'),
                           ('SamplingRate', 'f4'), ('Reserved', '5u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7028, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7028, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numdetections = self.header[3]
         self.descriptor = None
@@ -1518,8 +1527,8 @@ class Data7041(BaseData):
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
                           ('Beams', 'u2'), ('Flags', 'u2'), ('SampleRate', 'f4'), ('Reserved', '4u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=1):
-        super(Data7041, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=1):
+        super(Data7041, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.numbeams = self.header[3]
         self.data = None
@@ -1629,8 +1638,8 @@ class Data7200(BaseData):
                           ('RecordDataSize', 'u4'), ('NumberOfDevices', 'u4'), ('RecordingName', 'S64'),
                           ('RecordingProgramVersion', 'S16'), ('UserDefinedName', 'S64'), ('Notes', 'S128')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
-        super(Data7200, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+    def __init__(self, datablock, utctime, read_limit=None):
+        super(Data7200, self).__init__(datablock, read_limit=read_limit)
         # the strings are 'null terminated' so strip the bytes from those messages
         self.header['RecordingName'] = self.header['RecordingName'][0].rstrip(b'\xff').rstrip(b'\x00').decode()
         self.header['RecordingProgramVersion'] = self.header['RecordingProgramVersion'][0].rstrip(b'\xff').rstrip(b'\x00').decode()
@@ -1691,11 +1700,11 @@ class Data7503(BaseData):
                           ('BeamModeSelection', 'u2'), ('DepthGateTilt', 'f4'), ('AppliedFrequency', 'f4'),
                           ('ElementNumber', 'u4'), ('MaxImageHeight', 'u4'), ('BytesPerPixel', 'u4')])
 
-    def __init__(self, datablock, utctime, byteswap=False, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=None):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
-        if len(datablock) == 268:
-            super(Data7503, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
+        if len(datablock) == 268:  # some versions will not have the last two entries
+            super(Data7503, self).__init__(datablock, read_limit=read_limit)
         elif len(datablock) == 260:
             self.hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('Frequency', 'f4'),
                                        ('SampleRate', 'f4'), ('ReceiverBandwidth', 'f4'), ('TXPulseWidth', 'f4'),
@@ -1722,72 +1731,150 @@ class Data7503(BaseData):
                                        ('BeamModeSelection', 'u2'), ('DepthGateTilt', 'f4'), ('AppliedFrequency', 'f4'),
                                        ('ElementNumber', 'u4')])
             self.hdr_sz = self.hdr_dtype.itemsize
-            super(Data7503, self).__init__(datablock, byteswap=byteswap, read_limit=read_limit)
-        self.settings = {'waterline_vertical_location': '0.0'}
-        self.ky_data73_translator = {'SonarID': 'system_main_head_serial_number',
-                                     'S0Z': 'transducer_0_vertical_location', 'S0X': 'transducer_0_along_location',
-                                     'S0Y': 'transducer_0_athwart_location', 'S0H': 'transducer_0_heading_angle',
-                                     'S0R': 'transducer_0_roll_angle', 'S0P': 'transducer_0_pitch_angle',
-                                     'S1Z': 'transducer_1_vertical_location', 'S1X': 'transducer_1_along_location',
-                                     'S1Y': 'transducer_1_athwart_location', 'S1H': 'transducer_1_heading_angle',
-                                     'S1R': 'transducer_1_roll_angle', 'S1P': 'transducer_1_pitch_angle',
-                                     'S1N': 'transducer_1_number_modules', 'S2Z': 'transducer_2_vertical_location',
-                                     'S2X': 'transducer_2_along_location', 'S2Y': 'transducer_2_athwart_location',
-                                     'S2H': 'transducer_2_heading_angle', 'S2R': 'transducer_2_roll_angle',
-                                     'S2P': 'transducer_2_pitch_angle', 'S2N': 'transducer_2_number_modules',
-                                     'S3Z': 'transducer_3_vertical_location', 'S3X': 'transducer_3_along_location',
-                                     'S3Y': 'transducer_3_athwart_location', 'S3H': 'transducer_3_heading_angle',
-                                     'S3R': 'transducer_3_roll_angle', 'S3P': 'transducer_3_pitch_angle',
-                                     'S0S': 'tx_2_array_size', 'S3S': 'rx_2_array_size',
-                                     'S1S': 'tx_array_size', 'S2S': 'rx_array_size', 'GO1': 'sonar_head_1_gain_offset',
-                                     'GO2': 'sonar_head_2_gain_offset', 'OBO': 'outer_beam_offset',
-                                     'FGD': 'high_low_freq_gain_difference', 'TSV': 'transmitter_software_version',
-                                     'RSV': 'receiver_software_version', 'BSV': 'bsp_software_version',
-                                     'PSV': 'processing_unit_software_version', 'DDS': 'dds_software_version',
-                                     'OSV': 'operator_station_software_version', 'DSV': 'datagram_format_version',
-                                     'DSX': 'pressure_sensor_along_location', 'DSY': 'pressure_sensor_athwart_location',
-                                     'DSZ': 'pressure_sensor_vertical_location', 'DSD': 'pressure_sensor_time_delay',
-                                     'DSO': 'pressure_sensor_offset', 'DSF': 'pressure_sensor_scale_factor',
-                                     'DSH': 'pressure_sensor_heave', 'APS': 'active_position_system_number',
-                                     'P1Q': 'position_1_quality_check', 'P1M': 'position_1_motion_compensation',
-                                     'P1T': 'position_1_time_stamp', 'P1Z': 'position_1_vertical_location',
-                                     'P1X': 'position_1_along_location', 'P1Y': 'position_1_athwart_location',
-                                     'P1D': 'position_1_time_delay', 'P1G': 'position_1_datum',
-                                     'P2Q': 'position_2_quality_check', 'P2M': 'position_2_motion_compensation',
-                                     'P2T': 'position_2_time_stamp', 'P2Z': 'position_2_vertical_location',
-                                     'P2X': 'position_2_along_location', 'P2Y': 'position_2_athwart_location',
-                                     'P2D': 'position_2_time_delay', 'P2G': 'position_2_datum',
-                                     'P3Q': 'position_3_quality_check', 'P3M': 'position_3_motion_compensation',
-                                     'P3T': 'position_3_time_stamp', 'P3Z': 'position_3_vertical_location',
-                                     'P3X': 'position_3_along_location', 'P3Y': 'position_3_athwart_location',
-                                     'P3D': 'position_3_time_delay', 'P3G': 'position_3_datum',
-                                     'P3S': 'position_3_serial_or_ethernet',
-                                     'MSZ': 'motion_sensor_1_vertical_location',
-                                     'MSX': 'motion_sensor_1_along_location', 'MSY': 'motion_sensor_1_athwart_location',
-                                     'MRP': 'motion_sensor_1_roll_ref_plane', 'MSD': 'motion_sensor_1_time_delay',
-                                     'MSR': 'motion_sensor_1_roll_angle', 'MSP': 'motion_sensor_1_pitch_angle',
-                                     'MSG': 'motion_sensor_1_heading_angle',
-                                     'NSZ': 'motion_sensor_2_vertical_location',
-                                     'NSX': 'motion_sensor_2_along_location', 'NSY': 'motion_sensor_2_athwart_location',
-                                     'NRP': 'motion_sensor_2_roll_ref_plane', 'NSD': 'motion_sensor_2_time_delay',
-                                     'NSR': 'motion_sensor_2_roll_angle', 'NSP': 'motion_sensor_2_pitch_angle',
-                                     'NSG': 'motion_sensor_2_heading_angle', 'GCG': 'gyrocompass_heading_offset',
-                                     'MAS': 'roll_scaling_factor', 'SHC': 'transducer_depth_sound_speed_source',
-                                     'PPS': '1pps_clock_sync', 'CLS': 'clock_source', 'CLO': 'clock_offset',
-                                     'VSN': 'active_attitude_velocity', 'VSU': 'attitude_velocity_sensor_1_address',
-                                     'VSE': 'attitude_velocity_sensor_1_port',
-                                     'VTU': 'attitude_velocity_sensor_2_address',
-                                     'VTE': 'attitude_velocity_sensor_2_port',
-                                     'ARO': 'active_roll_pitch_sensor', 'AHE': 'active_heave_sensor',
-                                     'AHS': 'active_heading_sensor', 'VSI': 'ethernet_2_address',
-                                     'VSM': 'ethernet_2_network_mask', 'MCAn': 'multicast_sensor_address',
-                                     'MCUn': 'multicast_sensor_port', 'MCIn': 'multicast_sensor_identifier',
-                                     'MCPn': 'multicast_position_system_number', 'SNL': 'ship_noise_level',
-                                     'CPR': 'cartographic_projection', 'ROP': 'responsible_operator',
-                                     'SID': 'survey_identifier', 'RFN': 'raw_file_name',
-                                     'PLL': 'survey_line_identifier',
-                                     'COM': 'comment'}
-        self.time = utctime
+            super(Data7503, self).__init__(datablock, read_limit=read_limit)
+            self.time = utctime
+            self.ky_data7503_translator = {'SonarID': 'system_main_head_serial_number', 'SampleRate': 'sample_rate_hertz',
+                                           'ReceiverBandwidth': 'receiver_bandwidth_3db_hertz', 'TXPulseWidth': 'tx_pulse_width_seconds',
+                                           'TXPulseTypeID': 'tx_pulse_type_id', 'TXPulseEnvelope': 'tx_pulse_envelope_identifier',
+                                           'TXPulseEnvelopeParameter': 'tx_pulse_envelope_parameter', 'TXPulseMode': 'tx_single_multiping_mode',
+                                           'MaxPingRate': 'maximum_ping_rate_per_second', 'PingPeriod': 'ping_period_seconds',
+                                           'RangeSelection': 'range_selection_meters', 'PowerSelection': 'power_selection_db_re_1micropascal',
+                                           'GainSelection': 'gain_selection_db', 'ProjectorIdentifier': 'projector_selection',
+                                           'ProjectorBeamWeightingWindowType': 'projector_weighting_window_type',
+                                           'HydrophoneIdentifier': 'hydrophone_identifier', 'ReceiveBeamWeightingWindow': 'receiver_weighting_window_type',
+                                           'BottomDetectionFilterMinRange': 'bottom_detect_filter_min_range',
+                                           'BottomDetectionFilterMaxRange': 'bottom_detect_filter_max_range',
+                                           'BottomDetectionFilterMinDepth': 'bottom_detect_filter_min_depth',
+                                           'BottomDetectionFilterMaxDepth': 'bottom_detect_filter_max_depth',
+                                           'Absorption': 'absorption_db_km', 'SoundVelocity': 'sound_velocity_meters_per_sec',
+                                           'Spreading': 'spreading_loss_db', 'VernierOperationMode': 'vernier_operation_mode',
+                                           'AutomaticFilterWindow': 'automatic_filter_window_size_percent_depth',
+                                           'HeadTiltX': 'head_tilt_acrosstrack', 'HeadTiltY': 'head_tilt_alongtrack',
+                                           'PingState': 'ping_state', 'BeamSpacingMode': 'beam_spacing_mode',
+                                           'SonarSourceMode': 'sonar_source_mode', 'AdaptiveGateBottomMinDepth': 'adaptive_gate_min_depth',
+                                           'AdaptiveGateBottomMaxDepth': 'adaptive_gate_max_depth', 'TriggerOutWidth': 'trigger_out_width',
+                                           'TriggerOutOffset': 'trigger_out_offset', 'EightSeriesProjectorSelection': 'eight_series_projector_selection',
+                                           'EightSeriesAlternateGain': 'eight_series_alternate_gain_db', 'VernierFilter': 'vernier_filter_settings',
+                                           'CustomBeams': 'custom_beams', 'CoverageAngle': 'coverage_angle_radians', 'CoverageMode': 'coverage_mode',
+                                           'QualityFilterFlags': 'quality_filter_enabled', 'HorizontalReceiverBeamSteeringAngle': 'receiver_beam_steering_angle_radians',
+                                           'FlexModeSectorCoverage': 'flexmode_coverage_sector_radians', 'FlexModeSectorSteering': 'flexmode_steering_angle_radians',
+                                           'ConstantSpacing': 'constant_beam_spacing_meters', 'BeamModeSelection': 'sonar_xml_beam_mode_index',
+                                           'DepthGateTilt': 'depth_gate_tilt_angle_radians', 'AppliedFrequency': 'transmit_frequency_slider'}
+            self.ky_data7503_val_translator = {'TXPulseTypeID': {0: 'CW', 1: 'FM'},
+                                               'TXPulseEnvelope': {0: 'tapered_rectangular', 1: 'tukey', 2: 'hamming', 3: 'han', 4: 'rectangular'},
+                                               'TXPulseMode': {1: 'single_ping', 2: 'multiping2', 3: 'multiping3', 4: 'multiping4'},
+                                               'ProjectorBeamWeightingWindowType': {0: 'rectangular', 1: 'chebychev'},
+                                               'ReceiveBeamWeightingWindow': {0: 'chebychev', 1: 'kaiser'},
+                                               'PingState': {0: 'disabled', 1: 'enabled', 2: 'externally_triggered'},
+                                               'BeamSpacingMode': {1: 'equiangle', 2: 'equidistant', 3: 'flex', 4: 'intermediate'},
+                                               'SonarSourceMode': {0: 'normal', 1: 'autopilot', 2: 'calibration'},
+                                               'EightSeriesProjectorSelection': {0: 'stick', 1: 'main_array', 2: 'extended_range'},
+                                               'CoverageMode': {0: 'reduce_spacing', 1: 'reduce_beams'},
+                                               'QualityFilterFlags': {0: 'disabled', 1: 'enabled'}}
+
+    @property
+    def control_flags(self):
+        """
+        Return the translated control flags
+        """
+        settings = {}
+        if 'ControlFlags' in self.header.dtype.names:
+            data = self.header['ControlFlags'][0]
+            binctrl = format(data, '#034b')  # convert to binary, string length 34 to account for the leading '0b' and 32 bits
+            settings['auto_range_method'] = int(binctrl[-4:], 2)
+            settings['auto_bottom_detection_filter_method'] = int(binctrl[-8:-4], 2)
+            settings['bottom_detection_range_filter_enabled'] = str(bool(int(binctrl[-9], 2)))
+            settings['bottom_detection_depth_filter_enabled'] = str(bool(int(binctrl[-10], 2)))
+            settings['receiver_gain_autogain'] = str(bool(int(binctrl[-11], 2)))
+            settings['receiver_gain_fixedgain'] = str(bool(int(binctrl[-12], 2)))
+            settings['trigger_out_high'] = str(bool(int(binctrl[-15], 2)))
+            settings['system_active'] = str(bool(int(binctrl[-16], 2)))
+            settings['adaptive_search_window_passive'] = str(bool(int(binctrl[-20], 2)))
+            settings['pipe_gating_filter_enabled'] = str(bool(int(binctrl[-21], 2)))
+            settings['adaptive_gate_depth_filter_fixed'] = str(bool(int(binctrl[-22], 2)))
+            settings['adaptive_gate_enabled'] = str(bool(int(binctrl[-23], 2)))
+            settings['adaptive_gate_depth_filter_enabled'] = str(bool(int(binctrl[-24], 2)))
+            settings['trigger_out_enabled'] = str(bool(int(binctrl[-25], 2)))
+            settings['trigger_in_edge_negative'] = str(bool(int(binctrl[-26], 2)))
+            settings['pps_edge_negative'] = str(bool(int(binctrl[-27], 2)))
+            settings['timestamp_state_ok'] = str(int(binctrl[-29:-27], 2) == 3)
+            settings['depth_filter_follow_seafloor'] = str(bool(int(binctrl[-30], 2)))
+            settings['reduced_coverage_for_constant_spacing'] = str(bool(int(binctrl[-31], 2)))
+            settings['is_simulator'] = str(bool(int(binctrl[-32], 2)))
+        return settings
+
+    @property
+    def receive_flags(self):
+        """
+        Return the translated receive flags
+        """
+        settings = {}
+        if 'ReceiveFlags' in self.header.dtype.names:
+            data = self.header['ReceiveFlags'][0]
+            binctrl = format(data, '#034b')  # convert to binary, string length 34 to account for the leading '0b' and 32 bits
+            settings['roll_compensation_indicator'] = str(bool(int(binctrl[-1], 2)))
+            settings['heave_compensation_indicator'] = str(bool(int(binctrl[-3], 2)))
+            settings['dynamic_focusing_method'] = str(int(binctrl[-8:-4], 2))
+            settings['doppler_compensation_method'] = str(int(binctrl[-12:-8], 2))
+            settings['match_filtering_method'] = str(int(binctrl[-16:-12], 2))
+            settings['tvg_method'] = str(int(binctrl[-20:-16], 2))
+            settings['multi_ping_number_of_pings'] = str(int(binctrl[-24:-20], 2))
+        return settings
+
+    @property
+    def offsets_and_angles(self):
+        """
+        Return the translated offsets, angles in a format that matches our Kluster/Kongsberg format.  We do some math to get
+        us to the arrays rel ref point.  Also add in some blank entries for angles, IMU location that we use in Kluster.
+        """
+        settings = {'waterline_vertical_location': '0.000', 'transducer_0_heading_angle': '0.000', 'transducer_0_roll_angle': '0.000',
+                    'transducer_0_pitch_angle': '0.000', 'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
+                    'transducer_1_pitch_angle': '0.000', 'motion_sensor_1_vertical_location': '0.000', 'motion_sensor_1_along_location': '0.000',
+                    'motion_sensor_1_athwart_location': '0.000', 'motion_sensor_1_roll_ref_plane': '0.000', 'motion_sensor_1_time_delay': '0.000',
+                    'motion_sensor_1_roll_angle': '0.000', 'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
+                    'active_heading_sensor': 'motion_1'}
+        # Reson - X = Across, Y = Along, Z = Vertical
+        # Reson reference point is the center of the receiver in (x, z) directions, and center of transmitter in y direction
+        if 'TxArrayPositionOffsetY' in self.header.dtype.names:  # along ship offset from center of RX to center of TX
+            data = self.header['TxArrayPositionOffsetY'][0]
+            # this is the TX offset from the sonar reference point
+            settings['transducer_0_along_location'] = '0.0'  # TX Along is always 0 (see ref point)
+            # this is the RX offset from the sonar reference point
+            settings['transducer_1_along_location'] = str(round(-float(data), 3))  # RX Along is the reverse of (center of rx to center of tx, center of tx is the rp)
+        else:
+            raise NotImplementedError('prr3: Expected TxArrayPositionOffsetY in Data7503, unable to build offsets')
+        if 'TxArrayPositionOffsetX' in self.header.dtype.names:  # across ship offset from center of RX to center of TX
+            data = self.header['TxArrayPositionOffsetX'][0]
+            settings['transducer_0_athwart_location'] = str(round(float(data), 3))  # TX Across is (center of rx to center of tx, center of rx is the rp)
+            settings['transducer_1_athwart_location'] = '0.000'  # RX Across is always 0 (see ref point)
+        else:
+            raise NotImplementedError('prr3: Expected TxArrayPositionOffsetX in Data7503, unable to build offsets')
+        if 'TxArrayPositionOffsetZ' in self.header.dtype.names:  # vertical ship offset from center of RX to center of TX
+            settings['transducer_0_vertical_location'] = str(round(-float(data), 3))  # TX Down is the reverse (to make it positive down) of (center of rx to center of tx, center of rx is the rp)
+            settings['transducer_1_vertical_location'] = '0.000'  # RX Offset is always 0 (see ref point)
+        else:
+            raise NotImplementedError('prr3: Expected TxArrayPositionOffsetZ in Data7503, unable to build offsets')
+        return settings
+
+    @property
+    def full_settings(self):
+        """
+        Return the dict that includes all the useful entries in the 7503 record translated so that you can understand them
+        """
+        settings = self.offsets_and_angles
+        settings.update(self.control_flags)
+        settings.update(self.receive_flags)
+        for entry in self.header.dtype.names:
+            data = self.header[entry][0]
+            if entry in self.ky_data7503_translator:
+                newkey = self.ky_data7503_translator[entry]
+                if entry in self.ky_data7503_val_translator:
+                    try:
+                        data = self.ky_data7503_val_translator[entry][data]
+                    except KeyError:
+                        pass
+                settings[newkey] = data
+        return settings
 
 
 class MapPack:
@@ -1822,6 +1909,7 @@ class MapPack:
         cur_closest = None
         rectype = None
         recdata = None
+        diff = None
         for typ in list(self.packdir.keys()):
             locs = self.packdir[typ][:, 0]
             if mode == 'nearest':
