@@ -13,39 +13,36 @@ import matplotlib.pyplot as plt
 from datetime import timedelta, timezone, datetime
 
 
-recs_categories_7006 = {'1012': ['time', 'Roll', 'Pitch', 'Heave'],
+recs_categories_7027 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
+                        '1009': ['time', 'data.Depth', 'data.SoundSpeed'],
+                        '1012': ['time', 'Roll', 'Pitch', 'Heave'],
                         '1013': ['time', 'Heading'],
-                        '7001': ['time', 'serial_one', 'serial_two'],
-                        '7503': ['time', 'settings'],
-                      '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
-                             'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
-                             'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
-                      '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
-                      '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                      '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
+                        '7001': ['serial_one', 'serial_two'],
+                        '7503': ['time', 'settings', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency'],
+                        '7027': ['time', 'PingNumber', 'TxAngle', 'RxAngle', 'Uncertainty', 'Flags',  # flags for amp/phase detect
+                                 'DetectionPoint', 'SamplingRate']}
 
-recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
-                                        'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
-                                        'Heading': [['attitude', 'heading']]},
-                                 '73': {'time': [['installation_params', 'time']],
-                                        'Serial#': [['installation_params', 'serial_one']],
-                                        'Serial#2': [['installation_params', 'serial_two']],
-                                        'settings': [['installation_params', 'installation_settings']]},
-                                 '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
-                                        'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
-                                        'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
-                                        'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
-                                        'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
-                                        'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
-                                 '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
-                                        'ReceiverFixedGain': [['runtime_params', 'modetwo']],
-                                        'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
-                                        'settings': [['runtime_params', 'runtime_settings']]},
-                                 '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
-                                        'SoundSpeed': [['profile', 'soundspeed']]},
-                                 '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
-                                        'Longitude': [['navigation', 'longitude']],
-                                        'Altitude': [['navigation', 'altitude']]}}
+recs_categories_translator = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                       'Longitude': [['navigation', 'longitude']],
+                                       'Height': [['navigation', 'altitude']]},
+                              '1009': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                       'SoundSpeed': [['profile', 'soundspeed']]},
+                              '1012': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                       'Pitch': [['attitude', 'pitch']], 'Heading': [['attitude', 'heading']]},
+                              '1013': {'Time': [['attitude', 'htime']], 'Heave': [['attitude', 'heave']]},
+                              '7001': {'Serial#': [['installation_params', 'serial_one']],
+                                       'Serial#2': [['installation_params', 'serial_two']]},
+                              '7503': {'time': [['installation_params', 'time']],
+                                       'settings': [['installation_params', 'installation_settings']],
+                                       'SoundVelocity': [['ping', 'soundspeed']],
+                                       'TXPulseTypeID': [['runtime_params', 'mode']],
+                                       'TransmitFlags': [['runtime_params', 'yawpitchstab']],
+                                       'Frequency': [['ping', 'frequency']]},
+                              '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
+                                       'TxAngle': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
+                                       'Uncertainty': [['ping', 'qualityfactor']], 'DetectionPoint': [['ping', 'traveltime_dp']],
+                                       'SamplingRate': [['ping', 'traveltime_sr']]}}
+
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                                   'installation_settings': None},
@@ -1454,7 +1451,6 @@ class Data7022(BaseData):
 
 class Data7027(BaseData):
     """
-    SUPERSEDED BY 7047
     Raw Detection Data
     """
     hdr_dtype = np.dtype([('SonarID', 'u8'), ('PingNumber', 'u4'), ('MultipingSequence', 'u2'),
