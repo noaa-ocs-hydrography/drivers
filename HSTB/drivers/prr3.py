@@ -1469,6 +1469,7 @@ class Data7027(BaseData):
 
     def read(self, datablock):
         strt_counter = 0
+        # this isn't great.  Look at https://stackoverflow.com/questions/36797088/speed-up-pythons-struct-unpack
         for i in range(self.numdetections):
             data = np.frombuffer(datablock[strt_counter:], self.detect_dtype)
             strt_counter += self.detect_dsize

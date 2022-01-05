@@ -95,12 +95,17 @@ class kmall():
                     # between two buffer reads.
                     self.FID.seek(-4, 1)
 
-    def decode_datagram(self):
+    def decode_datagram(self, warn_no_definition: bool = False):
         """
         Assumes the file pointer is at the correct position to read the size of the dgram and the identifier
         
         Stores the datagram identifier and the read method as attributes.  read method is the name of the class
         method that we would use to read the datagram
+
+        Parameters
+        ----------
+        warn_no_definition
+            if this is set to True, will print a warning message when a datagram is found that does not have a matching read method
         """
         self.datagram_ident = None
         self.read_method = None
@@ -126,7 +131,10 @@ class kmall():
                 else:
                     raise ValueError('Found multiple valid read methods for {}: {}'.format(dgram, read_method))
             else:
-                raise ValueError('Did not find valid datagram identifier: {}'.format(dgram))
+                if warn_no_definition:
+                    print('Did not find valid datagram identifier: {}'.format(dgram))
+                self.read_method = 'error'  # set it to something other than None just to satisfy skip datagram
+                self.skip_datagram()
         else:
             self.eof = True
     
