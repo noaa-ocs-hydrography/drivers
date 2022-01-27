@@ -1,6 +1,5 @@
 import xml.etree.ElementTree as ET
 import datetime
-import sets
 
 import pandas
 
@@ -58,7 +57,7 @@ class HVF:
         stamps = []
         for e, times in self.get_all_timestamp_elements():
             stamps.extend(times)
-        all_times = list(sets.Set([s.attrib['value'] for s in stamps]))
+        all_times = list(set([s.attrib['value'] for s in stamps]))
         all_times.sort()
         return all_times
 
