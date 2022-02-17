@@ -224,7 +224,7 @@ class AllRead:
         self.error = False
         self.start_ptr = start_ptr
         self.end_ptr = end_ptr
-        self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122, 124, 302, 304]
+        self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122, 124, 302, 304, 850]  # 850 being the ME70
         self.ems_with_oldrangeangle = [3020, 1020, 120, 2000]
         self.time_buffer = []
 
@@ -2711,7 +2711,7 @@ class Data73(BaseData):
                                            'em2045': [None, 'txrx', None, None], 'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
                                            'em3002': [None, 'tx', 'rx', None], 'em2040p': [None, 'txrx', None, None],
                                            'em3020': [None, 'tx', 'rx', None], 'em3020_dual': [None, 'txrx_port', 'txrx_stbd', None],
-                                           'me70bo': ['txrx', None, None, None]}
+                                           'ME70': [None, 'txrx', None, None]}
         self.time = POSIXtime
         for entry in temp:
             data = entry.split('=')
@@ -2733,6 +2733,8 @@ class Data73(BaseData):
         translator_numbers = [re.sub("[^0-9]", "", x) for x in translator_keys]
         possibles = [translator_keys[cnt] for cnt, sonar in enumerate(translator_numbers) if sonar == modelnum]
         if len(possibles) == 0:
+            if modelnum == '850':
+                return 'ME70'
             print('Unable to determine sonar model from {}'.format(modelnum))
             return modelnum
         elif len(possibles) == 1:
@@ -5725,6 +5727,94 @@ class useall(AllRead):
             self.tblfile.close()
         else:
             print("pytables module unavailable.")
+
+
+def print_some_records(file_object: AllRead, recordnum: int = 50):
+    """
+    Used in Kluster file analyzer, print out the first x records in the file for the user to examine
+    """
+    cur_counter = 0
+    if isinstance(file_object, str):
+        file_object = AllRead(file_object)
+    if isinstance(file_object, AllRead):
+        file_object.infile.seek(0)
+        file_object.eof = False
+        while not file_object.eof and cur_counter < recordnum + 1:
+            cur_counter += 1
+            print('*****************************************************')
+            file_object.read()
+            try:
+                print(file_object.packet.display())
+            except:
+                print('unable to display packet')
+                continue
+            try:
+                file_object.get()
+            except:
+                print('unable to decode record')
+                continue
+            try:
+                print(file_object.packet.subpack)
+            except:
+                print('no decoded data found to display')
+                continue
+            if file_object.packet.dtype in [78, 102]:
+                print(file_object.packet.subpack.tx_data)
+                print(file_object.packet.subpack.rx_data)
+            elif file_object.packet.dtype == 65:
+                print(file_object.packet.subpack.att)
+            elif file_object.packet.dtype == 110:
+                print(file_object.packet.subpack.att_data)
+            elif file_object.packet.dtype == 85:
+                print(file_object.packet.subpack.ss)
+    else:
+        print(f'PAR3: Found file object that is not an instance of AllRead: {file_object}')
+
+
+def kluster_read_test(file_object, byte_count: int = 2000000):
+    """
+    Used in Kluster file analyzer, print out the kluster desired records in a chunk of the file with byte length byte_count
+    """
+    if isinstance(file_object, str):
+        file_object = AllRead(file_object)
+    if isinstance(file_object, AllRead):
+        print(f'File: {file_object.infilename}')
+        print(f'File size: {file_object.max_filelen}')
+        print(f'Has Data110 record: {file_object.has_data110()}')
+        print(f'Has older rangeangle datagram: {file_object.has_old_style_rangeangle()}')
+        if byte_count == -1:
+            byte_count = file_object.max_filelen
+        else:
+            byte_count = min(byte_count, file_object.max_filelen)
+        file_object.infile.seek(0)
+        file_object.end_ptr = byte_count
+        file_object.start_ptr = 0
+        file_object.filelen = int(file_object.end_ptr - file_object.start_ptr)
+        data = file_object.sequential_read_records(first_installation_rec=False)
+        for ky, val in data.items():
+            if isinstance(val, dict):
+                for subky, subval in val.items():
+                    if isinstance(subval, dict):
+                        for subsubky, subsubval in subval.items():
+                            try:
+                                print(subsubky, subsubval.shape, f'Found NaN values: {np.count_nonzero(np.isnan(subsubval))}', f'Found zero values: {np.count_nonzero(subsubval == 0)}')
+                            except:
+                                print(subsubky)
+                            print(subsubval)
+                    else:
+                        try:
+                            print(subky, subval.shape, f'Found NaN values: {np.count_nonzero(np.isnan(subval))}', f'Found zero values: {np.count_nonzero(subval == 0)}')
+                        except:
+                            print(subky)
+                        print(subval)
+            else:
+                try:
+                    print(ky, val.shape, f'Found NaN values: {np.count_nonzero(np.isnan(val))}', f'Found zero values: {np.count_nonzero(val == 0)}')
+                except:
+                    print(ky)
+                print(val)
+    else:
+        print(f'PAR3: Found file object that is not an instance of AllRead: {file_object}')
 
 
 if __name__ == '__main__':

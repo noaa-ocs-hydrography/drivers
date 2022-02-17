@@ -16,6 +16,7 @@ import re
 import bz2
 import copy
 from scipy import stats
+import reprlib
 
 
 class kmall():
@@ -4359,6 +4360,56 @@ class kmall():
             self.FID.seek(0)
 
         return {0: int(ser_one), 1: int(ser_two)}
+
+
+def print_some_records(file_object, recordnum: int = 50):
+    """
+    Used in Kluster file analyzer, print out the first x records in the file for the user to examine
+    """
+    cur_counter = 0
+    r = reprlib.Repr()
+    r.maxlist = 800  # max elements displayed for lists
+    r.maxstring = 800  # max characters displayed for strings
+    r.maxdict = 10
+    r.maxarray = 800
+    r.maxtuple = 400
+    r.maxlevel = 2
+    r.maxlong = 800
+    r.maxother = 800
+
+    if isinstance(file_object, str):
+        file_object = kmall(file_object)
+    if isinstance(file_object, kmall):
+        if file_object.FID is None:
+            file_object.OpenFiletoRead()
+        file_object.FID.seek(0)
+        while not file_object.eof and cur_counter < recordnum + 1:
+            cur_counter += 1
+            print('*****************************************************')
+            file_object.decode_datagram()
+            print(f'Datagram {file_object.datagram_ident}')
+            try:
+                file_object.read_datagram()
+                for ky, val in file_object.datagram_data.items():
+                    print(ky)
+                    if isinstance(val, dict):
+                        for subky, subval in val.items():
+                            print(subky)
+                            if isinstance(subval, (list, tuple)) and isinstance(subval[0], (list, tuple)):
+                                print(r.repr(subval[0]))
+                                print('....')
+                            else:
+                                print(r.repr(subval))
+                    else:
+                        if isinstance(val, (list, tuple)) and isinstance(val[0], (list, tuple)):
+                            print(r.repr(val[0]))
+                            print('....')
+                        else:
+                            print(r.repr(val))
+            except:
+                print(f'Unable to read datagram {file_object.datagram_ident}')
+    else:
+        print(f'kmall: Found file object that is not an instance of kmall: {file_object}')
 
 
 def main(args=None):

@@ -766,3 +766,24 @@ def smrmsg_fast_read_start_end_time(smrmsgfile: str):
     except:
         print('unable to read smrmsg file: {}'.format(smrmsgfile))
         return None
+
+
+def print_some_records(sbet_array, recordnum: int = 50):
+    """
+    Used in Kluster file analyzer, print out the first x records in the file for the user to examine
+    """
+    if sbet_array.shape[1] == 17:
+        fields = ['time - gps week seconds', 'latitude - radians', 'longitude - radians', 'altitude - meters',
+                  'x_vel', 'y_vel', 'z_vel', 'roll', 'pitch', 'platform_heading', 'wander_angle', 'x_acceleration',
+                  'y_acceleration', 'z_acceleration', 'x_angular_rate', 'y_angular_rate', 'z_angular']
+    elif sbet_array.shape[1] == 10:
+        fields = ['time - gps week seconds', 'North position RMS error - meters', 'East position RMS error - meters',
+                  'Down position RMS error - meters', 'North velocity RMS error - meters / second', 'East velocity RMS error - meters / second'
+                  'Down velotiy RMS error - meters / second', 'Roll RMS error - arc minutes', 'Pitch RMS error - arc minutes',
+                  'Heading RMS error - arc - minutes']
+    else:
+        print(f'Unknown array, expected 17 or 10 fields, found {sbet_array.shape[1]}')
+        return
+    for cnt, fld in enumerate(fields):
+        print(fld)
+        print(sbet_array[:recordnum + 1, cnt])

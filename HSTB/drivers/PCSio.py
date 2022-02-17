@@ -386,6 +386,30 @@ def posfiles_to_xarray(posfiles: list, weekstart_year: int = None, weekstart_wee
     return navdata
 
 
+def print_some_records(file_object, recordnum: int = 50):
+    """
+    Used in Kluster file analyzer, print out the first x records in the file for the user to examine
+    """
+    cur_counter = 0
+    if isinstance(file_object, str):
+        file_object = PCSFile(file_object)
+    if isinstance(file_object, PCSFile):
+        file_object.msdffile.seek(0)
+        while cur_counter < recordnum + 1:
+            cur_counter += 1
+            curpos = file_object.msdffile.tell()
+            print('*****************************************************')
+            try:
+                hdr, data = file_object.ReadSensor()
+                print(hdr)
+                print(data)
+            except:
+                file_object.msdffile.seek(curpos)
+                _, hdr = file_object.SkimSensor()
+                print(hdr)
+                print('Cannot decode record')
+
+
 def main():
     import optparse
     print("Version 12.2.b")
