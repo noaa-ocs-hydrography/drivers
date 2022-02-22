@@ -890,11 +890,13 @@ class AllRead:
                                 try:
                                     val = [getattr(tmprec, subrec)]
                                 except ValueError:  # it just isn't there
+                                    print('par3: Unable to read {}: {} - {}'.format(datagram_type, tmprec, subrec))
                                     val = []
                             except AttributeError:  # flow for nested recs
                                 try:
                                     val = [tmprec[subrec]]
                                 except (TypeError, ValueError):  # it just isn't there
+                                    print('par3: Unable to read {}: {} - {}'.format(datagram_type, tmprec, subrec))
                                     val = []
 
                         # generate new list or append to list for each rec of that dgram type found
