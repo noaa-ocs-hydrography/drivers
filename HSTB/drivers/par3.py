@@ -175,6 +175,17 @@ recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': Non
                           'profile': {'time': None, 'depth': None, 'soundspeed': None},
                           'navigation': {'time': None, 'latitude': None, 'longitude': None, 'altitude': None}}
 
+sonar_translator = {'em122': [None, 'tx', 'rx', None], 'em302': [None, 'tx', 'rx', None], 'em304': [None, 'tx', 'rx', None],
+                    'em710': [None, 'tx', 'rx', None], 'em712': [None, 'tx', 'rx', None], 'em2040': [None, 'tx', 'rx', None],
+                    'em2040_dual_rx': [None, 'tx', 'rx_port', 'rx_stbd'],
+                    'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', None],
+                    'em2040_dual_tx_rx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
+                    # EM2040c is represented in the .all file as em2045
+                    'em2045': [None, 'txrx', None, None], 'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
+                    'em3002': [None, 'tx', 'rx', None], 'em2040p': [None, 'txrx', None, None],
+                    'em3020': [None, 'tx', 'rx', None], 'em3020_dual': [None, 'txrx_port', 'txrx_stbd', None],
+                    'me70': [None, 'txrx', None, None]}
+
 
 class AllRead:
     """
@@ -788,6 +799,25 @@ class AllRead:
 
         # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
         for dset_name in ['attitude', 'navigation']:
+            # first handle these cases where variables are of a different size vs time, I believe this is some issue with older datasets
+            #  and the data65 record, need to determine the actual cause as the 'fix' used here is not great
+            for dgram in recs_to_read[dset_name]:
+                if dgram != 'time':
+                    try:
+                        assert recs_to_read[dset_name][dgram].shape[0] == recs_to_read[dset_name]['time'].shape[0]
+                    except AssertionError:
+                        dgramsize = recs_to_read[dset_name][dgram].shape[0]
+                        timesize = recs_to_read[dset_name]["time"].shape[0]
+                        msg = f'variable {dgram} has a length of {dgramsize}, where time has a length of {timesize}'
+                        if recs_to_read[dset_name][dgram].ndim == 2:  # shouldn't be seen with attitude/navigation datasets anyway
+                            raise NotImplementedError(msg + ', handling this for 2 dimensional cases is not implemented')
+                        elif timesize < dgramsize:  # trim to time size
+                            recs_to_read[dset_name][dgram] = recs_to_read[dset_name][dgram][:timesize]
+                            print('Warning: ' + msg + f', trimming {dgram} to length {timesize}')
+                        else:
+                            recs_to_read[dset_name][dgram] = np.concatenate([recs_to_read[dset_name][dgram], [recs_to_read[dset_name][dgram][-1]] * (timesize - dgramsize)])
+                            print('Warning: ' + msg + f', filling {dgram} by repeating last element {timesize - dgramsize} times')
+
             dset = recs_to_read[dset_name]
             _, index = np.unique(dset['time'], return_index=True)
             if dset['time'].size != index.size:
@@ -2702,16 +2732,7 @@ class Data73(BaseData):
                                                  '6': 'multicast_2', '7': 'multicast_3', '8': 'attvel_1_udp5',
                                                  '9': 'attvel_2_udp6'}
                                          }
-        self.ky_data73_sonar_translator = {'em122': [None, 'tx', 'rx', None], 'em302': [None, 'tx', 'rx', None], 'em304': [None, 'tx', 'rx', None],
-                                           'em710': [None, 'tx', 'rx', None], 'em712': [None, 'tx', 'rx', None], 'em2040': [None, 'tx', 'rx', None],
-                                           'em2040_dual_rx': [None, 'tx', 'rx_port', 'rx_stbd'],
-                                           'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', None],
-                                           'em2040_dual_tx_rx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
-                                           # EM2040c is represented in the .all file as em2045
-                                           'em2045': [None, 'txrx', None, None], 'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
-                                           'em3002': [None, 'tx', 'rx', None], 'em2040p': [None, 'txrx', None, None],
-                                           'em3020': [None, 'tx', 'rx', None], 'em3020_dual': [None, 'txrx_port', 'txrx_stbd', None],
-                                           'ME70': [None, 'txrx', None, None]}
+        self.ky_data73_sonar_translator = sonar_translator
         self.time = POSIXtime
         for entry in temp:
             data = entry.split('=')
@@ -2734,7 +2755,7 @@ class Data73(BaseData):
         possibles = [translator_keys[cnt] for cnt, sonar in enumerate(translator_numbers) if sonar == modelnum]
         if len(possibles) == 0:
             if modelnum == '850':
-                return 'ME70'
+                return 'me70'
             print('Unable to determine sonar model from {}'.format(modelnum))
             return modelnum
         elif len(possibles) == 1:

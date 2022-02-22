@@ -18,6 +18,16 @@ import copy
 from scipy import stats
 import reprlib
 
+# only potential dual head systems need to be included here.
+sonar_translator = {'em2040': [None, 'tx', 'rx', None],
+                    'em2040_dual_rx': [None, 'tx', 'rx_port', 'rx_stbd'],
+                    'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', None],
+                    'em2040_dual_tx_rx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
+                    # EM2040c is represented in the .all file as em2045
+                    'em2045': [None, 'txrx', None, None],
+                    'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
+                    'em3020': [None, 'tx', 'rx', None], 'em3020_dual': [None, 'txrx_port', 'txrx_stbd', None]}
+
 
 class kmall():
     """ A class for reading a Kongsberg KMALL data file. """
@@ -4053,13 +4063,6 @@ class kmall():
         return translated
 
     def _translate_sonar_model_number(self, settings: dict, model_number: str):
-        sonar_translator = {'em2040': [None, 'tx', 'rx', None],
-                            'em2040_dual_rx': [None, 'tx', 'rx_port', 'rx_stbd'],
-                            'em2040_dual_tx': ['tx_port', 'tx_stbd', 'rx_port', None],
-                            'em2040_dual_tx_rx': ['tx_port', 'tx_stbd', 'rx_port', 'rx_stbd'],
-                            # EM2040c is represented in the .all file as em2045
-                            'em2045': [None, 'txrx', None, None],
-                            'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None]}
         possibles = [sonar for sonar in list(sonar_translator.keys()) if sonar.find(model_number) > -1]
         if len(possibles) <= 1:  # not a potential dual head system
             return model_number
