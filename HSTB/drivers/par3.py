@@ -883,6 +883,8 @@ class AllRead:
                         val = None
                         if subrec == 'settings':
                             val = [getattr(tmprec, subrec)]
+                        elif subrec == 'Altitude' and tmprec is None:  # handle case where gg_data is not found
+                            val = [np.nan]
                         else:
                             try:  # flow for array/list attribute
                                 val = list(getattr(tmprec, subrec))
@@ -3062,12 +3064,12 @@ class Data80(BaseData):
         """
         parse the gga string.
         """
-        # try:
-        self.gg_data = Data80_gga(self.raw_data)
-        self.source_data = self.gg_data.header  # for backward compatibility
-        self.gg_data.Altitude = self.gg_data.OrthometricHeight + self.gg_data.GeoidSeparation
-        # except:
-        #     print('Unable to process GGA string: {}'.format(self.raw_data))
+        try:
+            self.gg_data = Data80_gga(self.raw_data)
+            self.source_data = self.gg_data.header  # for backward compatibility
+            self.gg_data.Altitude = self.gg_data.OrthometricHeight + self.gg_data.GeoidSeparation
+        except:
+            print('Unable to process GGA string: {}'.format(self.raw_data))
 
     def _parse_ggk(self):
         """
