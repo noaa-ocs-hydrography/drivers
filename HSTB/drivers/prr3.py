@@ -4,7 +4,7 @@ V0.3.9 20150107
 This is intended to help trouble shoot Reson data directly from the Reson datagrams.
 It was inspired by The Great Sam Greenaway during his graduate work at UNH.
 
-Updated for Python3
+Updated for Python3, Eric Younkin, DEC 2021
 """
 
 import os, sys, struct, pickle
@@ -41,7 +41,7 @@ recs_categories_translator = {'1003': {'time': [['navigation', 'time']], 'Latitu
                               '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
                                        'TxAngle': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
                                        'Uncertainty': [['ping', 'qualityfactor']], 'DetectionPoint': [['ping', 'traveltime_dp']],
-                                       'SamplingRate': [['ping', 'traveltime_sr']]}}
+                                       'SamplingRate': [['ping', 'traveltime_sr']], 'Flags': [['ping', 'detectioninfo']]}}
 
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
