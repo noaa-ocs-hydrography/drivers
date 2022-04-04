@@ -4415,6 +4415,42 @@ def print_some_records(file_object, recordnum: int = 50):
         print(f'kmall: Found file object that is not an instance of kmall: {file_object}')
 
 
+def build_BSCorr(fname1, fname2, which_swath=0, bs_mean=None, plot_bs=True, lambertian=True, debug=False, show_fig=True, save_fig=False):
+    raise NotImplementedError('Still working on this')
+    fone = kmall(fname1)
+    fone_mrz = fone.read_first_datagram('MRZ')
+    fone_install = fone.read_first_datagram('IIP')
+    fone_sonartype = fone_install['install_txt']['sonar_model_number']
+    fone_numsectors = fone_mrz['pingInfo']['numTxSectors']
+    fone_modeone = fone_mrz['pingInfo']['pulseForm']
+    fone_modetwo = fone_mrz['pingInfo']['depthMode']
+    fone_numswaths = fone_mrz['cmnPart']['swathsPerPing']
+
+    ftwo = kmall(fname2)
+    ftwo_mrz = ftwo.read_first_datagram('MRZ')
+    ftwo_install = ftwo.read_first_datagram('IIP')
+    ftwo_sonartype = ftwo_install['install_txt']['sonar_model_number']
+    ftwo_numsectors = ftwo_mrz['pingInfo']['numTxSectors']
+    ftwo_modeone = ftwo_mrz['pingInfo']['pulseForm']
+    ftwo_modetwo = ftwo_mrz['pingInfo']['depthMode']
+    ftwo_numswaths = ftwo_mrz['cmnPart']['swathsPerPing']
+
+    title = f"pulseForm/depthMode is {fone_modeone}/{fone_modetwo}, the number of sectors is {fone_numsectors}, and the sonar type is {fone_sonartype}"
+    print("\n" + title + "\n")
+    if fone_sonartype != ftwo_sonartype or fone_numsectors != ftwo_numsectors or fone_modeone != ftwo_modeone or fone_modetwo != ftwo_modetwo or fone_numswaths != ftwo_numswaths:
+        print("***WARNING: These files should not be compared for BSCorr purposes.***")
+        if fone_sonartype != ftwo_sonartype:
+            print('First file sonartype: {}, second file sonartype: {}'.format(fone_sonartype, ftwo_sonartype))
+        if fone_numsectors != ftwo_numsectors:
+            print('First file sector count: {}, second file sector count: {}'.format(fone_numsectors, ftwo_numsectors))
+        if fone_modeone != ftwo_modeone:
+            print('First file pulseForm: {}, second file pulseForm: {}'.format(fone_modeone, ftwo_modeone))
+        if fone_modetwo != ftwo_modetwo:
+            print('First file depthMode: {}, second file depthMode: {}'.format(fone_modetwo, ftwo_modetwo))
+        if fone_numswaths != ftwo_numswaths:
+            print('First file number of swaths: {}, second file number of swaths: {}'.format(fone_numswaths, ftwo_numswaths))
+
+
 def main(args=None):
     ''' Commandline script code.'''
     if args == None:
@@ -4659,6 +4695,7 @@ def main(args=None):
 
             T.closeFile()
             K.closeFile()
+
 
 if __name__ == '__main__':
     sys.exit(main())
