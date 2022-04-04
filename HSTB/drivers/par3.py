@@ -53,6 +53,7 @@ The primary classes in this module to be accessed directly are
 import sys
 import os
 import numpy as np
+from numpy import fft
 from numpy.lib.recfunctions import append_fields, merge_arrays
 import pyproj
 import datetime as dtm
@@ -61,6 +62,11 @@ import struct
 import re
 import copy
 from glob import glob
+try:
+    import tables as tbl
+    have_tables = True
+except ImportError:
+    have_tables = False
 
 from matplotlib import pyplot as plt
 
@@ -1239,7 +1245,7 @@ class AllRead:
                     pitch += list(pav.data['Pitch'])
                     heave += list(pav.data['Heave'])
                     heading += list(pav.data['Heading'])
-                    exttime += list(pav.source_data['Time1'].astype(np.float64) + pav._weektime)
+                    exttime += list(pav.source_data['Time1'].astype(np.float64) + pav.att_data.weektime)
                     rollrate += list(pav.source_data['RollRate'])
                     pitchrate += list(pav.source_data['PitchRate'])
                     yawrate += list(pav.source_data['YawRate'])
@@ -2063,7 +2069,7 @@ class Data51(BaseData):
             pass
         elif content_type == 6:
             data_sz = np.frombuffer(datablock[self.hdr_sz: self.hdr_sz + 2], dtype='H')[0]
-            self.raw_rangeanglea = datablock[self.hdr_sz + 2: self.hdr_sz + 2 + data_sz]
+            self.raw_rangeanglea = datablock[self.hdr_sz + 2: self.hdr_sz + 2 + data_sz].decode()
             if model == 710:
                 self._parse_710_bscorr()
             elif model == 122:
@@ -2885,13 +2891,13 @@ class Data78(BaseData):
         """
         Returns the receive times in POSIX time.
         """
-        txnum = sorted(self.tx['TransmitSector#'])
+        txnum = np.array(sorted(self.tx['TransmitSector#']))
         # deal with EM2040 in 200 kHz where the tx sector idx are [0,2]
         if txnum.max() == len(txnum):
             txnum[-1] = txnum[-1] - 1
         txdelays = self.tx['Delay'][txnum]
         rxdelays = txdelays[self.rx['TransmitSectorID']].astype(np.float64)
-        rxtime = self.rx['TravelTime'].astype(np.float64) + rxdelays + self.pingtime
+        rxtime = self.rx['TravelTime'].astype(np.float64) + rxdelays + self.time
         return rxtime
 
 
@@ -3876,6 +3882,17 @@ class Data110_aaq(BaseData):
     def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
         super(Data110_aaq, self).__init__(datablock, byteswap=byteswap,
                                           read_limit=read_limit)  # read as many records as passed in
+        self.time = POSIXtime
+        packettime = dtm.datetime.utcfromtimestamp(POSIXtime)
+        # subtract 1 because the first day of the year does not start with zero
+        ordinal = packettime.toordinal()
+        dow = packettime.weekday() + 1.
+        if dow == 7:
+            # shift sunday to be start of week.
+            dow = 0
+        # 1970-1-1 is julian day 719163
+        POSIXdays = ordinal - 719163. - dow
+        self.weektime = POSIXdays * 24. * 3600.
         
 class Data110_aas(BaseData):
     hdr_dtype = np.dtype([('Header1', 'B'), ('Header2', 'B'),
@@ -3904,6 +3921,17 @@ class Data110_aas(BaseData):
     def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
         super(Data110_aas, self).__init__(datablock, byteswap=byteswap,
                                           read_limit=read_limit)  # read as many records as passed in
+        self.time = POSIXtime
+        packettime = dtm.datetime.utcfromtimestamp(POSIXtime)
+        # subtract 1 because the first day of the year does not start with zero
+        ordinal = packettime.toordinal()
+        dow = packettime.weekday() + 1.
+        if dow == 7:
+            # shift sunday to be start of week.
+            dow = 0
+        # 1970-1-1 is julian day 719163
+        POSIXdays = ordinal - 719163. - dow
+        self.weektime = POSIXdays * 24. * 3600.
 
 
 class Data110_q42(BaseData):
@@ -3930,6 +3958,17 @@ class Data110_q42(BaseData):
     def __init__(self, datablock, POSIXtime, byteswap=False, read_limit=None):
         super(Data110_q42, self).__init__(datablock, byteswap=byteswap,
                                           read_limit=read_limit)  # read as many records as passed in
+        self.time = POSIXtime
+        packettime = dtm.datetime.utcfromtimestamp(POSIXtime)
+        # subtract 1 because the first day of the year does not start with zero
+        ordinal = packettime.toordinal()
+        dow = packettime.weekday() + 1.
+        if dow == 7:
+            # shift sunday to be start of week.
+            dow = 0
+        # 1970-1-1 is julian day 719163
+        POSIXdays = ordinal - 719163. - dow
+        self.weektime = POSIXdays * 24. * 3600.
 
 
 class Data110_att(BaseData):
@@ -4101,6 +4140,49 @@ class Data110(BaseData):
         part1 = super(Data110, self).get_datablock()
         part2 = self.att_data.get_datablock()
         return part1 + part2
+
+
+if have_tables:
+    class wcfile(tbl.IsDescription):
+        """
+        Used by the "build_wc_h5" method in the useall class.
+        """
+
+        Infilename = tbl.StringCol(33)
+
+
+    class wcextra(tbl.IsDescription):
+        """
+        Used by the "build_wc_h5" method in the useall class.
+        """
+        POSIXtime = tbl.Float64Col()
+        Speed = tbl.Float32Col()
+        PingInFile = tbl.UInt16Col()
+        TotalSamples = tbl.UInt32Col()
+        TotalBeams = tbl.UInt32Col()
+        PingMean = tbl.Float32Col()
+        PingStd = tbl.Float32Col()
+        PingName = tbl.StringCol(8)
+
+
+    class wcheader(tbl.IsDescription):
+        """
+        Used by the "build_wc_h5" method in the useall class.
+        """
+
+        PingCounter = tbl.UInt16Col()
+        SystemSerialNum = tbl.UInt16Col()
+        NumOfDatagrams = tbl.UInt16Col()
+        DatagramNum = tbl.UInt16Col()
+        NumTxSectors = tbl.UInt16Col()
+        TotalNumBeams = tbl.UInt16Col()
+        NumBeamsInDatagram = tbl.UInt16Col()
+        SoundSpeed = tbl.Float32Col()
+        SamplingFrequency = tbl.Float64Col()
+        TxHeave = tbl.Float32Col()
+        TVGfunction = tbl.UInt8Col()
+        TVGoffset = tbl.Int8Col()
+        ScanningInfo = tbl.UInt8Col()
 
 
 class mappack:
@@ -4510,11 +4592,11 @@ class useall(AllRead):
                 self.savefilemap()
 
         if reload_map and os.path.exists(infilename + '.nav'):
-            self.load_navarray(verbose)
+            self.load_navarray()
         else:
             self._build_navarray(allrecords=True)
             if save_filemap:
-                self.save_navarray(verbose)
+                self.save_navarray()
         self.has_reported_error()
         self.installation_parameters = self.getrecord(73, 0)
         self.reset()
@@ -4786,7 +4868,7 @@ class useall(AllRead):
                 x_arm = float(ip.settings['S1X'])
                 y_arm = float(ip.settings['S1Y'])
                 txroll = np.interp(txtime[n, 0], att[:, 0], att[:, 1], left=np.nan, right=np.nan)
-                induced_heave = x_arm * sin(np.deg2rad(txpitch[n, 0])) + y_arm * sin(np.deg2rad(txroll))
+                induced_heave = x_arm * np.sin(np.deg2rad(txpitch[n, 0])) + y_arm * np.sin(np.deg2rad(txroll))
                 height = np.interp(txtime[n, 0], rawheight[:, 0], rawheight[:, 1], left=np.nan, right=np.nan)
                 depth88[n, :] = p88.data['Depth'] - height - induced_heave
             else:
@@ -5136,8 +5218,8 @@ class useall(AllRead):
         else:
             x_arm = float(ip.settings['S1X'])
             y_arm = float(ip.settings['S1Y'])
-            induced_heave = (x_arm * sin(np.deg2rad(m[4])) +
-                             y_arm * sin(np.deg2rad(m[3])))
+            induced_heave = (x_arm * np.sin(np.deg2rad(m[4])) +
+                             y_arm * np.sin(np.deg2rad(m[3])))
             beams = np.nonzero(p.data['Detection'] < 129)[0]
             depths = p.data['Depth'][beams] - v - induced_heave
             # do the rotation of X and Y by the heading, and add the vector to the position
@@ -5365,7 +5447,7 @@ class useall(AllRead):
         """
         # find if the system is reverse mounted so roll is applied correctly
         ping73 = self.getrecord(73, 0)
-        S2R = float(ping73.settings['S2R'])
+        S2R = float(ping73.settings['transducer_2_roll_angle'])
         # S2H = float(ping73.settings['S2H'])
         # S1H = float(ping73.settings['S1H'])
         # yaw = (S2H + S1H) % 180
@@ -5392,7 +5474,11 @@ class useall(AllRead):
         k = which_swath
         progress = 0
         for n in range(num78):
-            ping78 = self.getrecord(78, k)
+            try:
+                ping78 = self.getrecord(78, k)
+            except:
+                print('Hit unexpected end of file, continuing to processing...')
+                break
             rxtimes = ping78.get_rx_time()
             roll = self.getnav(rxtimes)[:, 3]  # in degrees
             txid[n, :] = ping78.rx['TransmitSectorID']
@@ -5618,7 +5704,7 @@ class useall(AllRead):
         if '80' not in self.map.packdir:
             altfile = self.infilename[:-3] + 'all'
             if os.path.isfile(altfile):
-                b = allRead(altfile)
+                b = AllRead(altfile)
                 b.mapfile()
             else:
                 print('No Speed source found')
@@ -5840,6 +5926,207 @@ def kluster_read_test(file_object, byte_count: int = 2000000):
                 print(val)
     else:
         print(f'PAR3: Found file object that is not an instance of AllRead: {file_object}')
+
+
+def build_BSCorr(fname1, fname2, which_swath=0, bs_mean=None, plot_bs=True, lambertian=True, debug=False, show_fig=True,
+                 save_fig=False):
+    """
+    This function is intended to build a BSCorr.txt file for a Kongsberg
+    multibeam that has a compatable version of SIS (4.1.x and later,
+    depending on the system).  Provide two file names.  The two files are
+    plotted so that the range of pings in each file can be manually selected.
+    The selected pings are then stacked to look for the average in each sector
+    and by beam.
+
+    -For the EM710-
+    From Gard Skokland:
+    The second line in the bscorr file is describing the swath
+    The first number indicate which mode (very shallow, shallow etc.).
+    The second number indicate which swath (single=0, first in dual=1, second in dual=2).
+    The third number tells you how many sectors you have (for EM710, 3)
+
+    The fourth line indicates the source level used for this sector,
+    and the the fifth line indicates how many  inputs you have in this sector (in this case 6  for port sector, 11 for the middel sector and 6 for starboard)
+    Maximum allowed inputs per sector is 32.
+    That gives 96 for the whole swath. Since the swath is maximum 70/70, total 140 degrees, you will then be able to have approxemately one correction input per 1.5 degree.
+    This is a very time consuming job if you do it manually, but I think the deault 10 degrees is a little to big step.
+
+    -For the EM122-
+    ...
+    """
+    a = useall(fname1)
+    b = useall(fname2)
+    # get the current bscorr info
+    a51 = a.getrecord(51, 0)
+    # get the metadata for the BSCorr file
+    a78 = a.getrecord(78, 0)
+    asonartype = a.packet.header['Model']
+    anumsectors = a78.header['Ntx']
+    a82 = a.getrecord(82, 0)
+    amode = a82.header['Mode']
+    adual_swath = ((amode & 128) == 128)
+    b78 = b.getrecord(78, 0)
+    bsonartype = b.packet.header['Model']
+    bnumsectors = b78.header['Ntx']
+    b82 = b.getrecord(82, 0)
+    bmode = b82.header['Mode']
+    bdual_swath = ((bmode & 128) == 128)
+
+    mode = (amode & 7) + 1
+    if adual_swath and mode < 5:
+        swath = ', Dual Swath (' + str(which_swath) + ').'
+        bscorr_swath = which_swath + 1
+    else:
+        swath = ', Single Swath.'
+        bscorr_swath = 0
+    title = "Mode type is " + str(mode) + ", the number of sectors is " + str(anumsectors) + ", and the sonar type is " + str(asonartype) + swath
+    print("\n" + title + "\n")
+    if asonartype != bsonartype or anumsectors != bnumsectors or amode != bmode or adual_swath != bdual_swath:
+        print("***WARNING: These files should not be compared for BSCorr purposes.***")
+        if asonartype != bsonartype:
+            print('First file sonartype: {}, second file sonartype: {}'.format(asonartype, bsonartype))
+        if anumsectors != bnumsectors:
+            print('First file sector count: {}, second file sector count: {}'.format(anumsectors, bnumsectors))
+        if amode != bmode:
+            print('First file mode: {}, second file mode: {}'.format(amode, bmode))
+        if adual_swath != bdual_swath:
+            print('First file dual_swath: {}, second file dual_swath: {}'.format(adual_swath, bdual_swath))
+
+    # extract the right data from the BSCorr for this mode
+    swathnum = np.array(a51.swathnum)
+    modes = np.array(a51.modes)
+    idx = np.nonzero((modes == mode) & (swathnum == bscorr_swath))[0]
+    if len(idx) == 1:
+        bscorr_data = a51.data[idx[0]]
+        bscorr_sectors = []
+        if asonartype == 710:
+            for n in range(anumsectors):
+                bscorr_sectors.append(bscorr_data[n])
+        elif asonartype == 122:
+            bscorr_sectors = bscorr_data
+    else:
+        print("No match for settings found in BSCorr!!!")
+
+    # get the backscatter for each line
+    abp, acount, angles = a.build_BSCorr_info(which_swath=which_swath, plot_bs=plot_bs, lambertian=lambertian)
+    bbp, bcount, angles = b.build_BSCorr_info(which_swath=which_swath, plot_bs=plot_bs, lambertian=lambertian)
+
+    # dropping the data near nadir from the nomalization.  Kjell does something similar...
+    # idx = np.nonzero((angles < 15) & (angles > -15))
+    # abp[idx,:] = np.nan
+    # bbp[idx,:] = np.nan
+
+    # find the average values as a difference from the mean
+    abp_lin = 10 ** (abp / 10)
+    bbp_lin = 10 ** (bbp / 10)
+    if bs_mean == None:
+        bs_mean = 10 * np.log10((np.nanmean(abp_lin) + np.nanmean(bbp_lin)) / 2)
+        bs_mean = int(bs_mean * 100) / 100.
+    print('Normalizing backscatter to ' + str(bs_mean))
+    m, n = abp.shape
+    bp_mean = np.zeros((m, n))
+    for s in range(n):
+        if asonartype == 710:
+            for r in range(m):
+                if np.isnan(abp[r, s]) & np.isnan(bbp[r, s]):
+                    bp_mean[r, s] = np.nan
+                elif np.isnan(abp[r, s]):
+                    bp_mean[r, s] = bbp[r, s]
+                elif np.isnan(bbp[r, s]):
+                    bp_mean[r, s] = abp[r, s]
+                else:
+                    bp_mean[r, s] = 10 * np.log10((10 ** (abp[r, s] / 10) + 10 ** (bbp[r, s] / 10)) / 2)
+        elif asonartype == 122:
+            idx = np.nonzero(~np.isnan(abp[:, s]))
+            abp_mean = np.nanmean(abp[:, s])
+            bbp_mean = np.nanmean(bbp[:, s])
+            bp_mean[:, s] = np.nan
+            bp_mean[idx, s] = (abp_mean + bbp_mean) / 2.
+    bp_mean -= bs_mean
+
+    # combine the BScorr file with the averaged output
+    bscorr_interp = []
+    for n in range(anumsectors):
+        if asonartype == 710:
+            temp = bscorr_sectors[n]
+            idx = temp[:, 0].argsort()  # angles are in reverse order in the BSCorr
+            temp = temp[idx, :]
+            bscorr_interp.append(np.interp(angles, temp[:, 0], temp[:, 1], left=np.nan, right=np.nan))
+        elif asonartype == 122:
+            temp = bscorr_sectors[n]
+            idx = np.nonzero(~np.isnan(bp_mean[:, n]))
+            vals = np.zeros(len(bp_mean)) + np.nan
+            vals[idx] = int(temp[0])
+            bscorr_interp.append(vals)
+    bscorr_interp = np.asarray(bscorr_interp).T
+
+    # make the plot
+    amin = angles.min()
+    amax = angles.max()
+    f1 = plt.figure(figsize=(8, 10))
+    ax1 = f1.add_subplot(411)
+    ax1.plot(angles, abp, 'g-+')
+    ax1.plot(angles, bbp, 'r-*')
+    ax1.set_ylabel('First and Second Files\ndB re 1 $\mu$Pa at 1 meter')
+    ax1.set_xlim((amax, amin))
+    plt.grid()
+    ax2 = f1.add_subplot(412)
+    ax2.plot(angles, bp_mean, 'g-+')
+    ax2.plot(angles, (bscorr_interp - np.nanmean(bscorr_interp)) * 0.01, 'r-*')
+    ax2.set_ylabel('File Mean and BSCorr\ndB re 1 $\mu$Pa at 1 meter')
+    ax2.set_xlim((amax, amin))
+    plt.grid()
+    ax3 = f1.add_subplot(413)
+    ax3.plot(angles, bp_mean + bscorr_interp, '-*')
+    ax3.set_ylabel('For BSCorr Input\ndB re 1 $\mu$Pa at 1 meter')
+    ax3.set_xlim((amax, amin))
+    plt.grid()
+    ax4 = f1.add_subplot(817)
+    ax4.plot(angles, acount, '-+')
+    ax4.set_ylabel('File A Count')
+    ax4.set_xlim((amax, amin))
+    plt.grid()
+    ax5 = f1.add_subplot(818)
+    ax5.plot(angles, bcount, '-*')
+    ax5.set_xlabel('Angle (Degrees)')
+    ax5.set_ylabel('File B Count')
+    ax5.set_xlim((amax, amin))
+    plt.grid()
+    f1.suptitle(title + '\n Normalized to ' + str(bs_mean))
+    # plt.tight_layout()
+    if show_fig:
+        plt.show()
+    if save_fig:
+        plt.savefig(os.path.splitext(fname1)[0] + '.tif')
+
+    if asonartype == 710:
+        # output text file
+        outname = os.path.splitext(fname1)[0] + '.bscorr'
+        outfile = open(outname, 'w')
+        s = swath.split()[1]
+        metatitle = 'Mode,Number of Sectors,Sonar Type,Swath Type/Number,BS Mean\n'
+        metadata = str(mode) + "," + str(anumsectors) + "," + str(asonartype) + ',' + s + str(which_swath) + ',' + str(bs_mean) + '\n'
+        outfile.write(metatitle)
+        outfile.write(metadata)
+
+        angletitle = ''
+        dataout = ['', '', '']
+        for n, a in enumerate(angles):
+            if a % 5 == 0:
+                angletitle = angletitle + str(a) + ','
+                for m in range(anumsectors):
+                    bs = bp_mean[n, m]
+                    if np.isnan(bs) or np.isnan(bscorr_interp[n, m]):
+                        dataout[m] = dataout[m] + ','
+                    else:
+                        dataout[m] = dataout[m] + str(bs + bscorr_interp[n, m]) + ','
+        angletitle = angletitle + '\n'
+        outfile.write(angletitle)
+        for m in range(anumsectors):
+            outfile.write(dataout[m] + '\n')
+        outfile.write('BSCorr\n')
+        outfile.close()
+    assert (not debug)
 
 
 if __name__ == '__main__':
