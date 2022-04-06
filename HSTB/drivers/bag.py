@@ -1013,26 +1013,16 @@ class VRBag(SRBag):
             ref = None
         return ref
 
-    def read_refinement(self, i, j):
-        mdata = self.varres_metadata[i, j]
+    def refinement_extents(self, i, j, mdata=None):
+        if mdata is None:
+            mdata = self.varres_metadata[i, j]
         index_start = mdata["index"]
 
         if index_start < 0xffffffff:
-            dimensions_x = mdata["dimensions_x"]
-            dimensions_y = mdata["dimensions_y"]
             resolution_x = mdata["resolution_x"]
             resolution_y = mdata["resolution_y"]
             sw_corner_x = mdata["sw_corner_x"]
             sw_corner_y = mdata["sw_corner_y"]
-
-            index_end = index_start + int(dimensions_x * dimensions_y)
-            # Using vr_depth or vr_uncrt reads the entire array, so we need to read the index range first then grab the depth
-            #   -- much much faster for a large dataset
-            # tile = self.vr_depth[index_start:index_end].reshape(dimensions_y, dimensions_x)
-            data = self.varres_refinements[:, index_start:index_end]
-            tile = data[self.varres_refinements.dtype.names[0]].reshape(dimensions_y, dimensions_x)
-            # uncrt = self.vr_uncrt[index_start:index_end].reshape(dimensions_y, dimensions_x)
-            uncrt = data[self.varres_refinements.dtype.names[1]].reshape(dimensions_y, dimensions_x)
 
             bag_supergrid_dx = self.cell_size_x
             bag_supergrid_dy = self.cell_size_y
@@ -1043,6 +1033,42 @@ class VRBag(SRBag):
             supergrid_y = i * bag_supergrid_dy
             refinement_llx = bag_llx + supergrid_x + sw_corner_x - resolution_x / 2.0  # @TODO implies swcorner is to the center and not the exterior
             refinement_lly = bag_lly + supergrid_y + sw_corner_y - resolution_y / 2.0
+            corners = ((refinement_llx, refinement_lly), (refinement_llx + supergrid_x + resolution_x, refinement_lly + supergrid_y + resolution_y))
+        else:
+            corners = None
+        return corners
+
+    def read_refinement(self, i, j):
+        mdata = self.varres_metadata[i, j]
+        index_start = mdata["index"]
+
+        if index_start < 0xffffffff:
+            dimensions_x = mdata["dimensions_x"]
+            dimensions_y = mdata["dimensions_y"]
+            resolution_x = mdata["resolution_x"]
+            resolution_y = mdata["resolution_y"]
+            # sw_corner_x = mdata["sw_corner_x"]
+            # sw_corner_y = mdata["sw_corner_y"]
+
+            index_end = index_start + int(dimensions_x * dimensions_y)
+            # Using vr_depth or vr_uncrt reads the entire array, so we need to read the index range first then grab the depth
+            #   -- much much faster for a large dataset
+            # tile = self.vr_depth[index_start:index_end].reshape(dimensions_y, dimensions_x)
+            data = self.varres_refinements[:, index_start:index_end]
+            tile = data[self.varres_refinements.dtype.names[0]].reshape(dimensions_y, dimensions_x)
+            # uncrt = self.vr_uncrt[index_start:index_end].reshape(dimensions_y, dimensions_x)
+            uncrt = data[self.varres_refinements.dtype.names[1]].reshape(dimensions_y, dimensions_x)
+
+            # bag_supergrid_dx = self.cell_size_x
+            # bag_supergrid_dy = self.cell_size_y
+            # bag_llx = self.minx - bag_supergrid_dx / 2.0  # @todo seems the llx is center of the supergridd cel?????
+            # bag_lly = self.miny - bag_supergrid_dy / 2.0
+            #
+            # supergrid_x = j * bag_supergrid_dx
+            # supergrid_y = i * bag_supergrid_dy
+            # refinement_llx = bag_llx + supergrid_x + sw_corner_x - resolution_x / 2.0  # @TODO implies swcorner is to the center and not the exterior
+            # refinement_lly = bag_lly + supergrid_y + sw_corner_y - resolution_y / 2.0
+            (refinement_llx, refinement_lly), (refinement_urx, refinement_ury) = self.refinement_extents(i, j, mdata)
             ref = Refinement(tile, uncrt, resolution_x, resolution_y, refinement_llx, refinement_lly)
         else:
             ref = None
