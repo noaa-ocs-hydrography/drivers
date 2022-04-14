@@ -1496,7 +1496,8 @@ def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN
                 data = r_val.ReadAsArray(ir, ic, rows, cols)
                 cnt = r_cnt.ReadAsArray(ir, ic, rows, cols)
                 if mode == MEAN:
-                    res = data / cnt
+                    with numpy.errstate(divide='ignore'):
+                        res = data / cnt
                     res[cnt == 0] = nodata
                 elif mode in (MIN, MAX, POINT):
                     res = data
