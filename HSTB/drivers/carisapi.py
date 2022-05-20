@@ -1673,6 +1673,7 @@ class CarisAPI():
         sp = ''
         minor = ''
         need_conversion = []
+        use_heading_location = False
 
         if float(self.hipsversion) < 11:
             hdcspath = os.path.join(self.hdcs_folder, self.sheet_name, self.vessel_name, self.day_num)
@@ -1687,6 +1688,10 @@ class CarisAPI():
                     hdcspath = os.path.join(self.hdcs_folder, self.sheet_name, 'TrackLines_' + self.sheet_name)
                 else:
                     hdcspath = os.path.join(self.hdcs_folder, self.sheet_name)
+                #  Additional check to see if we can use the sensor heading location option added in 11.4.6
+                if (int(major) == 11 and int(sp) >= 4 and int(minor) >= 6) or (int(major) >= 11 and int(sp) >= 5) or (
+                        int(major) >= 12):
+                    use_heading_location = True
             else:
                 hdcspath = os.path.join(self.hdcs_folder, self.sheet_name)
 
@@ -1765,6 +1770,8 @@ class CarisAPI():
                 fullcommand += ' --convert-side-scan HIGH'
                 fullcommand += ' --sensor-altitude-location SENSOR --convert-from-cable-out'
                 fullcommand += ' --sensor-depth-location SENSOR '
+                if use_heading_location:
+                    fullcommand += '--sensor-heading-location NMEA '
             elif self.input_format == 'EDGETECH_LOW':
                 fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format EDGETECH_JSF'
                 fullcommand += ' --input-crs EPSG:' + epsg
@@ -1775,6 +1782,8 @@ class CarisAPI():
                 fullcommand += ' --convert-side-scan LOW'
                 fullcommand += ' --sensor-altitude-location SENSOR --convert-from-cable-out'
                 fullcommand += ' --sensor-depth-location SENSOR '
+                if use_heading_location:
+                    fullcommand += '--sensor-heading-location NMEA '
             elif self.input_format == 'HYPACK_HIGH':
                 fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format HYPACK'
                 fullcommand += ' --input-crs EPSG:' + epsg
