@@ -175,15 +175,19 @@ class HIPSProject(HIPSObject):
         self.attributes = {}
         self.sq_hips_cursor.execute('SELECT name from dataset WHERE id=1;')
         self.attributes['Project Name'] = self.sq_hips_cursor.fetchall()[0][0]
-        self.attributes['Project Extents'] = self.single_value_query(
-            1, 'projectExtents')
-        self.sq_hips_cursor.execute(
-            'SELECT referenceSystem from dataset WHERE id=1;')
-        self.attributes['Reference System'] = self.sq_hips_cursor.fetchall()[
-            0][0]
-        ex_attrs = self.get_attributes_by_id(1)
-        for name, value in list(ex_attrs.items()):
-            self.attributes[name] = value
+        try:
+            self.attributes['Project Extents'] = self.single_value_query(1, 'projectExtents')
+        except:
+            self.attributes['Project Extents'] = None
+        self.sq_hips_cursor.execute('SELECT referenceSystem from dataset WHERE id=1;')
+        self.attributes['Reference System'] = self.sq_hips_cursor.fetchall()[0][0]
+        try:
+            ex_attrs = self.get_attributes_by_id(1)
+        except:
+            ex_attrs = {}
+            for name, value in list(ex_attrs.items()):
+                self.attributes[name] = value
+
 
     #*************************************************#
     #                                                 #
