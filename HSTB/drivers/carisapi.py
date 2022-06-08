@@ -20,7 +20,9 @@ from HSTB.Charlene import processing_report
 from HSTB.Charlene import pyText2Pdf
 from HSTB.time.UTC import UTCs80ToDateTime
 from HSTB.drivers import hips_project
-import HSTB.driver.csar.raw.csar
+from hyo2.grids.grids_manager import GridsManager
+
+charlene_test_folder = os.path.join(os.path.realpath(os.path.dirname(HSTB.Charlene.__file__)), 'tests')
 
 _TCARI_CONVERTED = False
 _HDCSIO_CONVERTED = False
@@ -692,139 +694,79 @@ def get_base_version_from_carisdll(command):
     return exact_baseversion
 
 
-def command_finder_old():
-    # carisbatch finder, in case you installed somewhere dumb or don't have it installed at all
-    name = 'carisbatch.exe'
-    command = ''
+def caris_command_finder(exe_name, accepted_versions, app_key, get_all_versions=False):
     batch_engine = ''
-    pathlist = [r'C:\Program Files\CARIS\HIPS and SIPS\10.4', r'C:\Program Files\CARIS\HIPS and SIPS\10.3',
-                r'C:\Program Files\CARIS\HIPS and SIPS\10.2']
-    for path in pathlist:
-        if os.path.exists(path):
-            for root, dirs, files in os.walk(path, topdown=True):
-                if name in files:
-                    batch_engine = os.path.join(root, name)
-                    break
-            break
-    if batch_engine:
-        command = '"' + batch_engine + '"'
+    vers = ''
+    versions = []
+    regHKLM = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
+    for vHIPS in accepted_versions:
+        try:
+            kBDB = OpenKey(regHKLM, os.sep.join(('SOFTWARE', 'CARIS', app_key, vHIPS, 'Environment Variables')))
+            p2hipsinst = QueryValueEx(kBDB, "install_dir")[0]
+            batch_engine = os.path.join(p2hipsinst, 'bin', exe_name)
+            # if the carisbatch doesn't exist then continue to the next version of caris
+            if not os.path.exists(batch_engine):
+                continue
+            if get_all_versions:
+                versions.append([batch_engine, vers])
+            else:
+                vers = float(vHIPS)
+                break
+        except WindowsError:
+            continue
+    if get_all_versions:
+        return versions
     else:
-        raise Exception("No Batch Engine found...is CARIS installed at C:\Program Files\CARIS\HIPS and SIPS?")
-    return command
+        return batch_engine, vers
 
 
 def get_hips_command_from_version(vers):
-    name = 'carisbatch.exe'
-    batch_engine = ''
-    regHKLM = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-    try:
-        vHIPS = str(vers)
-        kBDB = OpenKey(regHKLM, os.sep.join(('SOFTWARE', 'CARIS', 'HIPS', vHIPS, 'Environment Variables')))
-        p2hipsinst = QueryValueEx(kBDB, "install_dir")[0]
-        batch_engine = os.path.join(p2hipsinst, 'bin', 'carisbatch.exe')
-    except WindowsError:
-        pass
+    batch_engine, vers = caris_command_finder('carisbatch.exe', (str(vers),), "HIPS")
     if not batch_engine:
         raise Exception("No Batch Engine found...is CARIS HIPS and SIPS {} installed?".format(vers))
     return batch_engine
 
 
 def get_all_hips_versions():
-    name = 'carisbatch.exe'
-    versions = []
-    batch_engine = ''
-    vers = ''
-    regHKLM = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-    for vHIPS in ('11.4', '11.3', '11.2', '11.1', '10.4', '10.3', '10.2'):
-        try:
-            kBDB = OpenKey(regHKLM, os.sep.join(('SOFTWARE', 'CARIS', 'HIPS', vHIPS, 'Environment Variables')))
-            p2hipsinst = QueryValueEx(kBDB, "install_dir")[0]
-            batch_engine = os.path.join(p2hipsinst, 'bin', 'carisbatch.exe')
-            # if the carisbatch doesn't exist then continue to the next version of caris
-            if not os.path.exists(batch_engine):
-                continue
-            vers = float(vHIPS)
-            versions.append([batch_engine, vers])
-        except WindowsError:
-            continue
-    if not batch_engine:
+    versions = caris_command_finder('carisbatch.exe', ('11.4', '11.3', '11.2', '11.1', '10.4', '10.3', '10.2'), "HIPS", get_all_versions=True)
+    if not versions:
         raise Exception("No Batch Engine found...is CARIS HIPS and SIPS installed?")
     return versions
 
 
 def command_finder_hips():
-    name = 'carisbatch.exe'
-    batch_engine = ''
-    vers = ''
-    regHKLM = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-    for vHIPS in ('11.4', '11.3', '11.2', '11.1', '10.4', '10.3', '10.2'):
-        try:
-            kBDB = OpenKey(regHKLM, os.sep.join(('SOFTWARE', 'CARIS', 'HIPS', vHIPS, 'Environment Variables')))
-            p2hipsinst = QueryValueEx(kBDB, "install_dir")[0]
-            batch_engine = os.path.join(p2hipsinst, 'bin', 'carisbatch.exe')
-            # if the carisbatch doesn't exist then continue to the next version of caris
-            if not os.path.exists(batch_engine):
-                continue
-            vers = float(vHIPS)
-            break
-        except WindowsError:
-            continue
+    batch_engine, vers = caris_command_finder('carisbatch.exe', ('11.4', '11.3', '11.2', '11.1', '10.4', '10.3', '10.2'), "HIPS")
     if not batch_engine:
         raise Exception("No Batch Engine found...is CARIS HIPS and SIPS installed?")
     return batch_engine, vers
 
 
-def get_all_base_versions():
-    name = 'carisbatch.exe'
-    versions = []
-    batch_engine = ''
-    vers = ''
-    regHKLM = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-    for vHIPS in ('5.5', '5.4', '5.3', '5.2', '5.1', '4.4', '4.3', '4.2'):
-        try:
-            kBDB = OpenKey(regHKLM, os.sep.join(('SOFTWARE', 'CARIS', 'BASE Editor', vHIPS, 'Environment Variables')))
-            p2hipsinst = QueryValueEx(kBDB, "install_dir")[0]
-            batch_engine = os.path.join(p2hipsinst, 'bin', 'carisbatch.exe')
-            # if the carisbatch doesn't exist then continue to the next version of caris
-            if not os.path.exists(batch_engine):
-                continue
-            vers = float(vHIPS)
-            versions.append([batch_engine, vers])
-        except WindowsError:
-            continue
-    if not batch_engine:
-        raise Exception("No Batch Engine found...is CARIS BASE Editor installed?")
-    return versions
-
-
 def command_finder_base():
-    name = 'carisbatch.exe'
-    batch_engine = ''
-    vers = ''
-    regHKLM = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-    for vHIPS in ('5.5', '5.4', '5.3', '5.2', '5.1', '4.4', '4.3', '4.2'):
-        try:
-            kBDB = OpenKey(regHKLM, os.sep.join(('SOFTWARE', 'CARIS', 'BASE Editor', vHIPS, 'Environment Variables')))
-            p2hipsinst = QueryValueEx(kBDB, "install_dir")[0]
-            batch_engine = os.path.join(p2hipsinst, 'bin', 'carisbatch.exe')
-            # if the carisbatch doesn't exist then continue to the next version of caris
-            if not os.path.exists(batch_engine):
-                continue
-            vers = float(vHIPS)
-            break
-        except WindowsError:
-            continue
+    batch_engine, vers = caris_command_finder('carisbatch.exe', ('5.5', '5.4', '5.3', '5.2', '5.1', '4.4', '4.3', '4.2'), 'BASE Editor')
     if not batch_engine:
         raise Exception("No Batch Engine found...is CARIS BASE Editor installed?")
     return batch_engine, vers
 
 
+def get_bands_from_csar(path_to_csar):
+    """ Open a csar file and return the bands.  Returns a list.
+    For a sounding csar probably like this:
+        ['Depth', 'Deep', 'Density', 'Hypothesis_Count', 'Hypothesis_Strength', 'Mean', 'Node_Std_Dev', 'Shoal', 'Std_Dev', 'Uncertainty', 'User_Nominated']
+    For a sidescan csar then something like this:
+        ['Intensity', 'Density', 'Standard_Deviation', 'Weights']
+    """
+    grids = GridsManager()
+    grids.add_path(path_to_csar)
+    list(grids.grid_list)
+    grids.set_current(path_to_csar)
+    DEFAULT_CHUNK_SIZE = 1073741824  # 1GB    4294967296  # 4GB
+    grids.open_to_read_current(DEFAULT_CHUNK_SIZE)
+    return list(grids.layer_names())
+
+
 def find_csar_band_name(csar, log=None, wldatum='MLLW'):
     if os.path.splitext(csar)[1] == '.csar':
-        c = HSTB.driver.csar.raw.csar.CsarBase()
-        c.open(csar)
-        bands = c.bands()
-        band_names = [b.name for b in bands]
+        band_names = get_bands_from_csar(csar)
         out = ''
         b = ''
 
@@ -866,7 +808,6 @@ def find_csar_band_name(csar, log=None, wldatum='MLLW'):
             with open(log, 'a+') as logger:
                 print(out, file=logger)
                 print(out)
-        c.close()
         return b
     elif os.path.splitext(csar)[1] == '.asc':
         if log:
@@ -1041,11 +982,9 @@ def retrieve_activate_batch():
 
 
 class CarisAPI():
-    def __init__(self, processtype='', hdcs_folder='', hvf='', project_name='', sheet_name='', vessel_name='',
-                 day_num='',
+    def __init__(self, processtype='', hdcs_folder='', hvf='', project_name='', sheet_name='', vessel_name='', day_num='',
                  input_format='', logger=os.path.join(os.path.dirname(__file__), 'Charlene', 'log.txt'), benchcsv='',
-                 coord_mode='',
-                 proj_mode='', noaa_support_files=False, benchfrom='', benchto='', benchtoraw='',
+                 coord_mode='', proj_mode='', noaa_support_files=False, benchfrom='', benchto='', benchtoraw='',
                  bench=True, progressbar=None, base=False, hipsips=True, overridehipsversion=''):
         self.benchclass = benchmark.Benchmark(benchfrom, benchto, benchtoraw)
         self.benchfrom = benchfrom
@@ -1096,14 +1035,6 @@ class CarisAPI():
             queue.put(line)
         out.close()
 
-    def run_this_old_old(self, fullcommand):
-        p = subprocess.Popen(fullcommand, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
-        while p.poll() is None:
-            if self.progressbar:
-                self.progressbar.UpdatePulse('Running Caris Processes')
-            for line in iter(p.stdout.readline, b''):
-                print((">>> " + line.rstrip()))
-
     def run_this(self, fullcommand):
         if self.logger is not None:
             if not os.path.exists(os.path.split(self.logger)[0]):
@@ -1115,56 +1046,6 @@ class CarisAPI():
                 if self.progressbar:
                     self.progressbar.UpdatePulse('Running Caris Processes')
                 time.sleep(.1)
-
-    def run_this_old_old_old_old(self, fullcommand):
-        log = open(self.logger, 'a+')
-        log.write(fullcommand)
-        templog = open('templog.txt', 'wb')
-        p = subprocess.Popen(fullcommand, stdout=templog, stderr=subprocess.STDOUT)
-        readtemp = open('templog.txt', 'r')
-        while p.poll() is None:
-            if self.progressbar:
-                self.progressbar.UpdatePulse('Running Caris Processes')
-            t = readtemp.read()
-            if t:
-                print(t)
-                log.write(t)
-            time.sleep(.1)
-        t = readtemp.read()
-        if t:
-            print(t)
-            log.write(t)
-        readtemp.close()
-        templog.close()
-        os.remove('templog.txt')
-
-    def run_this_old(self, fullcommand):
-        p = subprocess.Popen(fullcommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        output, errors = p.communicate()
-        log = open(self.logger, 'a+')
-        print(output)
-        print(output, file=log)
-        print(errors)
-        print(errors, file=log)
-
-    def run_this_old_old_old(self, fullcommand):
-        log = open(self.logger, 'w+')
-        p = subprocess.Popen(fullcommand, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1,
-                             close_fds=ON_POSIX)
-        q = Queue()
-        t = threading.Thread(target=self.enqueue_output, args=(p.stdout, q))
-        # t.daemon()
-        t.start()
-        while t.is_alive():
-            if self.progressbar:
-                self.progressbar.UpdatePulse('Running Caris Processes')
-            try:
-                line = q.get(timeout=.1)
-            except Empty:
-                pass
-            else:
-                print(line, end=' ')
-                print(line, end=' ', file=log)
 
     def caris_hips_license_check(self, printout=True):
         fullcommand = self.hipscommand + ' --version'
@@ -1219,8 +1100,8 @@ class CarisAPI():
             # second stage: Try to write a csar to see if you are licensed
             from HSTB import __file__
             # car = CarisAPI(bench=False)
-            tstsrc = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'Charlene', 'tests', 'tstraster.csar')
-            desttif = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'Charlene', 'tests', 'delete_me.tif')
+            tstsrc = os.path.join(charlene_test_folder, 'tstraster.csar')
+            desttif = os.path.join(charlene_test_folder, 'delete_me.tif')
             if os.path.exists(desttif):
                 os.remove(desttif)
 
@@ -1288,9 +1169,8 @@ class CarisAPI():
         else:
             # second stage: Try to write a csar to see if you are licensed
             from HSTB import __file__
-            # car = CarisAPI(bench=False, base=True, hipsips=False)
-            tstsrc = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'Charlene', 'tests', 'tstraster.csar')
-            desttif = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'Charlene', 'tests', 'delete_me.tif')
+            tstsrc = os.path.join(charlene_test_folder, 'tstraster.csar')
+            desttif = os.path.join(charlene_test_folder, 'delete_me.tif')
             if os.path.exists(desttif):
                 os.remove(desttif)
             self.export_raster(tstsrc, 'GeoTIFF', desttif, forcebase=True)
