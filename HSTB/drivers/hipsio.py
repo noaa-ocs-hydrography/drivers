@@ -4,15 +4,25 @@ import os
 import numpy
 
 from .helpers import *
-from HSTB.time import UTC
-import HSTPBin
-install_path = HSTPBin.__path__[0]
 
-os.chdir(install_path)
-dll = ctypes.CDLL(os.path.join(install_path, r'hips_io_sdku.dll'))
-dll.HIPSIO_Init(ctypes.c_wchar_p(""), 0)
+try:
+    from HSTB.time import UTC
+    dump_supported = True
+except:  # not a pydro installation
+    print('dump not supported, utc module not found, must not be a pydro installation')
+    dump_supported = False
 
-#from HSTPBin.PyPeekXTF import TideErrorFile
+# import HSTPBin
+# install_path = HSTPBin.__path__[0]
+
+# os.chdir(install_path)
+# dll = ctypes.CDLL(os.path.join(install_path, r'hips_io_sdku.dll'))
+# dll.HIPSIO_Init(ctypes.c_wchar_p(""), 0)
+
+install_path = os.path.dirname(__file__)
+dll = ctypes.CDLL(os.path.realpath(os.path.join(install_path, 'hips_support', r'hips_io_sdku.dll')))
+
+# from HSTPBin.PyPeekXTF import TideErrorFile
 
 
 def InitLicense(path_to_license=""):
@@ -86,7 +96,7 @@ class HDCSdata(object):
 
 
 def isREC_STATUS_REJECTED(status):
-    return bool(long(status) & 1 << 31)
+    return bool(int(status) & 1 << 31)
 
 
 class HDCSAttitude(HDCSdata):
@@ -174,13 +184,14 @@ class HDCSAttitude(HDCSdata):
                 else:
                     rcode = 0
             else:
-                bVerbose = False
-                attitude = TideErrorFile(pathToPVDL)
-                numRecords = attitude.getNumberOfRecords()
-                NumPyArray = numpy.zeros((numRecords, 3), numpy.float64)
-                for recordNum in range(numRecords):
-                    attituderecord = NumPyArray[recordNum]
-                    attituderecord[:] = attitude.read(recordNum + 1)[1:]
+                raise NotImplementedError('Not currently supported in Python3 implementation')
+                # bVerbose = False
+                # attitude = TideErrorFile(pathToPVDL)
+                # numRecords = attitude.getNumberOfRecords()
+                # NumPyArray = numpy.zeros((numRecords, 3), numpy.float64)
+                # for recordNum in range(numRecords):
+                #     attituderecord = NumPyArray[recordNum]
+                #     attituderecord[:] = attitude.read(recordNum + 1)[1:]
         else:
             rcode = 0
         if not rcode:
@@ -341,6 +352,7 @@ class HDCSNav(HDCSdata):
                 rcode = 0
             self.Close(nav)
         else:
+            print('Unable to open')
             rcode = 0
         if not rcode:
             NumPyArray = None
@@ -381,10 +393,11 @@ class HDCSNav(HDCSdata):
                 summaryStatus = verboseData['summaryStatus']
                 sourcename = verboseData['sourceFileName']
             else:
-                from HSTPBin import PyPeekXTF
-                summaryStatus = PyPeekXTF.NAV_EXAMINED_BY_HYDROG_MASK
-                if not sourcename:
-                    sourcename = line + str(sourceTypeExt)
+                raise NotImplementedError('Not currently supported in Python3')
+                # from HSTPBin import PyPeekXTF
+                # summaryStatus = PyPeekXTF.NAV_EXAMINED_BY_HYDROG_MASK
+                # if not sourcename:
+                #     sourcename = line + str(sourceTypeExt)
             rcode = 1
             rcodeCaris = 0    # HDCS I/O "Okay"=0
             # check to see if path to P/V/D/L directory exists; create to leaf dir L, if needed
@@ -431,13 +444,16 @@ class HDCSNav(HDCSdata):
         return rcode
 
     def Dump(self, pth, out_pipe):
-        numpy.set_printoptions(precision=3, suppress=True, threshold=20, formatter={'float': lambda x: '%.3f' % x})
-        timeseries = self.ReadTimeSeries(pth)
-        for rec in timeseries:
-            dt = UTC.UTCs80ToDateTime(rec[0])
-            s = " ".join([dt.strftime("%Y-%m-%d %H:%M:%S.%f"), "%f %f" % (numpy.rad2deg(rec[1]), numpy.rad2deg(rec[2])), str(rec[3:]).replace("[", "").replace("]", "")]) + "\n"
-            out_pipe.write(s)
-        numpy.set_printoptions()
+        if dump_supported:
+            numpy.set_printoptions(precision=3, suppress=True, threshold=20, formatter={'float': lambda x: '%.3f' % x})
+            timeseries = self.ReadTimeSeries(pth)
+            for rec in timeseries:
+                dt = UTC.UTCs80ToDateTime(rec[0])
+                s = " ".join([dt.strftime("%Y-%m-%d %H:%M:%S.%f"), "%f %f" % (numpy.rad2deg(rec[1]), numpy.rad2deg(rec[2])), str(rec[3:]).replace("[", "").replace("]", "")]) + "\n"
+                out_pipe.write(s)
+            numpy.set_printoptions()
+        else:
+            raise NotImplementedError('dump not supported, UTC module not found')
 
 
 class HDCSSideScan(HDCSdata):
