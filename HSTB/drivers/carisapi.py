@@ -1,7 +1,7 @@
 import os, sys, time, re
 import subprocess
 import numpy as np
-from pyproj import Proj, transform
+from pyproj import Proj, transform, Transformer
 import datetime
 import tempfile
 from queue import Queue, Empty
@@ -1424,13 +1424,12 @@ class CarisAPI():
                 log.write(msg)
                 print msg'''
 
-        outproj = Proj('epsg:' + str(epsg))
-        inproj = Proj('epsg:4326')  # WGS84
+        mytransf = Transformer.from_crs('epsg:4326', 'epsg:' + str(epsg), always_xy=True)
         lowxextent, lowyextent = lon.min(), lat.min()
         highxextent, highyextent = lon.max(), lat.max()
 
-        lowxextent_final, lowyextent_final = transform(inproj, outproj, lowxextent, lowyextent)
-        highxextent_final, highyextent_final = transform(inproj, outproj, highxextent, highyextent)
+        lowxextent_final, lowyextent_final = mytransf.transform(lowxextent, lowyextent)
+        highxextent_final, highyextent_final = mytransf.transform(highxextent, highyextent)
         return str(epsg), str(lowxextent_final - 2000), str(lowyextent_final - 2000), \
                str(highxextent_final + 2000), str(highyextent_final + 2000)
 
