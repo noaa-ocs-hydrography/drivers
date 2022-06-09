@@ -705,10 +705,10 @@ def caris_command_finder(exe_name, accepted_versions, app_key, get_all_versions=
             # if the carisbatch doesn't exist then continue to the next version of caris
             if not os.path.exists(batch_engine):
                 continue
+            vers = float(vHIPS)
             if get_all_versions:
                 versions.append([batch_engine, vers])
             else:
-                vers = float(vHIPS)
                 break
         except WindowsError:
             continue
@@ -1042,7 +1042,6 @@ class CarisAPI():
             while p.poll() is None:
                 if self.progressbar:
                     self.progressbar.UpdatePulse('Running Caris Processes')
-                time.sleep(.1)
 
     def caris_hips_license_check(self, printout=True):
         fullcommand = self.hipscommand + ' --version'
