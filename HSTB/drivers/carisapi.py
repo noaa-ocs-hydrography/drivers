@@ -1,10 +1,9 @@
 import os, sys, time, re
 import subprocess
 import numpy as np
-from pyproj import Proj, transform, Transformer
+from pyproj import Transformer
 import datetime
 import tempfile
-from queue import Queue, Empty
 import threading
 import xml.etree.ElementTree as ET
 import json
@@ -31,12 +30,17 @@ if _TCARI_CONVERTED:
     from HSTB.tides import tidestation
     from HSTB.tides.tcari import TCARI
 
-from HSTB.drivers import hipsio
+try:
+    from HSTB.caris import hipsio
 
-def hdcsio_read():
-    hipsio.InitLicense()
-    nav = hipsio.HDCSNav('Navigation')
-    return nav
+    def hdcsio_read():
+        hipsio.InitLicense()
+        nav = hipsio.HDCSNav('Navigation')
+        return nav
+except ImportError:
+    def hdcsio_read():
+        raise NotImplementedError('Unable to import hipsio, this requires the pydro installed environment to exist.')
+
 
 ON_POSIX = 'posix' in sys.builtin_module_names
 caris_framework_vers = {'5.4.0': {'HIPS': '', 'BASE': '5.3.0'}, '5.4.1': {'HIPS': '', 'BASE': '5.3.1'},
@@ -2587,3 +2591,10 @@ class CarisAPI():
         fullcommand = '"' + os.path.join(os.path.split(self.hipscommand)[0], 'caris_hips.exe') + '"'
         fullcommand += ' "' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips"')
         subprocess.Popen(fullcommand)
+
+
+def dump():
+    from HSTB.caris import hipsio
+    hipsio.InitLicense()
+    nav = hipsio.HDCSNav('Navigation')
+    navdata = nav.ReadTimeSeries(r"D:\charlene_dest\OPR-PXXX-FA-17\HXXXXX\Processed\Sonar_Data\HDCS_Data\HXXXXX_MB\TrackLines_HXXXXX_MB\0000_20170522_220650_FA2805")
