@@ -2591,10 +2591,3 @@ class CarisAPI():
         fullcommand = '"' + os.path.join(os.path.split(self.hipscommand)[0], 'caris_hips.exe') + '"'
         fullcommand += ' "' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips"')
         subprocess.Popen(fullcommand)
-
-
-def dump():
-    from HSTB.caris import hipsio
-    hipsio.InitLicense()
-    nav = hipsio.HDCSNav('Navigation')
-    navdata = nav.ReadTimeSeries(r"D:\charlene_dest\OPR-PXXX-FA-17\HXXXXX\Processed\Sonar_Data\HDCS_Data\HXXXXX_MB\TrackLines_HXXXXX_MB\0000_20170522_220650_FA2805")
