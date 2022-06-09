@@ -1,10 +1,9 @@
 import os, sys, time, re
 import subprocess
 import numpy as np
-from pyproj import Proj, transform
+from pyproj import Transformer
 import datetime
 import tempfile
-from queue import Queue, Empty
 import threading
 import xml.etree.ElementTree as ET
 import json
@@ -18,31 +17,30 @@ from win32api import GetFileVersionInfo, LOWORD, HIWORD
 from HSTB.Charlene import benchmark
 from HSTB.Charlene import processing_report
 from HSTB.Charlene import pyText2Pdf
+from HSTB.Charlene import __file__ as charlene_file
 from HSTB.time.UTC import UTCs80ToDateTime
 from HSTB.drivers import hips_project
 from hyo2.grids.grids_manager import GridsManager
 
-charlene_test_folder = os.path.join(os.path.realpath(os.path.dirname(HSTB.Charlene.__file__)), 'tests')
+charlene_test_folder = os.path.join(os.path.realpath(os.path.dirname(charlene_file)), 'tests')
 
 _TCARI_CONVERTED = False
-_HDCSIO_CONVERTED = False
 
 if _TCARI_CONVERTED:
     from HSTB.tides import tidestation
     from HSTB.tides.tcari import TCARI
 
-if _HDCSIO_CONVERTED:
-    pass
-    from HSTB.drivers import HDCSio
-
+try:
+    from HSTB.caris import hipsio
 
     def hdcsio_read():
-        nav = HDCSio.HDCSNav('Navigation')
-
+        hipsio.InitLicense()
+        nav = hipsio.HDCSNav('Navigation')
         return nav
-else:
+except ImportError:
     def hdcsio_read():
-        raise NotImplementedError("HDCSio is not implemented in Python 3 yet")
+        raise NotImplementedError('Unable to import hipsio, this requires the pydro installed environment to exist.')
+
 
 ON_POSIX = 'posix' in sys.builtin_module_names
 caris_framework_vers = {'5.4.0': {'HIPS': '', 'BASE': '5.3.0'}, '5.4.1': {'HIPS': '', 'BASE': '5.3.1'},
@@ -707,10 +705,10 @@ def caris_command_finder(exe_name, accepted_versions, app_key, get_all_versions=
             # if the carisbatch doesn't exist then continue to the next version of caris
             if not os.path.exists(batch_engine):
                 continue
+            vers = float(vHIPS)
             if get_all_versions:
                 versions.append([batch_engine, vers])
             else:
-                vers = float(vHIPS)
                 break
         except WindowsError:
             continue
@@ -882,13 +880,13 @@ def wgs84_epsg_utmzone_finder(maxlon, minlon):
     maxlon = int(maxlon)
     minlon = int(minlon)
     msg = ''
-    maxlon_zone = str(30 - ((int(maxlon) * -1) / 6))
+    maxlon_zone = str(int((np.floor((maxlon + 180) / 6) + 1) % 60))
     if len(str(maxlon_zone)) == 1:
         maxlon_zone = '3260' + str(maxlon_zone)
     else:
         maxlon_zone = '326' + str(maxlon_zone)
 
-    minlon_zone = str(30 - ((int(minlon) * -1) / 6))
+    minlon_zone = str(int((np.floor((minlon + 180) / 6) + 1) % 60))
     if len(str(minlon_zone)) == 1:
         minlon_zone = '3260' + str(minlon_zone)
     else:
@@ -903,13 +901,13 @@ def nad83_epsg_utmzone_finder(maxlon, minlon):
     maxlon = int(maxlon)
     minlon = int(minlon)
     msg = ''
-    maxlon_zone = str(30 - ((int(maxlon) * -1) / 6))
+    maxlon_zone = str(int((np.floor((maxlon + 180) / 6) + 1) % 60))
     if len(str(maxlon_zone)) == 1:
         maxlon_zone = '2690' + str(maxlon_zone)
     else:
         maxlon_zone = '269' + str(maxlon_zone)
 
-    minlon_zone = str(30 - ((int(minlon) * -1) / 6))
+    minlon_zone = str(int((np.floor((minlon + 180) / 6) + 1) % 60))
     if len(str(minlon_zone)) == 1:
         minlon_zone = '2690' + str(minlon_zone)
     else:
@@ -927,13 +925,13 @@ def proj_from_svp(svp_path):
             name = svp.readline()
             header = svp.readline()
             try:
-                section, date, lat, int = [header.split()[i] for i in [1, 2, 3, 4]]
+                section, date, lat, lon = [header.split()[i] for i in [1, 2, 3, 4]]
             except:
                 error = 'Error reading {}\n'.format(svp_path)
                 error += 'Please verify that the svp file has the correct header'
                 raise IOError(error)
-            degree_long = int.split(':')[0]
-            lon_zone = str(30 - ((int(degree_long) * -1) / 6))
+            degree_long = int(lon.split(':')[0])
+            lon_zone = str(int((np.floor((degree_long + 180) / 6) + 1) % 60))
             if lat[0] == '-':
                 return 'UTM Zone ' + lon_zone + 'S'
             return 'UTM Zone ' + lon_zone + 'N'
@@ -943,8 +941,7 @@ def proj_from_svp(svp_path):
 
 # helper function to retrieve the path to the NOAA folder in PydroXL
 def retrieve_noaa_folder_path():
-    from HSTB import __file__
-    folder_path = os.path.realpath(os.path.dirname(__file__))
+    folder_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(charlene_test_folder))))))
     if not os.path.exists(folder_path):
         raise RuntimeError("the folder does not exist: %s" % folder_path)
     # print "NOAA folder: {}".format(folder_path)
@@ -954,7 +951,7 @@ def retrieve_noaa_folder_path():
 # helper function to retrieve the install prefix path for PydroXL
 def retrieve_install_prefix():
     noaa_folder = retrieve_noaa_folder_path()
-    folder_path = os.path.realpath(os.path.join(noaa_folder, os.pardir, os.pardir, os.pardir, os.pardir))
+    folder_path = os.path.realpath(os.path.join(noaa_folder, os.pardir))
     if not os.path.exists(folder_path):
         raise RuntimeError("the folder does not exist: %s" % folder_path)
     # print "install prefix: %s" % folder_path
@@ -983,7 +980,7 @@ def retrieve_activate_batch():
 
 class CarisAPI():
     def __init__(self, processtype='', hdcs_folder='', hvf='', project_name='', sheet_name='', vessel_name='', day_num='',
-                 input_format='', logger=os.path.join(os.path.dirname(__file__), 'Charlene', 'log.txt'), benchcsv='',
+                 input_format='', logger=os.path.join(charlene_test_folder, 'log.txt'), benchcsv='',
                  coord_mode='', proj_mode='', noaa_support_files=False, benchfrom='', benchto='', benchtoraw='',
                  bench=True, progressbar=None, base=False, hipsips=True, overridehipsversion=''):
         self.benchclass = benchmark.Benchmark(benchfrom, benchto, benchtoraw)
@@ -1045,7 +1042,6 @@ class CarisAPI():
             while p.poll() is None:
                 if self.progressbar:
                     self.progressbar.UpdatePulse('Running Caris Processes')
-                time.sleep(.1)
 
     def caris_hips_license_check(self, printout=True):
         fullcommand = self.hipscommand + ' --version'
@@ -1098,8 +1094,6 @@ class CarisAPI():
             return False, out
         else:
             # second stage: Try to write a csar to see if you are licensed
-            from HSTB import __file__
-            # car = CarisAPI(bench=False)
             tstsrc = os.path.join(charlene_test_folder, 'tstraster.csar')
             desttif = os.path.join(charlene_test_folder, 'delete_me.tif')
             if os.path.exists(desttif):
@@ -1108,7 +1102,7 @@ class CarisAPI():
             # Temporarily disable the benchclass run functionality if you dont want to see the printouts
             if not printout:
                 carry_over_log = self.logger
-                self.logger = os.path.join(os.path.dirname(__file__), 'Charlene', 'log.txt')
+                self.logger = os.path.join(charlene_test_folder, 'log.txt')
                 need_to_disable = self.bench
                 if need_to_disable:
                     self.bench = False
@@ -1168,7 +1162,6 @@ class CarisAPI():
             return False, out
         else:
             # second stage: Try to write a csar to see if you are licensed
-            from HSTB import __file__
             tstsrc = os.path.join(charlene_test_folder, 'tstraster.csar')
             desttif = os.path.join(charlene_test_folder, 'delete_me.tif')
             if os.path.exists(desttif):
@@ -1298,7 +1291,11 @@ class CarisAPI():
                     tempraw = os.path.split(line)[1]
                     line_path = os.path.join(hdcspath, tempraw[:len(tempraw) - 4])
                     # If it isnt in the database, you need conversion (it cant be overwritten)
-                    if not hip.get_line_from_path(line_path):
+                    try:
+                        is_in_hips = hip.get_line_from_path(line_path)
+                    except:
+                        is_in_hips = False
+                    if not is_in_hips:
                         need_conversion.extend([line])
                 local_raw_file = [lne for lne in local_raw_file if lne not in need_conversion]
                 print('{} MBES Files need conversion...'.format(len(need_conversion)))
@@ -1430,13 +1427,12 @@ class CarisAPI():
                 log.write(msg)
                 print msg'''
 
-        outproj = Proj(init='epsg:' + str(epsg))
-        inproj = Proj(init='epsg:4326')  # WGS84
+        mytransf = Transformer.from_crs('epsg:4326', 'epsg:' + str(epsg), always_xy=True)
         lowxextent, lowyextent = lon.min(), lat.min()
         highxextent, highyextent = lon.max(), lat.max()
 
-        lowxextent_final, lowyextent_final = transform(inproj, outproj, lowxextent, lowyextent)
-        highxextent_final, highyextent_final = transform(inproj, outproj, highxextent, highyextent)
+        lowxextent_final, lowyextent_final = mytransf.transform(lowxextent, lowyextent)
+        highxextent_final, highyextent_final = mytransf.transform(highxextent, highyextent)
         return str(epsg), str(lowxextent_final - 2000), str(lowyextent_final - 2000), \
                str(highxextent_final + 2000), str(highyextent_final + 2000)
 
@@ -1460,7 +1456,7 @@ class CarisAPI():
                     print(startmsg)
                     log.write(startmsg)
                     # tidetype = self.tcaridata.ChooseTideTypeIfMultiple(self)
-                    nav = HDCSio.HDCSNav('Navigation')
+                    nav = hdcsio_read()
                     times = []
                     remove_paths = []
                     for path in lines:
@@ -2533,10 +2529,8 @@ class CarisAPI():
         if gridqa:
             grid_qa = "1"
 
-        start = retrieve_noaa_folder_path()
-        spackages = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-        qcscripts = os.path.join(spackages, 'Python38', 'hyo2', 'qc', 'scripts', 'qc_scripts.py')
-        startpy = retrieve_install_prefix()
+        spackages = os.path.realpath(os.path.join(charlene_file, os.pardir, os.pardir, os.pardir, os.pardir, os.pardir))
+        qcscripts = os.path.join(spackages, 'Python38', 'svn_repo', 'hyo2', 'qc', 'scripts', 'qc_scripts.py')
 
         if os.path.exists(grid_path):
             args = ["cmd.exe", "/C", "set pythonpath=", "&&",
@@ -2565,8 +2559,9 @@ class CarisAPI():
 
     def picky_py3(self, carishdcs, picky_proj, sheet):
         activate_file = retrieve_activate_batch()
-        spackages = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-        picky_batch = os.path.join(spackages, 'Python38', 'HSTB', 'picky', 'side_scan_batch.py')
+
+        spackages = os.path.realpath(os.path.join(charlene_file, os.pardir, os.pardir, os.pardir, os.pardir, os.pardir))
+        picky_batch = os.path.join(spackages, 'Python38', 'svn_repo', 'HSTB', 'picky', 'side_scan_batch.py')
 
         picky_proj_folder = os.path.dirname(picky_proj)
 
