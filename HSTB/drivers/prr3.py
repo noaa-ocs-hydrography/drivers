@@ -19,29 +19,58 @@ recs_categories_7027 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
                         '1013': ['time', 'Heading'],
                         '7001': ['serial_one', 'serial_two'],
                         '7503': ['time', 'settings', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency'],
-                        '7027': ['time', 'PingNumber', 'TxAngle', 'RxAngle', 'Uncertainty', 'Flags',  # flags for amp/phase detect
-                                 'DetectionPoint', 'SamplingRate']}
+                        '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
+                                 'TravelTime']}
 
-recs_categories_translator = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
-                                       'Longitude': [['navigation', 'longitude']],
-                                       'Height': [['navigation', 'altitude']]},
-                              '1009': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
-                                       'SoundSpeed': [['profile', 'soundspeed']]},
-                              '1012': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
-                                       'Pitch': [['attitude', 'pitch']], 'Heading': [['attitude', 'heading']]},
-                              '1013': {'Time': [['attitude', 'htime']], 'Heave': [['attitude', 'heave']]},
-                              '7001': {'Serial#': [['installation_params', 'serial_one']],
-                                       'Serial#2': [['installation_params', 'serial_two']]},
-                              '7503': {'time': [['installation_params', 'time']],
-                                       'settings': [['installation_params', 'installation_settings']],
-                                       'SoundVelocity': [['ping', 'soundspeed']],
-                                       'TXPulseTypeID': [['runtime_params', 'mode']],
-                                       'TransmitFlags': [['runtime_params', 'yawpitchstab']],
-                                       'Frequency': [['ping', 'frequency']]},
-                              '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
-                                       'TxAngle': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
-                                       'Uncertainty': [['ping', 'qualityfactor']], 'DetectionPoint': [['ping', 'traveltime_dp']],
-                                       'SamplingRate': [['ping', 'traveltime_sr']], 'Flags': [['ping', 'detectioninfo']]}}
+recs_categories_translator_7027 = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                            'Longitude': [['navigation', 'longitude']],
+                                            'Height': [['navigation', 'altitude']]},
+                                   '1009': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                            'SoundSpeed': [['profile', 'soundspeed']]},
+                                   '1012': {'time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                            'Pitch': [['attitude', 'pitch']], 'Heading': [['attitude', 'heading']]},
+                                   '1013': {'time': [['attitude', 'htime']], 'Heave': [['attitude', 'heave']]},
+                                   '7001': {'Serial#': [['installation_params', 'serial_one']],
+                                            'Serial#2': [['installation_params', 'serial_two']]},
+                                   '7503': {'time': [['installation_params', 'time']],
+                                            'settings': [['installation_params', 'installation_settings']],
+                                            'SoundVelocity': [['ping', 'soundspeed']],
+                                            'TXPulseTypeID': [['runtime_params', 'mode']],
+                                            'TransmitFlags': [['runtime_params', 'yawpitchstab']],
+                                            'Frequency': [['ping', 'frequency']]},
+                                   '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
+                                            'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
+                                            'Uncertainty': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
+                                            'DetectionFlags': [['ping', 'detectioninfo']]}}
+
+recs_categories_7027_1016 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
+                             '1009': ['time', 'data.Depth', 'data.SoundSpeed'],
+                             '1016': ['datatime', 'Roll', 'Pitch', 'Heave', 'Heading'],
+                             '7001': ['serial_one', 'serial_two'],
+                             '7503': ['time', 'settings', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency'],
+                             '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
+                                      'TravelTime']}
+
+recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                                 'Longitude': [['navigation', 'longitude']],
+                                                 'Height': [['navigation', 'altitude']]},
+                                        '1009': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                                 'SoundSpeed': [['profile', 'soundspeed']]},
+                                        '1016': {'datatime': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                                 'Pitch': [['attitude', 'pitch']], 'Heading': [['attitude', 'heading']],
+                                                 'Heave': [['attitude', 'heave']]},
+                                        '7001': {'Serial#': [['installation_params', 'serial_one']],
+                                                 'Serial#2': [['installation_params', 'serial_two']]},
+                                        '7503': {'time': [['installation_params', 'time']],
+                                                 'settings': [['installation_params', 'installation_settings']],
+                                                 'SoundVelocity': [['ping', 'soundspeed']],
+                                                 'TXPulseTypeID': [['runtime_params', 'mode']],
+                                                 'TransmitFlags': [['runtime_params', 'yawpitchstab']],
+                                                 'Frequency': [['ping', 'frequency']]},
+                                        '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
+                                                 'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
+                                                 'Uncertainty': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
+                                                 'DetectionFlags': [['ping', 'detectioninfo']]}}
 
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
@@ -880,7 +909,7 @@ class Data1010(BaseData):
                           ('SampleContentValidity', 'u1'), ('Reserved', 'u2'), ('Latitude', 'f8'), ('Longitude', 'f8'),
                           ('SampleRate', 'f4'), ('NumberOfLayers', 'u4')])
 
-    def __init__(self, datablock, utctime, read_limit=None):
+    def __init__(self, datablock, utctime, read_limit=1):
         super(Data1010, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.profile_conductivity = []
@@ -934,6 +963,50 @@ class Data1013(BaseData):
         the decoder for the rest of the record."""
         super(Data1013, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
+
+
+class Data1015(BaseData):
+    """
+    Navigation Datagram if logged via PDS, otherwise you should get the 1003 Position record
+    """
+    hdr_dtype = np.dtype([('VerticalReference', 'u1'), ('Latitude', 'f8'), ('Longitude', 'f8'),
+                          ('HorizontalPositionAccuracy', 'f4'), ('VesselHeight', 'f4'), ('HeightAccuracy', 'f4'),
+                          ('SpeedOverGround', 'f4'), ('CourseOverGround', 'f4'), ('Heading', 'f4')])
+
+    def __init__(self, datablock, utctime, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1015, self).__init__(datablock, read_limit=read_limit)
+        self.time = utctime
+
+
+class Data1016(BaseData):
+    """
+    Attitude Datagram if logged via PDS, otherwise you should get the 1012 RollPitchHeave record
+    """
+    hdr_dtype = np.dtype([('NumberOfDatasets', 'u1')])
+
+    def __init__(self, datablock, utctime, read_limit=1):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1016, self).__init__(datablock, read_limit=read_limit)
+        self.time = utctime
+        self.datatime = None
+        self.Roll = None
+        self.Pitch = None
+        self.Heave = None
+        self.Heading = None
+        self.numrecords = self.header['NumberOfDatasets']
+        self.read_data(datablock[self.hdr_sz:])
+
+    def read_data(self, datablock):
+        data_dtype = np.dtype([('TimeOffset', 'u2'), ('Roll', 'f4'), ('Pitch', 'f4'), ('Heave', 'f4'), ('Heading', 'f4')])
+        data = np.frombuffer(datablock, dtype=data_dtype, count=self.numrecords)
+        self.datatime = (data['TimeOffset'] / 1000) + self.time
+        self.Roll = np.rad2deg(data['Roll'])
+        self.Pitch = np.rad2deg(data['Pitch'])
+        self.Heave = data['Heave']
+        self.Heading = np.rad2deg(data['Heading'])
 
 
 class Data7000(BaseData):
@@ -1462,18 +1535,22 @@ class Data7027(BaseData):
         self.time = utctime
         self.numdetections = self.header[3]
         self.data = None
-        self.detect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
-                                      ('Quality', 'u4'), ('Uncertainty', 'f4'), ('Intensity', 'f4'), ('MinLimit', 'f4'), ('MaxLimit', 'f4')])
-        self.detect_dsize = self.detect_dtype.itemsize
+        self.TxAngleArray = None
+        self.RxAngle = None
+        self.Uncertainty = None
+        self.TravelTime = None
+        self.DetectionFlags = None
         self.read(datablock[self.hdr_sz:])
 
     def read(self, datablock):
-        strt_counter = 0
-        # this isn't great.  Look at https://stackoverflow.com/questions/36797088/speed-up-pythons-struct-unpack
-        for i in range(self.numdetections):
-            data = np.frombuffer(datablock[strt_counter:], self.detect_dtype)
-            strt_counter += self.detect_dsize
-            self.data.append(data)
+        detect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
+                                 ('Quality', 'u4'), ('Uncertainty', 'f4'), ('Intensity', 'f4'), ('MinLimit', 'f4'), ('MaxLimit', 'f4')])
+        self.data = np.frombuffer(datablock, dtype=detect_dtype, count=self.numdetections)
+        self.RxAngle = np.rad2deg(self.data['RxAngle'])
+        self.TxAngleArray = np.full(self.RxAngle.size, self.TxAngle, dtype=np.float32).size
+        self.Uncertainty = self.data['Uncertainty']
+        self.TravelTime = self.data['DetectionPoint'] / self.SamplingRate
+        self.DetectionFlags = self.data['DetectionFlags']
 
 
 class Data7028(BaseData):
@@ -1666,6 +1743,29 @@ class Data7200(BaseData):
                 data = list(np.frombuffer(datablock[datapointer:datapointer + data_sz], dtype=self.optional_data_header)[0])
                 datapointer += data_sz
                 self.optional_data.append(data)
+
+
+class Data7300(BaseData):
+    """
+    File Catalog Record
+    """
+
+    hdr_dtype = np.dtype([('Size', 'u4'), ('Version', 'u2'), ('NumberofRecords', 'u4'), ('Reserved', 'u4')])
+
+    def __init__(self, datablock, utctime, read_limit=1):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data7300, self).__init__(datablock, read_limit=read_limit)
+        self.time = utctime
+        self.data = None
+        self.numrecords = self.header['NumberofRecords']
+        self.read_data(datablock[self.hdr_sz:])
+
+    def read_data(self, datablock):
+        data_dtype = np.dtype([('Size', 'u4'), ('Offset', 'u8'), ('RecordType', 'u2'), ('DeviceIdentifier', 'u2'),
+                               ('SystemEnumerator', 'u2'), ('Year', 'u2'), ('Day', 'u2'), ('Seconds', 'f4'),
+                               ('Hours', 'u1'), ('Minutes', 'u1'), ('RecordCount', 'u4'), ('Reserved', '8u2')])
+        self.data = np.frombuffer(datablock, dtype=data_dtype, count=self.numrecords)
 
 
 class Data7503(BaseData):
