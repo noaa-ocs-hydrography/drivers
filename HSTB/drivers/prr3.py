@@ -18,9 +18,10 @@ recs_categories_7027 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
                         '1012': ['time', 'Roll', 'Pitch', 'Heave'],
                         '1013': ['time', 'Heading'],
                         '7001': ['serial_one', 'serial_two'],
-                        '7503': ['time', 'settings', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency'],
                         '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
-                                 'TravelTime']}
+                                 'TravelTime'],
+                        '7030': ['time', 'translated_settings'],
+                        '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency']}
 
 recs_categories_translator_7027 = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                             'Longitude': [['navigation', 'longitude']],
@@ -32,24 +33,25 @@ recs_categories_translator_7027 = {'1003': {'time': [['navigation', 'time']], 'L
                                    '1013': {'time': [['attitude', 'htime']], 'Heave': [['attitude', 'heave']]},
                                    '7001': {'Serial#': [['installation_params', 'serial_one']],
                                             'Serial#2': [['installation_params', 'serial_two']]},
-                                   '7503': {'time': [['installation_params', 'time']],
-                                            'settings': [['installation_params', 'installation_settings']],
-                                            'SoundVelocity': [['ping', 'soundspeed']],
-                                            'TXPulseTypeID': [['runtime_params', 'mode']],
-                                            'TransmitFlags': [['runtime_params', 'yawpitchstab']],
-                                            'Frequency': [['ping', 'frequency']]},
                                    '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
                                             'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
                                             'Uncertainty': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
-                                            'DetectionFlags': [['ping', 'detectioninfo']]}}
+                                            'DetectionFlags': [['ping', 'detectioninfo']]},
+                                   '7030': {'time': [['installation_params', 'time']],
+                                            'translated_settings': [['installation_params', 'installation_settings']]},
+                                   '7503': {'SoundVelocity': [['ping', 'soundspeed']],
+                                            'TXPulseTypeID': [['runtime_params', 'mode']],
+                                            'TransmitFlags': [['runtime_params', 'yawpitchstab']],
+                                            'Frequency': [['ping', 'frequency']]}}
 
 recs_categories_7027_1016 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
                              '1009': ['time', 'data.Depth', 'data.SoundSpeed'],
                              '1016': ['datatime', 'Roll', 'Pitch', 'Heave', 'Heading'],
                              '7001': ['serial_one', 'serial_two'],
-                             '7503': ['time', 'settings', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency'],
                              '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
-                                      'TravelTime']}
+                                      'TravelTime'],
+                             '7030': ['time', 'translated_settings'],
+                             '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency']}
 
 recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                                  'Longitude': [['navigation', 'longitude']],
@@ -61,16 +63,16 @@ recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']
                                                  'Heave': [['attitude', 'heave']]},
                                         '7001': {'Serial#': [['installation_params', 'serial_one']],
                                                  'Serial#2': [['installation_params', 'serial_two']]},
-                                        '7503': {'time': [['installation_params', 'time']],
-                                                 'settings': [['installation_params', 'installation_settings']],
-                                                 'SoundVelocity': [['ping', 'soundspeed']],
-                                                 'TXPulseTypeID': [['runtime_params', 'mode']],
-                                                 'TransmitFlags': [['runtime_params', 'yawpitchstab']],
-                                                 'Frequency': [['ping', 'frequency']]},
                                         '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
                                                  'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
                                                  'Uncertainty': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
-                                                 'DetectionFlags': [['ping', 'detectioninfo']]}}
+                                                 'DetectionFlags': [['ping', 'detectioninfo']]},
+                                        '7030': {'time': [['installation_params', 'time']],
+                                                 'translated_settings': [['installation_params', 'installation_settings']]},
+                                        '7503': {'SoundVelocity': [['ping', 'soundspeed']],
+                                                 'TXPulseTypeID': [['runtime_params', 'mode']],
+                                                 'TransmitFlags': [['runtime_params', 'yawpitchstab']],
+                                                 'Frequency': [['ping', 'frequency']]}}
 
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
@@ -83,6 +85,19 @@ recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': Non
                                              'runtime_settings': None},
                           'profile': {'time': None, 'depth': None, 'soundspeed': None},
                           'navigation': {'time': None, 'latitude': None, 'longitude': None, 'altitude': None}}
+
+# Appendix B - Device identifier lookup to retrieve model number
+device_identifiers = {20: 'T20', 22: 'T20Dual', 30: 'F30', 50: 'T50', 51: 'T51', 52: 'T50Dual', 103: 'GenericMBES',
+                      1000: 'OdomMB1', 1002: 'OdomMB2', 4013: 'TC4013', 7005: 'ProScan', 7012: '7012', 7100: '7100',
+                      7101: '7101', 7102: '7102', 7111: '7111', 7112: '7112', 7123: '7123', 7125: '7125', 7128: '7128',
+                      7130: '7130', 7150: '7150', 7160: '7160', 8100: '8100', 8101: '8101', 8102: '8102', 8111: '8111',
+                      8123: '8123', 8124: '8124', 8125: '8125', 8128: '8128', 8150: '8150', 8160: '8160', 9000: 'E20',
+                      9001: 'Deso5', 9002: 'Deso5DS', 10000: 'DMS05', 10001: '335B', 10002: '332B', 10010: 'SBE37',
+                      10200: 'Litton200', 11000: 'FS-DW-SBP', 11001: 'FS-DW-LFSSS', 11002: 'FS-DW-HFSSS',
+                      12000: 'RPT319', 13002: 'NorbitFLS', 13003: 'NorbitBathy', 13004: 'NorbitiWBMS', 13005: 'NorbitBathyCompact',
+                      13007: 'NorbitBathy', 13008: 'NorbitBathy', 13009: 'NorbitDeepSea', 13010: 'NorbitDeepSea',
+                      13011: 'NorbitDeepSea', 13012: 'NorbitiLidar', 13016: 'NorbitBathySTX', 13017: 'NorbitBathySTX',
+                      13018: 'NorbitiWBMSe', 14000: 'HydroSweep3DS', 14001: 'HydroSweep3MD50', 14002: 'HydroSweep3MD30'}
 
 
 class X7kRead:
@@ -159,8 +174,6 @@ class X7kRead:
             self.eof = True
 
         if not self.eof:
-            if self.hdr_read and not self.data_read:
-                self.packet.skipdata()
             try:
                 if self.intype == '7k':
                     self.read7k(verbose)
@@ -260,6 +273,7 @@ class X7kRead:
         self.corrupt_record = False
         self.last_record_sz = 0
         self.split_record = False
+        self.filelen = self.max_filelen
 
     def findpacket(self, datatype, verbose=True):
         """Finds the requested packet type and reads the packet"""
@@ -307,12 +321,13 @@ class X7kRead:
         #   search for \x00\x00\xff\xff, need to also find protocol version to get it all matched up correctly
         while not self.at_right_byte:
             cur_ptr = self.infile.tell()
-            if cur_ptr >= self.start_ptr + self.filelen:
+            if cur_ptr >= self.start_ptr + self.filelen - 4:  # minus four for the seek we do to get ready for the next search
                 self.eof = True
-                raise ValueError('prr3: Unable to find sonar startbyte, is this sonar supported?')
+                raise ValueError('Unable to find sonar startbyte, is this sonar supported?')
+
             # consider start bytes right at the end of the given filelength as valid, even if they extend
             # over to the next chunk
-            srchdat = self.infile.read(min(20, (self.start_ptr + self.filelen) - cur_ptr))
+            srchdat = self.infile.read(min(100, (self.start_ptr + self.filelen) - cur_ptr))
             stx_idx = 1
             # First loop through is mandatory to find a startbyte
             while stx_idx >= 0:
@@ -530,6 +545,112 @@ class X7kRead:
         print('status of the current record is corrupt: ' + str(self.corrupt_record))
         print('location in file (bytes from start): ' + str(self.infile.tell()))
 
+    def fast_read_start_end_time(self):
+        """
+        Get the start and end time for the dataset without mapping the file
+
+        Returns
+        -------
+        list, [starttime: float, first time stamp in data, endtime: float, last time stamp in data]
+
+        """
+        starttime = None
+        endtime = None
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
+        startptr = self.start_ptr
+
+        # Read the first records till you get one that has time in the packet (most recs at this point i believe)
+        while starttime is None:
+            self.read()
+            try:
+                starttime = self.packet.time
+            except AttributeError:  # no time for this packet
+                self.read()
+                try:
+                    starttime = self.packet.time
+                except AttributeError:
+                    raise ValueError('Prr3: Unable to read the time of the first record.')
+        if starttime is None:
+            raise ValueError('Prr3: Unable to find a suitable packet to read the start time of the file')
+
+        # Move the start/end file pointers towards the end of the file and get the last available time
+        self.infile.seek(0, 2)
+        # the last record is the file manifest, this can be huge, and you need to start reading before it.  Pick a large
+        #   number that should be larger than the file manifest.
+        chunksize = min(10000000, self.infile.tell())  # pick 10MB of reading just to make sure you get some valid records, or the filelength if it is less than that
+        self.at_right_byte = False
+        eof = self.infile.tell()
+        self.start_ptr = eof - chunksize
+        self.end_ptr = eof
+        self.filelen = chunksize
+
+        self.infile.seek(self.start_ptr)
+        self.eof = False
+        while not self.eof:
+            self.read()
+            try:
+                endtime = self.packet.time
+            except:
+                pass
+        if endtime is None:
+            raise ValueError('Unable to find a suitable packet to read the end time of the file')
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
+        self.eof = False
+        self.start_ptr = startptr
+        return [starttime, endtime]
+
+    def fast_read_serial_number(self):
+        """
+        Get the serial numbers and model number of the provided file
+
+        Returns
+        -------
+        list, [serialnumber: int, secondaryserialnumber: int, sonarmodelnumber: str]
+
+        """
+        found_install_params = False
+        found_modelnum = False
+        recs_skipped = 0
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
+        startptr = self.start_ptr
+
+        serialnumber = 0
+        serialnumbertwo = 0
+        sonarmodel = ''
+
+        self.infile.seek(0)
+        while not found_install_params or not found_modelnum:
+            self.read()
+            datagram_type = str(self.packet.dtype)
+            if datagram_type not in ['7030', '7001']:
+                recs_skipped += 1
+                if recs_skipped == 10:
+                    print('Warning: not finding the installation parameters records (7001 and 7030) at the beginning of {}'.format(self.infilename))
+                continue
+            self.get()
+            if datagram_type == '7001':
+                try:
+                    serialnumber = self.packet.subpack.serial_one
+                    serialnumbertwo = self.packet.subpack.serial_two
+                except:
+                    raise ValueError('Error: unable to find the serial number records in the Data7001 record')
+                found_install_params = True
+            elif datagram_type == '7030':
+                try:
+                    sonarmodel = self.packet.subpack.translated_settings['sonar_model_number']
+                except:
+                    raise ValueError('Error: unable to find the translated sonar model number in the Data7030 record')
+                found_modelnum = True
+
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
+        self.eof = False
+        self.start_ptr = startptr
+        return [serialnumber, serialnumbertwo, sonarmodel]
+
 
 class Datagram:
     """Designed to read the data frame header, data, and data footer from a
@@ -580,7 +701,10 @@ class Datagram:
         """Calls the correct class to read the data part of the data frame"""
         dgram = get_datagram_by_number(self.dtype)
         if dgram is not None:
-            self.subpack = dgram(self.datablock, self.time)
+            if self.dtype == 7030:
+                self.subpack = dgram(self.datablock, self.time, self.header['DeviceIdentifier'])
+            else:
+                self.subpack = dgram(self.datablock, self.time)
             self.decoded = True
         else:
             self.subpack = None
@@ -1009,6 +1133,28 @@ class Data1016(BaseData):
         self.Heading = np.rad2deg(data['Heading'])
 
 
+class Data1020(BaseData):
+    """
+    Sonar Installation Identifiers
+    """
+    hdr_dtype = np.dtype([('SystemIdentificationNumber', 'u4'), ('TransmitterID', 'u4'), ('ReceiverID', 'u4'),
+                          ('StandardConfigurationOOptions', 'u4'), ('ConfigurationFixedParameters', 'u4'),
+                          ('TxLength', 'f4'), ('TxWidth', 'f4'), ('TxHeight', 'f4'), ('TxRadius', 'f4'),
+                          ('SRPtoTxX', 'f4'), ('SRPtoTxY', 'f4'), ('SRPtoTxZ', 'f4'),
+                          ('TxRoll', 'f4'), ('TxPitch', 'f4'), ('TxYaw', 'f4'),
+                          ('RxLength', 'f4'), ('RxWidth', 'f4'), ('RxHeight', 'f4'), ('RxRadius', 'f4'),
+                          ('SRPtoRxX', 'f4'), ('SRPtoRxY', 'f4'), ('SRPtoRxZ', 'f4'),
+                          ('RxRoll', 'f4'), ('RxPitch', 'f4'), ('RxYaw', 'f4'),
+                          ('Frequency', 'f4'), ('VRPtoSRPX', 'f4'), ('VRPtoSRPY', 'f4'), ('VRPtoSRPZ', 'f4'),
+                          ('CableLength', 'f4'), ('Reserved', '44u1')])
+
+    def __init__(self, datablock, utctime, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data1020, self).__init__(datablock, read_limit=read_limit)
+        self.time = utctime
+
+
 class Data7000(BaseData):
     """
     Sonar Settings datagram
@@ -1033,6 +1179,11 @@ class Data7000(BaseData):
         the decoder for the rest of the record."""
         super(Data7000, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
+        self.settings = None
+        self.translate_settings()
+
+    def translate_settings(self):
+        self.settings = {}
 
 
 class Data7001(BaseData):
@@ -1592,6 +1743,58 @@ class Data7028(BaseData):
                 beam_data = struct.unpack(fmt_data, datablock[strt_counter:strt_counter + data_sz])
                 strt_counter += data_sz
                 self.snippets[int(self.descriptor[beam, 0]), startoffset: startoffset + self.beamwindow[beam]] = beam_data
+
+
+class Data7030(BaseData):
+    """
+    Sonar Installation Parameters
+    """
+    hdr_dtype = np.dtype([('Frequency', 'f4'), ('LengthFirmwareVersion', 'u2'), ('FirmwareVersion', '128u1'), ('LengthSoftwareVersion', 'u2'),
+                          ('SoftwareVersion', '128u1'), ('LengthSevenkSoftwareVersion', 'u2'), ('SevenkSoftwareVersion', '128u1'),
+                          ('LengthProtocolVersion', 'u2'), ('ProtocolVersion', '128u1'), ('TransmitX', 'f4'), ('TransmitY', 'f4'),
+                          ('TransmitZ', 'f4'), ('TransmitRoll', 'f4'), ('TransmitPitch', 'f4'), ('TransmitHeading', 'f4'),
+                          ('ReceiveX', 'f4'), ('ReceiveY', 'f4'), ('ReceiveZ', 'f4'), ('ReceiveRoll', 'f4'), ('ReceivePitch', 'f4'),
+                          ('ReceiveHeading', 'f4'), ('MotionX', 'f4'), ('MotionY', 'f4'), ('MotionZ', 'f4'), ('MotionRoll', 'f4'),
+                          ('MotionPitch', 'f4'), ('MotionHeading', 'f4'), ('MotionTimeDelay', 'u2'), ('PositionX', 'f4'),
+                          ('PositionY', 'f4'), ('PositionZ', 'f4'), ('PositionTimeDelay', 'u2'), ('Waterline', 'f4')])
+
+    def __init__(self, datablock, utctime, device_id: int, read_limit=None):
+        """Catches the binary datablock and decodes the first section and calls
+        the decoder for the rest of the record."""
+        super(Data7030, self).__init__(datablock, read_limit=read_limit)
+        self.deviceid = device_id
+        self.time = utctime
+        self.translated_firmwareversion = ''.join([chr(i) for i in self.FirmwareVersion[0] if i != 0])
+        self.translated_softwareversion = ''.join([chr(i) for i in self.SoftwareVersion[0] if i != 0])
+        self.translated_7kversion = ''.join([chr(i) for i in self.SevenkSoftwareVersion[0] if i != 0])
+        self.translated_protocolversion = ''.join([chr(i) for i in self.ProtocolVersion[0] if i != 0])
+
+        self.translated_settings = None
+        self.translate_settings()
+
+    def translate_settings(self):
+        try:
+            modelnum = device_identifiers[self.deviceid]
+        except:
+            print(f'Data1020: Unrecognized device identifier: {self.deviceid}')
+            modelnum = 'Unknown'
+        # translated settings will be in the Kongsberg convention, which is what Kluster follows
+        self.translated_settings = {'sonar_model_number': modelnum, 'transducer_1_vertical_location': -round(float(self.TransmitZ), 3),
+                                    'transducer_1_along_location': round(float(self.TransmitY), 3), 'transducer_1_athwart_location': round(float(self.TransmitX), 3),
+                                    'transducer_1_heading_angle': round(float(self.TransmitHeading), 3), 'transducer_1_roll_angle': round(float(self.TransmitRoll), 3),
+                                    'transducer_1_pitch_angle': round(float(self.TransmitPitch), 3), 'transducer_2_vertical_location': -round(float(self.ReceiveZ), 3),
+                                    'transducer_2_along_location': round(float(self.ReceiveY), 3), 'transducer_2_athwart_location': round(float(self.ReceiveX), 3),
+                                    'transducer_2_heading_angle': round(float(self.ReceiveHeading), 3), 'transducer_2_roll_angle': round(float(self.ReceiveRoll), 3),
+                                    'transducer_2_pitch_angle': round(float(self.ReceivePitch), 3), 'position_1_time_delay': round(float(self.PositionTimeDelay), 3),
+                                    'position_1_vertical_location': -round(float(self.PositionZ), 3), 'position_1_along_location': -round(float(self.PositionY), 3),
+                                    'position_1_athwart_location': round(float(self.PositionX), 3), 'motion_sensor_1_time_delay': round(float(self.MotionTimeDelay), 3),
+                                    'motion_sensor_1_vertical_location': -round(float(self.MotionZ), 3), 'motion_sensor_1_along_location': round(float(self.MotionY), 3),
+                                    'motion_sensor_1_athwart_location': round(float(self.MotionX), 3), 'motion_sensor_1_roll_angle': round(float(self.MotionRoll), 3),
+                                    'motion_sensor_1_pitch_angle': round(float(self.MotionPitch), 3), 'motion_sensor_1_heading_angle': round(float(self.MotionHeading), 3),
+                                    'waterline_vertical_location': round(float(self.Waterline), 3), 'system_main_head_serial_number': 0,
+                                    'tx_serial_number': 0, 'tx_2_serial_number': 0, 'firmware_version': self.FirmwareVersion,
+                                    'software_version': self.SoftwareVersion, 'sevenk_version': self.SevenkSoftwareVersion,
+                                    'protocol_version': self.ProtocolVersion}
 
 
 class Data7041(BaseData):
