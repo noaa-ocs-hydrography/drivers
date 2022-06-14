@@ -1772,29 +1772,35 @@ class Data7030(BaseData):
         self.translated_settings = None
         self.translate_settings()
 
+    def _format_num(self, rawnum: float):
+        if rawnum == 0:
+            return '0.000'
+        else:
+            return "{:.3f}".format(round(float(rawnum), 3))
+
     def translate_settings(self):
         try:
             modelnum = device_identifiers[self.deviceid]
         except:
-            print(f'Data1020: Unrecognized device identifier: {self.deviceid}')
+            print(f'Data7030: Unrecognized device identifier: {self.deviceid}')
             modelnum = 'Unknown'
-        # translated settings will be in the Kongsberg convention, which is what Kluster follows
-        self.translated_settings = {'sonar_model_number': modelnum, 'transducer_1_vertical_location': -round(float(self.TransmitZ), 3),
-                                    'transducer_1_along_location': round(float(self.TransmitY), 3), 'transducer_1_athwart_location': round(float(self.TransmitX), 3),
-                                    'transducer_1_heading_angle': round(float(self.TransmitHeading), 3), 'transducer_1_roll_angle': round(float(self.TransmitRoll), 3),
-                                    'transducer_1_pitch_angle': round(float(self.TransmitPitch), 3), 'transducer_2_vertical_location': -round(float(self.ReceiveZ), 3),
-                                    'transducer_2_along_location': round(float(self.ReceiveY), 3), 'transducer_2_athwart_location': round(float(self.ReceiveX), 3),
-                                    'transducer_2_heading_angle': round(float(self.ReceiveHeading), 3), 'transducer_2_roll_angle': round(float(self.ReceiveRoll), 3),
-                                    'transducer_2_pitch_angle': round(float(self.ReceivePitch), 3), 'position_1_time_delay': round(float(self.PositionTimeDelay), 3),
-                                    'position_1_vertical_location': -round(float(self.PositionZ), 3), 'position_1_along_location': -round(float(self.PositionY), 3),
-                                    'position_1_athwart_location': round(float(self.PositionX), 3), 'motion_sensor_1_time_delay': round(float(self.MotionTimeDelay), 3),
-                                    'motion_sensor_1_vertical_location': -round(float(self.MotionZ), 3), 'motion_sensor_1_along_location': round(float(self.MotionY), 3),
-                                    'motion_sensor_1_athwart_location': round(float(self.MotionX), 3), 'motion_sensor_1_roll_angle': round(float(self.MotionRoll), 3),
-                                    'motion_sensor_1_pitch_angle': round(float(self.MotionPitch), 3), 'motion_sensor_1_heading_angle': round(float(self.MotionHeading), 3),
-                                    'waterline_vertical_location': round(float(self.Waterline), 3), 'system_main_head_serial_number': 0,
-                                    'tx_serial_number': 0, 'tx_2_serial_number': 0, 'firmware_version': self.FirmwareVersion,
-                                    'software_version': self.SoftwareVersion, 'sevenk_version': self.SevenkSoftwareVersion,
-                                    'protocol_version': self.ProtocolVersion}
+        # translated settings will be in the Kongsberg convention, which is what Kluster follows.  Flip the x/y and the z sign convention.
+        self.translated_settings = {'sonar_model_number': modelnum, 'transducer_1_vertical_location': self._format_num(-self.TransmitZ),
+                                    'transducer_1_along_location': self._format_num(self.TransmitY), 'transducer_1_athwart_location': self._format_num(self.TransmitX),
+                                    'transducer_1_heading_angle': self._format_num(self.TransmitHeading), 'transducer_1_roll_angle': self._format_num(np.rad2deg(self.TransmitRoll)),
+                                    'transducer_1_pitch_angle': self._format_num(np.rad2deg(self.TransmitPitch)), 'transducer_2_vertical_location': self._format_num(-self.ReceiveZ),
+                                    'transducer_2_along_location': self._format_num(self.ReceiveY), 'transducer_2_athwart_location': self._format_num(self.ReceiveX),
+                                    'transducer_2_heading_angle': self._format_num(np.rad2deg(self.ReceiveHeading)), 'transducer_2_roll_angle': self._format_num(np.rad2deg(self.ReceiveRoll)),
+                                    'transducer_2_pitch_angle': self._format_num(np.rad2deg(self.ReceivePitch)), 'position_1_time_delay': self._format_num(self.PositionTimeDelay * 1000),  # seconds
+                                    'position_1_vertical_location': self._format_num(-self.PositionZ), 'position_1_along_location': self._format_num(self.PositionY),
+                                    'position_1_athwart_location': self._format_num(self.PositionX), 'motion_sensor_1_time_delay': self._format_num(self.MotionTimeDelay * 1000),
+                                    'motion_sensor_1_vertical_location': self._format_num(-self.MotionZ), 'motion_sensor_1_along_location': self._format_num(self.MotionY),
+                                    'motion_sensor_1_athwart_location': self._format_num(self.MotionX), 'motion_sensor_1_roll_angle': self._format_num(np.rad2deg(self.MotionRoll)),
+                                    'motion_sensor_1_pitch_angle': self._format_num(np.rad2deg(self.MotionPitch)), 'motion_sensor_1_heading_angle': self._format_num(np.rad2deg(self.MotionHeading)),
+                                    'waterline_vertical_location': self._format_num(-self.Waterline), 'system_main_head_serial_number': '0',
+                                    'tx_serial_number': '0', 'tx_2_serial_number': '0', 'firmware_version': self.translated_firmwareversion,
+                                    'software_version': self.translated_softwareversion, 'sevenk_version': self.translated_7kversion,
+                                    'protocol_version': self.translated_protocolversion}
 
 
 class Data7041(BaseData):
