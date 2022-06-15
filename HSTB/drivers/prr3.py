@@ -88,7 +88,7 @@ recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': Non
 
 # Appendix B - Device identifier lookup to retrieve model number
 device_identifiers = {20: 'T20', 22: 'T20Dual', 30: 'F30', 50: 'T50', 51: 'T51', 52: 'T50Dual', 103: 'GenericMBES',
-                      1000: 'OdomMB1', 1002: 'OdomMB2', 4013: 'TC4013', 7005: 'ProScan', 7012: '7012', 7100: '7100',
+                      1000: 'OdomMB1', 1002: 'OdomMB2', 4013: 'TC4013', 7003: 'PDS', 7005: 'ProScan', 7012: '7012', 7100: '7100',
                       7101: '7101', 7102: '7102', 7111: '7111', 7112: '7112', 7123: '7123', 7125: '7125', 7128: '7128',
                       7130: '7130', 7150: '7150', 7160: '7160', 8100: '8100', 8101: '8101', 8102: '8102', 8111: '8111',
                       8123: '8123', 8124: '8124', 8125: '8125', 8128: '8128', 8150: '8150', 8160: '8160', 9000: 'E20',
@@ -545,6 +545,38 @@ class X7kRead:
         print('status of the current record is corrupt: ' + str(self.corrupt_record))
         print('location in file (bytes from start): ' + str(self.infile.tell()))
 
+    def has_datagram(self, datagramnum: int, max_records: int = 50):
+        """
+        Search for the given datagram sequentially through the file.  A fast way of finding a datagram you expect
+        at the beginning without mapping the file first.  If max records is provided, only search through that many
+        records.
+        """
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
+        startptr = self.start_ptr
+
+        # Read the first records till you get one that the given dtype
+        self.infile.seek(0)
+        currecords = 0
+        while not self.eof:
+            if max_records and currecords >= max_records:
+                break
+            self.read()
+            currecords += 1
+            datagram_type = str(self.packet.dtype)
+            if datagram_type == str(datagramnum):
+                self.infile.seek(curptr)
+                self.at_right_byte = cur_startstatus
+                self.eof = False
+                self.start_ptr = startptr
+                return True
+
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
+        self.eof = False
+        self.start_ptr = startptr
+        return False
+
     def fast_read_start_end_time(self):
         """
         Get the start and end time for the dataset without mapping the file
@@ -559,8 +591,10 @@ class X7kRead:
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         curptr = self.infile.tell()
         startptr = self.start_ptr
+        oldfilelen = self.filelen
 
         # Read the first records till you get one that has time in the packet (most recs at this point i believe)
+        self.infile.seek(0)
         while starttime is None:
             self.read()
             try:
@@ -575,30 +609,33 @@ class X7kRead:
             raise ValueError('Prr3: Unable to find a suitable packet to read the start time of the file')
 
         # Move the start/end file pointers towards the end of the file and get the last available time
-        self.infile.seek(0, 2)
         # the last record is the file manifest, this can be huge, and you need to start reading before it.  Pick a large
-        #   number that should be larger than the file manifest.
-        chunksize = min(10000000, self.infile.tell())  # pick 10MB of reading just to make sure you get some valid records, or the filelength if it is less than that
-        self.at_right_byte = False
-        eof = self.infile.tell()
-        self.start_ptr = eof - chunksize
-        self.end_ptr = eof
-        self.filelen = chunksize
+        #   number that should be larger than the file manifest.  Start small, get bigger
+        self.infile.seek(0, 2)
+        chunks = [min(15000000, self.infile.tell()), min(30000000, self.infile.tell()), min(60000000, self.infile.tell())]
+        for chunksize in chunks:
+            self.at_right_byte = False
+            eof = self.max_filelen
+            self.start_ptr = eof - chunksize
+            self.end_ptr = eof
+            self.filelen = chunksize
 
-        self.infile.seek(self.start_ptr)
-        self.eof = False
-        while not self.eof:
-            self.read()
-            try:
-                endtime = self.packet.time
-            except:
-                pass
-        if endtime is None:
-            raise ValueError('Unable to find a suitable packet to read the end time of the file')
+            self.infile.seek(self.start_ptr)
+            self.eof = False
+            while not self.eof:
+                try:
+                    self.read()
+                    endtime = self.packet.time
+                except:
+                    pass
+            if endtime:
+                break
         self.infile.seek(curptr)
+        self.filelen = oldfilelen
         self.at_right_byte = cur_startstatus
         self.eof = False
         self.start_ptr = startptr
+
         return [starttime, endtime]
 
     def fast_read_serial_number(self):
@@ -612,7 +649,6 @@ class X7kRead:
         """
         found_install_params = False
         found_modelnum = False
-        recs_skipped = 0
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         curptr = self.infile.tell()
         startptr = self.start_ptr
@@ -621,28 +657,31 @@ class X7kRead:
         serialnumbertwo = 0
         sonarmodel = ''
 
+        if not self.has_datagram(7001, 20):
+            print('Warning: Unable to find Datagram 7001 in the first 20 records, serial number will be 0')
+            found_install_params = True
+
         self.infile.seek(0)
         while not found_install_params or not found_modelnum:
             self.read()
             datagram_type = str(self.packet.dtype)
-            if datagram_type not in ['7030', '7001']:
-                recs_skipped += 1
-                if recs_skipped == 10:
-                    print('Warning: not finding the installation parameters records (7001 and 7030) at the beginning of {}'.format(self.infilename))
+            if datagram_type not in ['7000', '7027', '7001']:
                 continue
-            self.get()
-            if datagram_type == '7001':
+
+            if datagram_type == '7001' and not found_install_params:
+                self.get()
                 try:
                     serialnumber = self.packet.subpack.serial_one
                     serialnumbertwo = self.packet.subpack.serial_two
                 except:
                     raise ValueError('Error: unable to find the serial number records in the Data7001 record')
                 found_install_params = True
-            elif datagram_type == '7030':
+            elif datagram_type in ['7000', '7027'] and not found_modelnum:
+                self.get()
                 try:
-                    sonarmodel = self.packet.subpack.translated_settings['sonar_model_number']
+                    sonarmodel = device_identifiers[self.packet.header['DeviceIdentifier']]
                 except:
-                    raise ValueError('Error: unable to find the translated sonar model number in the Data7030 record')
+                    raise ValueError('Error: unable to find the translated sonar model number in the Data7027 record')
                 found_modelnum = True
 
         self.infile.seek(curptr)
@@ -1208,19 +1247,34 @@ class Data7001(BaseData):
         numdevices = self.header[1]
         data_sz = self.device_header.itemsize
         datapointer = 0
+        if not numdevices:
+            print('Warning: Unable to find hardware devices in Datagram 7001, serial number is unknown.')
         for i in range(numdevices):
             device_data = list(np.frombuffer(datablock[datapointer:datapointer + data_sz], dtype=self.device_header)[0])
             datapointer += data_sz
             variable_length = device_data[-1]
             info_data = list(np.frombuffer(datablock[datapointer: datapointer + variable_length], np.dtype([('DeviceInfo', f'S{variable_length}')]))[0])
-            datapointer += data_sz
+            datapointer += variable_length
             device_data += info_data
-            if i == 0:
-                self.serial_one = device_data[2]
-            elif i == 1:
-                self.serial_two = device_data[2]
-            else:
-                print('WARNING: Found a sonar with more than two devices, which is not supported in Kluster')
+            # descrp looks something like this in its raw state, 'SN3521033\x001\x000\x003\x003'
+            # we just want the integers
+            # sometimes it is just 'n/a', so we just leave serial number attributes as zero
+            descrp = device_data[1].decode()
+            trimmed_descrp = descrp if descrp[:2] != 'SN' else descrp[2:]
+            serialnum = ''
+            for descrpchar in trimmed_descrp:
+                try:
+                    serialnum += str(int(descrpchar))
+                except ValueError:
+                    break
+
+            if serialnum:  # if n/a, this is empty string
+                if i == 0:
+                    self.serial_one = serialnum
+                elif i == 1:
+                    self.serial_two = serialnum
+                else:
+                    print('WARNING: Found a sonar with more than two devices, which is not supported in Kluster')
             self.devices.append(device_data)
 
     def display(self):
