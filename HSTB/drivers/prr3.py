@@ -11,9 +11,10 @@ import os, sys, struct, pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import timedelta, timezone, datetime
+import copy
 
 
-recs_categories_7027 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
+recs_categories_7027 = {'1003': ['time', 'LatitudeNorthing', 'LongitudeEasting', 'Height'],
                         '1009': ['time', 'data.Depth', 'data.SoundSpeed'],
                         '1012': ['time', 'Roll', 'Pitch', 'Heave'],
                         '1013': ['time', 'Heading'],
@@ -21,40 +22,45 @@ recs_categories_7027 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
                         '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
                                  'TravelTime'],
                         '7030': ['time', 'translated_settings'],
-                        '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency']}
+                        '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency', 'BeamSpacingMode',
+                                 'full_settings']}
 
-recs_categories_translator_7027 = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
-                                            'Longitude': [['navigation', 'longitude']],
+recs_categories_translator_7027 = {'1003': {'time': [['navigation', 'time']], 'LatitudeNorthing': [['navigation', 'latitude']],
+                                            'LongitudeEasting': [['navigation', 'longitude']],
                                             'Height': [['navigation', 'altitude']]},
                                    '1009': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                             'SoundSpeed': [['profile', 'soundspeed']]},
                                    '1012': {'time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
-                                            'Pitch': [['attitude', 'pitch']], 'Heading': [['attitude', 'heading']]},
-                                   '1013': {'time': [['attitude', 'htime']], 'Heave': [['attitude', 'heave']]},
-                                   '7001': {'Serial#': [['installation_params', 'serial_one']],
-                                            'Serial#2': [['installation_params', 'serial_two']]},
+                                            'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heading']]},
+                                   '1013': {'time': [['attitude', 'htime']], 'Heading': [['attitude', 'heave']]},
+                                   '7001': {'serial_one': [['installation_params', 'serial_one']],
+                                            'serial_two': [['installation_params', 'serial_two']]},
                                    '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
                                             'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
                                             'Uncertainty': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
                                             'DetectionFlags': [['ping', 'detectioninfo']]},
                                    '7030': {'time': [['installation_params', 'time']],
                                             'translated_settings': [['installation_params', 'installation_settings']]},
-                                   '7503': {'SoundVelocity': [['ping', 'soundspeed']],
+                                   '7503': {'time': [['runtime_params', 'time']],
+                                            'SoundVelocity': [['runtime_params', 'soundspeed']],
                                             'TXPulseTypeID': [['runtime_params', 'mode']],
+                                            'BeamSpacingMode': [['runtime_params', 'modetwo']],
                                             'TransmitFlags': [['runtime_params', 'yawpitchstab']],
-                                            'Frequency': [['ping', 'frequency']]}}
+                                            'Frequency': [['runtime_params', 'frequency']],
+                                            'full_settings': [['runtime_params', 'runtime_settings']]}}
 
-recs_categories_7027_1016 = {'1003': ['time', 'Latitude', 'Longitude', 'Height'],
+recs_categories_7027_1016 = {'1003': ['time', 'LatitudeNorthing', 'LongitudeEasting', 'Height'],
                              '1009': ['time', 'data.Depth', 'data.SoundSpeed'],
                              '1016': ['datatime', 'Roll', 'Pitch', 'Heave', 'Heading'],
                              '7001': ['serial_one', 'serial_two'],
                              '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
                                       'TravelTime'],
                              '7030': ['time', 'translated_settings'],
-                             '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency']}
+                             '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency', 'BeamSpacingMode',
+                                      'full_settings']}
 
-recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
-                                                 'Longitude': [['navigation', 'longitude']],
+recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']], 'LatitudeNorthing': [['navigation', 'latitude']],
+                                                 'LongitudeEasting': [['navigation', 'longitude']],
                                                  'Height': [['navigation', 'altitude']]},
                                         '1009': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                                  'SoundSpeed': [['profile', 'soundspeed']]},
@@ -69,20 +75,22 @@ recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']
                                                  'DetectionFlags': [['ping', 'detectioninfo']]},
                                         '7030': {'time': [['installation_params', 'time']],
                                                  'translated_settings': [['installation_params', 'installation_settings']]},
-                                        '7503': {'SoundVelocity': [['ping', 'soundspeed']],
+                                        '7503': {'time': [['runtime_params', 'time']],
+                                                 'SoundVelocity': [['runtime_params', 'soundspeed']],
                                                  'TXPulseTypeID': [['runtime_params', 'mode']],
+                                                 'BeamSpacingMode': [['runtime_params', 'modetwo']],
                                                  'TransmitFlags': [['runtime_params', 'yawpitchstab']],
-                                                 'Frequency': [['ping', 'frequency']]}}
+                                                 'Frequency': [['runtime_params', 'frequency']],
+                                                 'full_settings': [['runtime_params', 'runtime_settings']]}}
 
-recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
+recs_categories_result = {'attitude':  {'time': None, 'htime': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                                   'installation_settings': None},
-                          'ping': {'time': None, 'counter': None, 'soundspeed': None, 'ntx': None, 'serial_num': None,
-                                   'tiltangle': None, 'delay': None, 'frequency': None,
+                          'ping': {'time': None, 'counter': None, 'tiltangle': None, 'frequency': None,
                                    'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
                                    'qualityfactor': None, 'traveltime': None},
-                          'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
-                                             'runtime_settings': None},
+                          'runtime_params': {'time': None, 'soundspeed': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
+                                             'frequency': None, 'runtime_settings': None},
                           'profile': {'time': None, 'depth': None, 'soundspeed': None},
                           'navigation': {'time': None, 'latitude': None, 'longitude': None, 'altitude': None}}
 
@@ -545,17 +553,23 @@ class X7kRead:
         print('status of the current record is corrupt: ' + str(self.corrupt_record))
         print('location in file (bytes from start): ' + str(self.infile.tell()))
 
-    def has_datagram(self, datagramnum: int, max_records: int = 50):
+    def has_datagram(self, datagramnum, max_records: int = 50):
         """
         Search for the given datagram sequentially through the file.  A fast way of finding a datagram you expect
         at the beginning without mapping the file first.  If max records is provided, only search through that many
         records.
         """
+        if not isinstance(datagramnum, list):
+            datagramnum = [datagramnum]
+        datagramnum = [str(dg) for dg in datagramnum]
+        founddatagram = [False] * len(datagramnum)
+
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         curptr = self.infile.tell()
         startptr = self.start_ptr
 
         # Read the first records till you get one that the given dtype
+        found = False
         self.infile.seek(0)
         currecords = 0
         while not self.eof:
@@ -564,20 +578,19 @@ class X7kRead:
             self.read()
             currecords += 1
             datagram_type = str(self.packet.dtype)
-            if datagram_type == str(datagramnum):
-                self.infile.seek(curptr)
-                self.at_right_byte = cur_startstatus
-                self.eof = False
-                self.start_ptr = startptr
-                return True
+            if datagram_type in datagramnum:
+                founddatagram[datagramnum.index(datagram_type)] = True
+            if all(founddatagram):
+                found = True
+                break
 
         self.infile.seek(curptr)
         self.at_right_byte = cur_startstatus
         self.eof = False
         self.start_ptr = startptr
-        return False
+        return found
 
-    def fast_read_start_end_time(self):
+    def fast_read_start_end_time(self, only_start = False):
         """
         Get the start and end time for the dataset without mapping the file
 
@@ -607,6 +620,13 @@ class X7kRead:
                     raise ValueError('Prr3: Unable to read the time of the first record.')
         if starttime is None:
             raise ValueError('Prr3: Unable to find a suitable packet to read the start time of the file')
+        if only_start:
+            self.infile.seek(curptr)
+            self.filelen = oldfilelen
+            self.at_right_byte = cur_startstatus
+            self.eof = False
+            self.start_ptr = startptr
+            return starttime, None
 
         # Move the start/end file pointers towards the end of the file and get the last available time
         # the last record is the file manifest, this can be huge, and you need to start reading before it.  Pick a large
@@ -689,6 +709,114 @@ class X7kRead:
         self.eof = False
         self.start_ptr = startptr
         return [serialnumber, serialnumbertwo, sonarmodel]
+
+    def return_empty_installparams(self, model_num: str = '', serial_num_one: str = '', serial_num_two: str = ''):
+        starttime, _ = self.fast_read_start_end_time(only_start=True)
+        isets = {'sonar_model_number': model_num, 'transducer_1_vertical_location': '0.000',
+                 'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
+                 'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
+                 'transducer_1_pitch_angle': '0.000', 'transducer_2_vertical_location': '0.000',
+                 'transducer_2_along_location': '0.000', 'transducer_2_athwart_location': '0.000',
+                 'transducer_2_heading_angle': '0.000', 'transducer_2_roll_angle': '0.000',
+                 'transducer_2_pitch_angle': '0.000', 'position_1_time_delay': '0.000',  # seconds
+                 'position_1_vertical_location': '0.000', 'position_1_along_location': '0.000',
+                 'position_1_athwart_location': '0.000', 'motion_sensor_1_time_delay': '0.000',
+                 'motion_sensor_1_vertical_location': '0.000', 'motion_sensor_1_along_location': '0.000',
+                 'motion_sensor_1_athwart_location': '0.000', 'motion_sensor_1_roll_angle': '0.000',
+                 'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
+                 'waterline_vertical_location': '0.000', 'system_main_head_serial_number': '0',
+                 'tx_serial_number': '0', 'tx_2_serial_number': '0', 'firmware_version': '',
+                 'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
+        finalrec = {'installation_params': {'time': starttime, 'serial_one': serial_num_one, 'serial_two': serial_num_two,
+                                            'installation_settings': isets}}
+        return finalrec
+
+    def sequential_read_records(self, first_installation_rec=False):
+        """
+        Using global recs_categories, parse out only the given datagram types by reading headers and decoding only
+        the necessary datagrams.
+
+        """
+        serialnumber, serialnumbertwo, sonarmodelnumber = self.fast_read_serial_number()
+
+        # first determine whether we need to use 1016 or the 1012/1013 pair for sensor data
+        if self.has_datagram([1012, 1013], 300):
+            categories = recs_categories_7027
+            category_translator = recs_categories_translator_7027
+        elif self.has_datagram(1016, 300):
+            categories = recs_categories_7027_1016
+            category_translator = recs_categories_translator_7027_1016
+        else:
+            raise ValueError('prr3: Attempted to read Reson s7k data using either 1012,1013 or 1016 for sensor data, unable to find either')
+        has_installation_rec = self.has_datagram(7030, 20)
+        if not has_installation_rec and first_installation_rec:
+            return self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo)
+        decoded_runtime = False
+
+        # recs_to_read is the returned dict of records parsed from the file
+        recs_to_read = copy.deepcopy(recs_categories_result)
+        recs_count = dict([(k, 0) for k in recs_to_read])
+
+        if self.start_ptr:
+            self.at_right_byte = False  # for now assume that if a custom start pointer is provided, we need to seek the start byte
+        self.infile.seek(self.start_ptr)
+        self.eof = False
+        while not self.eof:
+            self.read()  # find the start of the record and read the header
+            datagram_type = str(self.packet.dtype)
+            if datagram_type in list(categories.keys()):  # if the header indicates this is a record you want...
+                for rec_ident in list(category_translator[datagram_type].values())[0]:
+                    recs_count[rec_ident[0]] += 1
+                self.get()  # read the rest of the datagram and decode the data
+                rec = self.packet.subpack
+                if rec is not None:
+                    for subrec in categories[datagram_type]:
+                        #  override for nested recs, designated with periods in the recs_to_read dict
+                        if subrec.find('.') > 0:
+                            tmprec = getattr(rec, subrec.split('.')[0])
+                            subrec = subrec.split('.')[1]
+                        else:
+                            tmprec = rec
+
+                        val = None
+                        if subrec == 'translated_settings':
+                            val = [getattr(tmprec, subrec)]
+                        elif subrec == 'Height' and tmprec is None:  # handle case where gg_data is not found
+                            val = [np.nan]
+                        elif subrec == 'full_settings':
+                            if not decoded_runtime:
+                                val = [getattr(tmprec, subrec)]
+                                decoded_runtime = True
+                            else:
+                                continue
+                        else:
+                            try:  # flow for array/list attribute
+                                val = list(getattr(tmprec, subrec))
+                            except TypeError:  # flow for float/int attribute
+                                try:
+                                    val = [getattr(tmprec, subrec)]
+                                except ValueError:  # it just isn't there
+                                    print('prr3: Unable to read {}: {} - {}'.format(datagram_type, tmprec, subrec))
+                                    val = []
+                            except AttributeError:  # flow for nested recs
+                                try:
+                                    val = [tmprec[subrec]]
+                                except (TypeError, ValueError):  # it just isn't there
+                                    print('prr3: Unable to read {}: {} - {}'.format(datagram_type, tmprec, subrec))
+                                    val = []
+
+                        # generate new list or append to list for each rec of that dgram type found
+                        for translated in category_translator[datagram_type][subrec]:
+                            if recs_to_read[translated[0]][translated[1]] is None:
+                                recs_to_read[translated[0]][translated[1]] = copy.copy(val)
+                            else:
+                                recs_to_read[translated[0]][translated[1]].extend(val)
+
+            if datagram_type == '7030' and first_installation_rec:
+                self.eof = True
+        # recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber)
+        recs_to_read['format'] = 's7k'
+        return recs_to_read
 
 
 class Datagram:
@@ -1451,7 +1579,7 @@ class Data7007(BaseData):
             dgram = Data7007Beams
             dgram.hdr_dtype = np.dtype([('PortBeams', dtyp), ('StarboardBeams', dtyp)])
         else:
-            print(f'Datagram 7006: Unexpected Datablock size, {len(datablock)} not equal to {self.numbeams} * {self.numbytes} * 2')
+            print(f'Datagram 7007: Unexpected Datablock size, {len(datablock)} not equal to {self.numbeams} * {self.numbytes} * 2')
             return
         dgram.hdr_sz = dgram.hdr_dtype.itemsize
         self.data = dgram(datablock)
@@ -1748,11 +1876,23 @@ class Data7027(BaseData):
         self.read(datablock[self.hdr_sz:])
 
     def read(self, datablock):
-        detect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
+        newdetect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
                                  ('Quality', 'u4'), ('Uncertainty', 'f4'), ('Intensity', 'f4'), ('MinLimit', 'f4'), ('MaxLimit', 'f4')])
-        self.data = np.frombuffer(datablock, dtype=detect_dtype, count=self.numdetections)
+        # from reson dfd 2.41
+        olddetect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
+                                    ('Quality', 'u4'), ('Uncertainty', 'f4'), ('SignalStrength', 'f4')])
+        # from reson dfd 2.20
+        evenolderdetect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
+                                          ('Quality', 'u4'), ('Uncertainty', 'f4')])
+        decoded = False
+        for dtyp in [newdetect_dtype, olddetect_dtype, evenolderdetect_dtype]:
+            if dtyp.itemsize * self.numdetections == len(datablock):
+                self.data = np.frombuffer(datablock, dtype=dtyp, count=self.numdetections)
+                decoded = True
+        if not decoded:
+            raise ValueError('Data7027: Unable to decode datagram, tried all known data format definitions for this datagram')
         self.RxAngle = np.rad2deg(self.data['RxAngle'])
-        self.TxAngleArray = np.full(self.RxAngle.size, self.TxAngle, dtype=np.float32).size
+        self.TxAngleArray = np.full(self.RxAngle.size, self.TxAngle, dtype=np.float32)
         self.Uncertainty = self.data['Uncertainty']
         self.TravelTime = self.data['DetectionPoint'] / self.SamplingRate
         self.DetectionFlags = self.data['DetectionFlags']
@@ -2093,7 +2233,7 @@ class Data7503(BaseData):
             self.hdr_sz = self.hdr_dtype.itemsize
             super(Data7503, self).__init__(datablock, read_limit=read_limit)
             self.time = utctime
-            self.ky_data7503_translator = {'SonarID': 'system_main_head_serial_number', 'SampleRate': 'sample_rate_hertz',
+            self.ky_data7503_translator = {'SonarID': 'sonar_id', 'SampleRate': 'sample_rate_hertz',
                                            'ReceiverBandwidth': 'receiver_bandwidth_3db_hertz', 'TXPulseWidth': 'tx_pulse_width_seconds',
                                            'TXPulseTypeID': 'tx_pulse_type_id', 'TXPulseEnvelope': 'tx_pulse_envelope_identifier',
                                            'TXPulseEnvelopeParameter': 'tx_pulse_envelope_parameter', 'TXPulseMode': 'tx_single_multiping_mode',
@@ -2187,33 +2327,28 @@ class Data7503(BaseData):
         Return the translated offsets, angles in a format that matches our Kluster/Kongsberg format.  We do some math to get
         us to the arrays rel ref point.  Also add in some blank entries for angles, IMU location that we use in Kluster.
         """
-        settings = {'waterline_vertical_location': '0.000', 'transducer_0_heading_angle': '0.000', 'transducer_0_roll_angle': '0.000',
-                    'transducer_0_pitch_angle': '0.000', 'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
-                    'transducer_1_pitch_angle': '0.000', 'motion_sensor_1_vertical_location': '0.000', 'motion_sensor_1_along_location': '0.000',
-                    'motion_sensor_1_athwart_location': '0.000', 'motion_sensor_1_roll_ref_plane': '0.000', 'motion_sensor_1_time_delay': '0.000',
-                    'motion_sensor_1_roll_angle': '0.000', 'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
-                    'active_heading_sensor': 'motion_1'}
+        settings = {}
         # Reson - X = Across, Y = Along, Z = Vertical
         # Reson reference point is the center of the receiver in (x, z) directions, and center of transmitter in y direction
         if 'TxArrayPositionOffsetY' in self.header.dtype.names:  # along ship offset from center of RX to center of TX
             data = self.header['TxArrayPositionOffsetY'][0]
             # this is the TX offset from the sonar reference point
-            settings['transducer_0_along_location'] = '0.0'  # TX Along is always 0 (see ref point)
+            settings['transducer_1_along_refpt_offset'] = '0.0'  # TX Along is always 0 (see ref point)
             # this is the RX offset from the sonar reference point
-            settings['transducer_1_along_location'] = str(round(-float(data), 3))  # RX Along is the reverse of (center of rx to center of tx, center of tx is the rp)
+            settings['transducer_2_along_refpt_offset'] = str(round(-float(data), 3))  # RX Along is the reverse of (center of rx to center of tx, center of tx is the rp)
         else:
-            raise NotImplementedError('prr3: Expected TxArrayPositionOffsetY in Data7503, unable to build offsets')
+            print('prr3: Expected TxArrayPositionOffsetY in Data7503, unable to build offsets')
         if 'TxArrayPositionOffsetX' in self.header.dtype.names:  # across ship offset from center of RX to center of TX
             data = self.header['TxArrayPositionOffsetX'][0]
-            settings['transducer_0_athwart_location'] = str(round(float(data), 3))  # TX Across is (center of rx to center of tx, center of rx is the rp)
-            settings['transducer_1_athwart_location'] = '0.000'  # RX Across is always 0 (see ref point)
+            settings['transducer_1_athwart_refpt_offset'] = str(round(float(data), 3))  # TX Across is (center of rx to center of tx, center of rx is the rp)
+            settings['transducer_2_athwart_refpt_offset'] = '0.000'  # RX Across is always 0 (see ref point)
         else:
-            raise NotImplementedError('prr3: Expected TxArrayPositionOffsetX in Data7503, unable to build offsets')
+            print('prr3: Expected TxArrayPositionOffsetX in Data7503, unable to build offsets')
         if 'TxArrayPositionOffsetZ' in self.header.dtype.names:  # vertical ship offset from center of RX to center of TX
-            settings['transducer_0_vertical_location'] = str(round(-float(data), 3))  # TX Down is the reverse (to make it positive down) of (center of rx to center of tx, center of rx is the rp)
-            settings['transducer_1_vertical_location'] = '0.000'  # RX Offset is always 0 (see ref point)
+            settings['transducer_1_vertical_refpt_offset'] = str(round(-float(data), 3))  # TX Down is the reverse (to make it positive down) of (center of rx to center of tx, center of rx is the rp)
+            settings['transducer_2_vertical_refpt_offset'] = '0.000'  # RX Offset is always 0 (see ref point)
         else:
-            raise NotImplementedError('prr3: Expected TxArrayPositionOffsetZ in Data7503, unable to build offsets')
+            print('prr3: Expected TxArrayPositionOffsetZ in Data7503, unable to build offsets')
         return settings
 
     @property
