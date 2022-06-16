@@ -3851,8 +3851,8 @@ class kmall():
             inst_params = recs_to_read['installation_params']['installation_settings'][0]
             if inst_params is not None and serial_translator is not None:
                 serialnums = list(serial_translator.values())
-                recs_to_read['installation_params']['serial_one'] = serialnums[0]
-                recs_to_read['installation_params']['serial_two'] = serialnums[1]
+                recs_to_read['installation_params']['serial_one'] = np.array(serialnums[0], dtype='uint16')
+                recs_to_read['installation_params']['serial_two'] = np.array(serialnums[1], dtype='uint16')
                 recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 0] = serialnums[0]
                 recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 1] = serialnums[1]
 
@@ -3867,8 +3867,10 @@ class kmall():
                         recs_to_read[rec][dgram] = np.zeros(0, 'U2')
                 elif rec in ['attitude']:  # these recs have time blocks of data in them, need to be concatenated
                     recs_to_read[rec][dgram] = np.concatenate(recs_to_read[rec][dgram])
+                    if dgram in ['roll', 'pitch', 'heave', 'heading']:
+                        recs_to_read[rec][dgram] = recs_to_read[rec][dgram].astype(np.float32)
                 elif rec == 'ping':  # use the argsort indices here to sort by time
-                    if dgram in ['detectioninfo', 'qualityfactor', 'detectioninfo_two']:
+                    if dgram in ['detectioninfo', 'detectioninfo_two']:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.int32)
                     elif dgram == 'yawpitchstab':
                         recs_to_read[rec][dgram] = self.translate_yawpitch_tostring(np.array(recs_to_read[rec][dgram]))
@@ -3876,11 +3878,22 @@ class kmall():
                         recs_to_read[rec][dgram] = self.translate_mode_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram == 'modetwo':
                         recs_to_read[rec][dgram] = self.translate_mode_two_tostring(np.array(recs_to_read[rec][dgram]))
+                    elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor']:
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
+                    elif dgram == 'serial_num':
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint16')
+                    elif dgram == 'txsector_beam':
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint8')
+                    elif dgram == 'counter':
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint32')
                     else:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                     recs_to_read[rec][dgram] = recs_to_read[rec][dgram][idx]
                 else:
-                    recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                    if dgram == 'altitude':
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
+                    else:
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
 
         recs_to_read = self._translate_serial_number_record(recs_to_read, serial_translator)
         recs_to_read = self._ensure_unique_starttime(recs_to_read)

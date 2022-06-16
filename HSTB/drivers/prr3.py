@@ -710,7 +710,7 @@ class X7kRead:
         self.start_ptr = startptr
         return [serialnumber, serialnumbertwo, sonarmodel]
 
-    def return_empty_installparams(self, model_num: str = '', serial_num_one: str = '', serial_num_two: str = ''):
+    def return_empty_installparams(self, model_num: str = '', serial_num_one: int = 0, serial_num_two: int = 0):
         starttime, _ = self.fast_read_start_end_time(only_start=True)
         isets = {'sonar_model_number': model_num, 'transducer_1_vertical_location': '0.000',
                  'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
@@ -726,10 +726,184 @@ class X7kRead:
                  'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
                  'waterline_vertical_location': '0.000', 'system_main_head_serial_number': '0',
                  'tx_serial_number': '0', 'tx_2_serial_number': '0', 'firmware_version': '',
+                 'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
                  'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
-        finalrec = {'installation_params': {'time': starttime, 'serial_one': serial_num_one, 'serial_two': serial_num_two,
-                                            'installation_settings': isets}}
+        finalrec = {'installation_params': {'time': np.array([starttime], dtype=float),
+                                            'serial_one': np.array([serial_num_one], dtype=np.dtype('uint16')),
+                                            'serial_two': np.array([serial_num_two], dtype=np.dtype('uint16')),
+                                            'installation_settings': np.array([isets], dtype=np.object)}}
         return finalrec
+
+    def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber, serialnumber):
+        """
+        Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
+        convert to xarray.  Major steps include
+        - adding empty arrays so that concatenation later on will work
+        - translate the runtime parameters from integer/binary codes to string identifiers for easy reading (and to
+             allow comparing results between different file types)
+        returns: recs_to_read, dict of dicts finalized
+        """
+        # first check for varying number of beams
+        uneven = False
+        maxlen = None
+        if 'ping' in recs_to_read and recs_to_read['ping']['traveltime']:
+            minlen = len(min(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
+            maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
+            if minlen != maxlen:
+                print('prr3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
+                uneven = True
+
+        for rec in recs_to_read:
+            for dgram in recs_to_read[rec]:
+                if recs_count[rec] == 0:
+                    if rec != 'runtime_params' or dgram == 'time':
+                        # found no records, empty array
+                        recs_to_read[rec][dgram] = np.zeros(0)
+                    else:
+                        # found no records, empty array of strings for the mode/stab records
+                        recs_to_read[rec][dgram] = np.zeros(0, 'U2')
+                elif rec in ['attitude', 'navigation']:  # these recs have time blocks of data in them, need to be concatenated
+                    if dgram == 'altitude' and not recs_to_read[rec][dgram]:
+                        pass
+                    else:
+                        if dgram in ['latitude', 'longitude']:
+                            recs_to_read[rec][dgram] = np.rad2deg(np.array(recs_to_read[rec][dgram]))
+                        else:
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                elif rec == 'ping':
+                    if recs_to_read[rec][dgram] is None:  # frequency, txsector_beam are None at first
+                        pass
+                    elif uneven and isinstance(recs_to_read[rec][dgram][0], np.ndarray):
+                        newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=recs_to_read[rec][dgram][0].dtype)
+                        for i, j in enumerate(recs_to_read[rec][dgram]):
+                            newrec[i][0:len(j)] = j
+                        recs_to_read[rec][dgram] = newrec
+                    else:
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                elif rec == 'runtime_params':
+                    if dgram == 'yawpitchstab':
+                        recs_to_read[rec][dgram] = translate_yawpitch(np.array(recs_to_read[rec][dgram]))
+                    elif dgram == 'mode':
+                        recs_to_read[rec][dgram] = translate_mode(np.array(recs_to_read[rec][dgram]))
+                    elif dgram == 'modetwo':
+                        recs_to_read[rec][dgram] = translate_mode_two(np.array(recs_to_read[rec][dgram]))
+                    else:
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                else:
+                    recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+
+        # heading can come from a different record, if the freq is different we address that here
+        if 'htime' in recs_to_read['attitude']:
+            if recs_to_read['attitude']['time'].size != recs_to_read['attitude']['htime'].size:  # get indices of nearest runtime for each ping
+                hindex = np.searchsorted(recs_to_read['attitude']['htime'], recs_to_read['attitude']['time'])
+                recs_to_read['attitude']['heading'] = recs_to_read['attitude']['heading'][hindex]
+            recs_to_read['attitude'].pop('htime')
+
+        # reconfigure the ping/runtime results to match what Kluster wants
+        recs_to_read['ping']['txsector_beam'] = np.zeros(recs_to_read['ping']['detectioninfo'].shape, dtype='uint8')
+        if recs_to_read['ping']['time'].size != recs_to_read['runtime_params']['time'].size:  # get indices of nearest runtime for each ping
+            rindex = np.searchsorted(recs_to_read['runtime_params']['time'], recs_to_read['ping']['time'])
+        else:
+            rindex = np.full(recs_to_read['ping']['time'].shape, True, bool)
+
+        recs_to_read['ping']['soundspeed'] = recs_to_read['runtime_params'].pop('soundspeed')[rindex]
+        recs_to_read['ping']['mode'] = recs_to_read['runtime_params'].pop('mode')[rindex]
+        recs_to_read['ping']['modetwo'] = recs_to_read['runtime_params'].pop('modetwo')[rindex]
+        recs_to_read['ping']['yawpitchstab'] = recs_to_read['runtime_params'].pop('yawpitchstab')[rindex]
+        # shift frequency to the ping container AND expand to ping/beam dimension as Kluster expects this for multisector systems
+        recs_to_read['ping']['frequency'] = recs_to_read['runtime_params'].pop('frequency')[rindex]
+        recs_to_read['ping']['frequency'] = (np.ones_like(recs_to_read['ping']['qualityfactor']) * recs_to_read['ping']['frequency'][:, None])
+        recs_to_read['ping']['frequency'] = recs_to_read['ping']['frequency'].astype('int32')
+
+        recs_to_read['ping']['detectioninfo'] = translate_detectioninfo(recs_to_read['ping']['detectioninfo'])
+
+        # empty records we expect with sector wise systems that we need to cover for Kluster
+        recs_to_read['ping']['serial_num'] = np.full(recs_to_read['ping']['counter'].shape, serialnumber, dtype='uint16')
+        recs_to_read['ping']['delay'] = np.full_like(recs_to_read['ping']['tiltangle'], 0.0)
+
+        # drop the empty altitude record if it is empty
+        if recs_to_read['navigation']['altitude'] is None or len(recs_to_read['navigation']['altitude']) == 0:
+            recs_to_read['navigation'].pop('altitude')
+        else:
+            recs_to_read['navigation']['altitude'] = recs_to_read['navigation']['altitude'].astype(np.float32)
+
+        # cover the instance where there is no 7030 record for instal params
+        if not recs_to_read['installation_params']['time'].any():
+            recs_to_read['installation_params'] = self.return_empty_installparams(sonarmodelnumber, serialnumber)['installation_params']
+
+        recs_to_read['runtime_params']['time'] = np.array([recs_to_read['runtime_params']['time'][0]], dtype=float)
+
+        # # I do this in the other drivers, might include it later
+        # for var in ['latitude', 'longitude']:
+        #     dif = np.abs(np.diff(recs_to_read['navigation'][var]))
+        #     spike_idx = dif >= 1  # just look for spikes greater than one degree, should cover most cases
+        #     spikes = np.count_nonzero(spike_idx)
+        #     remove_these = []
+        #     if spikes:
+        #         try:
+        #             spike_index = np.where(spike_idx)[0] - 3
+        #             varlength = len(recs_to_read['navigation'][var])
+        #             for cnt, spk in enumerate(spike_index):
+        #                 last_good = recs_to_read['navigation'][var][spk - 1]
+        #                 if spk not in remove_these:
+        #                     still_bad = True
+        #                     idx = 1
+        #                     while still_bad:
+        #                         if abs(recs_to_read['navigation'][var][spk + idx] - last_good) > 1:
+        #                             if (spk + idx) not in remove_these:
+        #                                 remove_these.append(spk + idx)
+        #                         elif idx >= 10 or (spk + idx + 1) >= varlength:
+        #                             still_bad = False
+        #                         idx += 1
+        #         except:
+        #             print('Unable to remove navigation spikes')
+        #         # print('Removing {} {} spikes found in navigation record...'.format(len(remove_these), var))
+        #         for rec_type in ['time', 'latitude', 'longitude', 'altitude']:
+        #             if rec_type in recs_to_read['navigation']:
+        #                 recs_to_read['navigation'][rec_type] = np.delete(recs_to_read['navigation'][rec_type],
+        #                                                                  remove_these)
+
+        recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'],
+                                                                  dtype=np.uint8)
+
+        # hack here to ensure that we don't have duplicate times across chunks, modify the first time slightly.
+        #   next chunk might include a duplicate time
+        if recs_to_read['ping']['time'].any() and recs_to_read['ping']['time'].size > 1:
+            recs_to_read['ping']['time'][0] += 0.000010
+
+        # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
+        for dset_name in ['attitude', 'navigation']:
+            # first handle these cases where variables are of a different size vs time, I believe this is some issue with older datasets
+            #  and the data65 record, need to determine the actual cause as the 'fix' used here is not great
+            for dgram in recs_to_read[dset_name]:
+                if dgram != 'time':
+                    try:
+                        assert recs_to_read[dset_name][dgram].shape[0] == recs_to_read[dset_name]['time'].shape[0]
+                    except AssertionError:
+                        dgramsize = recs_to_read[dset_name][dgram].shape[0]
+                        timesize = recs_to_read[dset_name]["time"].shape[0]
+                        msg = f'variable {dgram} has a length of {dgramsize}, where time has a length of {timesize}'
+                        if recs_to_read[dset_name][dgram].ndim == 2:  # shouldn't be seen with attitude/navigation datasets anyway
+                            raise NotImplementedError(msg + ', handling this for 2 dimensional cases is not implemented')
+                        elif timesize < dgramsize:  # trim to time size
+                            recs_to_read[dset_name][dgram] = recs_to_read[dset_name][dgram][:timesize]
+                            print('Warning: ' + msg + f', trimming {dgram} to length {timesize}')
+                        else:
+                            recs_to_read[dset_name][dgram] = np.concatenate([recs_to_read[dset_name][dgram], [recs_to_read[dset_name][dgram][-1]] * (timesize - dgramsize)])
+                            print('Warning: ' + msg + f', filling {dgram} by repeating last element {timesize - dgramsize} times')
+
+            dset = recs_to_read[dset_name]
+            _, index = np.unique(dset['time'], return_index=True)
+            if dset['time'].size != index.size:
+                # print('par3: Found duplicate times in {}, removing...'.format(dset_name))
+                for var in dset:
+                    dset[var] = dset[var][index]
+            if not np.all(dset['time'][:-1] <= dset['time'][1:]):
+                # print('par3: {} is not sorted, sorting...'.format(dset_name))
+                index = np.argsort(dset['time'])
+                for var in dset:
+                    dset[var] = dset[var][index]
+        return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
         """
@@ -814,7 +988,7 @@ class X7kRead:
 
             if datagram_type == '7030' and first_installation_rec:
                 self.eof = True
-        # recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber)
+        recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber, serialnumber)
         recs_to_read['format'] = 's7k'
         return recs_to_read
 
@@ -1891,11 +2065,11 @@ class Data7027(BaseData):
                 decoded = True
         if not decoded:
             raise ValueError('Data7027: Unable to decode datagram, tried all known data format definitions for this datagram')
-        self.RxAngle = np.rad2deg(self.data['RxAngle'])
-        self.TxAngleArray = np.full(self.RxAngle.size, self.TxAngle, dtype=np.float32)
-        self.Uncertainty = self.data['Uncertainty']
-        self.TravelTime = self.data['DetectionPoint'] / self.SamplingRate
-        self.DetectionFlags = self.data['DetectionFlags']
+        self.RxAngle = [np.rad2deg(self.data['RxAngle'])]
+        self.TxAngleArray = [np.full(self.data['RxAngle'].size, self.TxAngle, dtype=np.float32)]
+        self.Uncertainty = [self.data['Uncertainty']]
+        self.TravelTime = [self.data['DetectionPoint'] / self.SamplingRate]
+        self.DetectionFlags = [self.data['DetectionFlags']]
 
 
 class Data7028(BaseData):
@@ -1992,6 +2166,7 @@ class Data7030(BaseData):
                                     'motion_sensor_1_athwart_location': self._format_num(self.MotionX), 'motion_sensor_1_roll_angle': self._format_num(np.rad2deg(self.MotionRoll)),
                                     'motion_sensor_1_pitch_angle': self._format_num(np.rad2deg(self.MotionPitch)), 'motion_sensor_1_heading_angle': self._format_num(np.rad2deg(self.MotionHeading)),
                                     'waterline_vertical_location': self._format_num(-self.Waterline), 'system_main_head_serial_number': '0',
+                                    'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
                                     'tx_serial_number': '0', 'tx_2_serial_number': '0', 'firmware_version': self.translated_firmwareversion,
                                     'software_version': self.translated_softwareversion, 'sevenk_version': self.translated_7kversion,
                                     'protocol_version': self.translated_protocolversion}
@@ -2281,8 +2456,8 @@ class Data7503(BaseData):
         if 'ControlFlags' in self.header.dtype.names:
             data = self.header['ControlFlags'][0]
             binctrl = format(data, '#034b')  # convert to binary, string length 34 to account for the leading '0b' and 32 bits
-            settings['auto_range_method'] = int(binctrl[-4:], 2)
-            settings['auto_bottom_detection_filter_method'] = int(binctrl[-8:-4], 2)
+            settings['auto_range_method'] = str(int(binctrl[-4:], 2))
+            settings['auto_bottom_detection_filter_method'] = str(int(binctrl[-8:-4], 2))
             settings['bottom_detection_range_filter_enabled'] = str(bool(int(binctrl[-9], 2)))
             settings['bottom_detection_depth_filter_enabled'] = str(bool(int(binctrl[-10], 2)))
             settings['receiver_gain_autogain'] = str(bool(int(binctrl[-11], 2)))
@@ -2368,7 +2543,7 @@ class Data7503(BaseData):
                         data = self.ky_data7503_val_translator[entry][data]
                     except KeyError:
                         pass
-                settings[newkey] = data
+                settings[newkey] = str(data)
         return settings
 
 
@@ -2449,3 +2624,71 @@ class MapPack:
         outfile = open(outfilename + '.prr', 'wb')
         pickle.dump(self.packdir, outfile)
         outfile.close()
+
+
+def translate_yawpitch(arr):
+    """
+    Translate the binary code to a string identifier
+
+    'yawandpitchstabilization' = 'Y' for Yaw stab, 'P' for pitch stab, 'PY' for both, 'N' for neither
+    # xxxx0000 no pitch stab, any other means pitch stabilized
+    # 0000xxxx no yaw stab, any other means yaw stab
+    """
+    rslt = np.full(arr.shape, 'N', dtype='U2')
+    pstab = np.bitwise_and(arr, 15).astype(bool)
+    ystab = np.bitwise_and(arr, 240).astype(bool)
+
+    rslt[pstab] = 'P'
+    rslt[ystab] = 'Y'
+    rslt[np.logical_and(pstab, ystab)] = 'PY'
+
+    return rslt
+
+
+def translate_mode(arr):
+    """
+    Translate the integer code to a string identifier
+
+    'mode' = 'CW' for continuous waveform, 'FM' for frequency modulated, 'MP' for Multi-Ping
+    0 for CW, 1 for FM, 2 or 3 for MP
+
+    """
+    rslt = np.full(arr.shape, '', dtype='U2')
+    rslt[arr == 0] = 'CW'
+    rslt[arr == 1] = 'FM'
+    rslt[arr == 2] = 'MP'
+    rslt[arr == 3] = 'MP'
+
+    return rslt
+
+
+def translate_mode_two(arr):
+    """
+    Translate the integer code to a string identifier
+
+    1 = Equiangle (EqAn), 2 = EquiDistant (EqDs), 3 = Flex (Flex), 4 = Intermediate (Intr)
+
+    """
+    rslt = np.full(arr.shape, '', dtype='U4')
+    rslt[arr == 1] = 'EqAn'
+    rslt[arr == 2] = 'EqDs'
+    rslt[arr == 3] = 'Flex'
+    rslt[arr == 4] = 'Intr'
+
+    return rslt
+
+
+def translate_detectioninfo(arr):
+    """
+    Translate the binary code to an int identifier
+    'detectioninfo' = 0 for amplitude detect, 1 for phase detect, 2 for rejected due to invalid detection
+
+    xxxxxxx0 = amplitude detect, xxxxxxx1 = phase detect
+    """
+    rslt = np.zeros(arr.shape, dtype=int)
+    first_bit_chk = np.bitwise_and(arr, (1 << 0)).astype(bool)
+    sec_bit_chk = np.bitwise_and(arr, (1 << 1)).astype(bool)
+
+    rslt[np.where(sec_bit_chk)] = 1
+    rslt[np.where(first_bit_chk)] = 0
+    return rslt

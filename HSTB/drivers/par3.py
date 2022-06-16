@@ -734,12 +734,12 @@ class AllRead:
                         recs_to_read[rec][dgram] = self._translate_to_array(recs_to_read[rec][dgram], override_type=np.int32, uneven=uneven, maxlen=maxlen, fullwith=2)
                     elif dgram == 'qualityfactor':
                         if uneven:
-                            newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=np.int32)
+                            newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=np.float32)
                             for i, j in enumerate(recs_to_read[rec][dgram]):
                                 newrec[i][0:len(j)] = j
                             recs_to_read[rec][dgram] = newrec
                         else:
-                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.int32)
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.float32)
                     else:
                         if uneven and isinstance(recs_to_read[rec][dgram][0], np.ndarray):
                             newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=recs_to_read[rec][dgram][0].dtype)
@@ -764,6 +764,7 @@ class AllRead:
         if recs_to_read['navigation']['altitude'] is None or len(recs_to_read['navigation']['altitude']) == 0:
             recs_to_read['navigation'].pop('altitude')
         recs_to_read['runtime_params']['runtime_settings'] = self._only_keep_important_runtime(recs_to_read['runtime_params']['runtime_settings'])
+        recs_to_read['ping']['counter'] = recs_to_read['ping']['counter'].astype('uint32')
 
         # finding spikes in latitude/longitude that go to 0 (only seen this once with old data), have to identify and remove
         for var in ['latitude', 'longitude']:
