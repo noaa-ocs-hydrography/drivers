@@ -3658,10 +3658,9 @@ class kmall():
                                    'sample.KMdefault.heave_m', 'sample.KMdefault.heading_deg'],
                            'IIP': ['header.dgtime', 'install_txt'],
                            'MRZ': ['header.dgtime', 'cmnPart.pingCnt',
-                                   'pingInfo.soundSpeedAtTxDepth_mPerSec', 'pingInfo.numTxSectors', 'txSectorInfo.txArrNumber',
-                                   'txSectorInfo.tiltAngleReTx_deg',
-                                   'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
-                                   'sounding.beamAngleReRx_deg', 'sounding.txSectorNumb', 'sounding.detectionType',
+                                   'pingInfo.soundSpeedAtTxDepth_mPerSec', 'txSectorInfo.txArrNumber',
+                                   'txSectorInfo.tiltAngleReTx_deg', 'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
+                                   'sounding.beamAngleReRx_deg', 'sounding.reflectivity2_dB', 'sounding.txSectorNumb', 'sounding.detectionType',
                                    'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
                                    'pingInfo.modeAndStabilisation', 'pingInfo.pulseForm', 'pingInfo.depthMode',
                                    'pingInfo.latitude_deg', 'pingInfo.longitude_deg', 'pingInfo.ellipsoidHeightReRefPoint_m'],
@@ -3681,6 +3680,7 @@ class kmall():
                                               'txSectorInfo.sectorTransmitDelay_sec': [['ping', 'delay']],
                                               'txSectorInfo.centreFreq_Hz': [['ping', 'frequency']],
                                               'sounding.beamAngleReRx_deg': [['ping', 'beampointingangle']],
+                                              'sounding.reflectivity2_dB': [['ping', 'reflectivity']],
                                               'sounding.txSectorNumb': [['ping', 'txsector_beam']],
                                               'sounding.detectionType': [['ping', 'detectioninfo']],
                                               'sounding.detectionMethod': [['ping', 'detectioninfo_two']],
@@ -3704,9 +3704,8 @@ class kmall():
             'attitude': {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
             'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                     'installation_settings': None},
-            'ping': {'time': None, 'counter': None, 'soundspeed': None,
-                     'serial_num': None, 'tiltangle': None, 'delay': None,
-                     'frequency': None, 'beampointingangle': None, 'txsector_beam': None,
+            'ping': {'time': None, 'counter': None, 'soundspeed': None, 'serial_num': None, 'tiltangle': None,
+                     'delay': None, 'frequency': None, 'beampointingangle': None, 'reflectivity': None, 'txsector_beam': None,
                      'detectioninfo': None, 'detectioninfo_two': None, 'qualityfactor': None, 'traveltime': None,
                      'mode': None, 'modetwo': None, 'yawpitchstab': None},
             'runtime_params': {'time': None, 'runtime_settings': None},
@@ -3877,7 +3876,7 @@ class kmall():
                         recs_to_read[rec][dgram] = self.translate_mode_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram == 'modetwo':
                         recs_to_read[rec][dgram] = self.translate_mode_two_tostring(np.array(recs_to_read[rec][dgram]))
-                    elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor']:
+                    elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor', 'reflectivity']:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
                     elif dgram == 'serial_num':
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint16')
@@ -3901,6 +3900,8 @@ class kmall():
         recs_to_read = self._skm_remove_empty_navigation(recs_to_read)
         recs_to_read = self._merge_detectioninfo_detectionmethod(recs_to_read)
 
+        # some dtype setting to appease the Kluster check
+        recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
         # empty processing status that we append for Kluster to use later
         recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
         return recs_to_read

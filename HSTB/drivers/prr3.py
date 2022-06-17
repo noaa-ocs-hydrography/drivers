@@ -20,7 +20,7 @@ recs_categories_7027 = {'1003': ['time', 'LatitudeNorthing', 'LongitudeEasting',
                         '1013': ['time', 'Heading'],
                         '7001': ['serial_one', 'serial_two'],
                         '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
-                                 'TravelTime'],
+                                 'TravelTime', 'Intensity'],
                         '7030': ['time', 'translated_settings'],
                         '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency', 'BeamSpacingMode',
                                  'full_settings']}
@@ -37,6 +37,7 @@ recs_categories_translator_7027 = {'1003': {'time': [['navigation', 'time']], 'L
                                             'serial_two': [['installation_params', 'serial_two']]},
                                    '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
                                             'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
+                                            'Intensity': [['ping', 'reflectivity']],
                                             'Uncertainty': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
                                             'DetectionFlags': [['ping', 'detectioninfo']]},
                                    '7030': {'time': [['installation_params', 'time']],
@@ -54,7 +55,7 @@ recs_categories_7027_1016 = {'1003': ['time', 'LatitudeNorthing', 'LongitudeEast
                              '1016': ['datatime', 'Roll', 'Pitch', 'Heave', 'Heading'],
                              '7001': ['serial_one', 'serial_two'],
                              '7027': ['time', 'PingNumber', 'TxAngleArray', 'RxAngle', 'Uncertainty', 'DetectionFlags',  # flags for amp/phase detect
-                                      'TravelTime'],
+                                      'TravelTime', 'Intensity'],
                              '7030': ['time', 'translated_settings'],
                              '7503': ['time', 'SoundVelocity', 'TXPulseTypeID', 'TransmitFlags', 'Frequency', 'BeamSpacingMode',
                                       'full_settings']}
@@ -71,6 +72,7 @@ recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']
                                                  'Serial#2': [['installation_params', 'serial_two']]},
                                         '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
                                                  'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
+                                                 'Intensity': [['ping', 'reflectivity']],
                                                  'Uncertainty': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
                                                  'DetectionFlags': [['ping', 'detectioninfo']]},
                                         '7030': {'time': [['installation_params', 'time']],
@@ -86,7 +88,7 @@ recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']
 recs_categories_result = {'attitude':  {'time': None, 'htime': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                                   'installation_settings': None},
-                          'ping': {'time': None, 'counter': None, 'tiltangle': None, 'frequency': None,
+                          'ping': {'time': None, 'counter': None, 'tiltangle': None, 'frequency': None, 'reflectivity': None,
                                    'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
                                    'qualityfactor': None, 'traveltime': None},
                           'runtime_params': {'time': None, 'soundspeed': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
@@ -768,6 +770,8 @@ class X7kRead:
                     else:
                         if dgram in ['latitude', 'longitude']:
                             recs_to_read[rec][dgram] = np.rad2deg(np.array(recs_to_read[rec][dgram]))
+                        elif dgram == 'heading': # convert negative heading to 0-360deg heading
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram]) % 360
                         else:
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'ping':
@@ -805,11 +809,11 @@ class X7kRead:
             rindex = np.searchsorted(recs_to_read['runtime_params']['time'], recs_to_read['ping']['time'])
         else:
             rindex = np.full(recs_to_read['ping']['time'].shape, True, bool)
-
         recs_to_read['ping']['soundspeed'] = recs_to_read['runtime_params'].pop('soundspeed')[rindex]
         recs_to_read['ping']['mode'] = recs_to_read['runtime_params'].pop('mode')[rindex]
         recs_to_read['ping']['modetwo'] = recs_to_read['runtime_params'].pop('modetwo')[rindex]
         recs_to_read['ping']['yawpitchstab'] = recs_to_read['runtime_params'].pop('yawpitchstab')[rindex]
+
         # shift frequency to the ping container AND expand to ping/beam dimension as Kluster expects this for multisector systems
         recs_to_read['ping']['frequency'] = recs_to_read['runtime_params'].pop('frequency')[rindex]
         recs_to_read['ping']['frequency'] = (np.ones_like(recs_to_read['ping']['qualityfactor']) * recs_to_read['ping']['frequency'][:, None])
@@ -827,11 +831,18 @@ class X7kRead:
         else:
             recs_to_read['navigation']['altitude'] = recs_to_read['navigation']['altitude'].astype(np.float32)
 
-        # cover the instance where there is no 7030 record for instal params
+        # drop the empty reflectivity record if it is empty
+        if recs_to_read['ping']['reflectivity'] is None or all(recs_to_read['ping']['reflectivity'] == None):
+            recs_to_read['ping'].pop('reflectivity')
+        else:
+            recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
+
+        # cover the instance where there is no 7030 record for install params
         if not recs_to_read['installation_params']['time'].any():
             recs_to_read['installation_params'] = self.return_empty_installparams(sonarmodelnumber, serialnumber)['installation_params']
 
         recs_to_read['runtime_params']['time'] = np.array([recs_to_read['runtime_params']['time'][0]], dtype=float)
+        recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
 
         # # I do this in the other drivers, might include it later...
         #
@@ -2055,11 +2066,12 @@ class Data7027(BaseData):
         self.Uncertainty = None
         self.TravelTime = None
         self.DetectionFlags = None
+        self.Intensity = None
         self.read(datablock[self.hdr_sz:])
 
     def read(self, datablock):
         newdetect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
-                                 ('Quality', 'u4'), ('Uncertainty', 'f4'), ('Intensity', 'f4'), ('MinLimit', 'f4'), ('MaxLimit', 'f4')])
+                                    ('Quality', 'u4'), ('Uncertainty', 'f4'), ('Intensity', 'f4'), ('MinLimit', 'f4'), ('MaxLimit', 'f4')])
         # from reson dfd 2.41
         olddetect_dtype = np.dtype([('BeamDescriptor', 'u2'), ('DetectionPoint', 'f4'), ('RxAngle', 'f4'), ('DetectionFlags', 'u4'),
                                     ('Quality', 'u4'), ('Uncertainty', 'f4'), ('SignalStrength', 'f4')])
@@ -2073,11 +2085,13 @@ class Data7027(BaseData):
                 decoded = True
         if not decoded:
             raise ValueError('Data7027: Unable to decode datagram, tried all known data format definitions for this datagram')
-        self.RxAngle = [np.rad2deg(self.data['RxAngle'])]
+        self.RxAngle = [np.rad2deg(self.data['RxAngle']) - self.AppliedRoll]
         self.TxAngleArray = [np.full(self.data['RxAngle'].size, self.TxAngle, dtype=np.float32)]
         self.Uncertainty = [self.data['Uncertainty']]
         self.TravelTime = [self.data['DetectionPoint'] / self.SamplingRate]
         self.DetectionFlags = [self.data['DetectionFlags']]
+        if 'Intensity' in self.data.dtype.names:
+            self.Intensity = [self.data['Intensity']]
 
 
 class Data7028(BaseData):
