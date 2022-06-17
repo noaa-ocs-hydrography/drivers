@@ -750,7 +750,7 @@ class X7kRead:
             minlen = len(min(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             if minlen != maxlen:
-                print('prr3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
+                # print('prr3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
                 uneven = True
 
         for rec in recs_to_read:
@@ -833,7 +833,8 @@ class X7kRead:
 
         recs_to_read['runtime_params']['time'] = np.array([recs_to_read['runtime_params']['time'][0]], dtype=float)
 
-        # # I do this in the other drivers, might include it later
+        # # I do this in the other drivers, might include it later...
+        #
         # for var in ['latitude', 'longitude']:
         #     dif = np.abs(np.diff(recs_to_read['navigation'][var]))
         #     spike_idx = dif >= 1  # just look for spikes greater than one degree, should cover most cases
@@ -870,6 +871,13 @@ class X7kRead:
         #   next chunk might include a duplicate time
         if recs_to_read['ping']['time'].any() and recs_to_read['ping']['time'].size > 1:
             recs_to_read['ping']['time'][0] += 0.000010
+
+        # mask the empty beams that we add where there are no beams to get nice squared arrays.  By setting detection
+        #  to rejected and traveltime to NaN, the processed data will be automatically rejected.
+        if uneven:
+            msk = recs_to_read['ping']['traveltime'] == 0
+            recs_to_read['ping']['detectioninfo'][msk] = 2
+            recs_to_read['ping']['traveltime'][msk] = np.float32(np.nan)
 
         # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
         for dset_name in ['attitude', 'navigation']:

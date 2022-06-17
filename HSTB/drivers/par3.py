@@ -708,7 +708,7 @@ class AllRead:
             minlen = len(min(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             if minlen != maxlen:
-                print('par3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
+                # print('par3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
                 uneven = True
 
         for rec in recs_to_read:
@@ -805,6 +805,13 @@ class AllRead:
             recs_to_read['ping']['time'][0] += 0.000010
             if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
                 recs_to_read['ping']['time'][1] += 0.000010
+
+        # mask the empty beams that we add where there are no beams to get nice squared arrays.  By setting detection
+        #  to rejected and traveltime to NaN, the processed data will be automatically rejected.
+        if uneven:
+            msk = recs_to_read['ping']['traveltime'] == 0
+            recs_to_read['ping']['detectioninfo'][msk] = 2
+            recs_to_read['ping']['traveltime'][msk] = np.float32(np.nan)
 
         # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
         for dset_name in ['attitude', 'navigation']:
