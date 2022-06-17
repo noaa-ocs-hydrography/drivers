@@ -72,7 +72,7 @@ from matplotlib import pyplot as plt
 
 recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                       '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                      '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
+                      '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                              'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                              'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
                       '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
@@ -87,7 +87,7 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
                                         'Serial#2': [['installation_params', 'serial_two']],
                                         'settings': [['installation_params', 'installation_settings']]},
                                  '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
-                                        'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                        'SoundSpeed': [['ping', 'soundspeed']],
                                         'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                         'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                         'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
@@ -104,7 +104,7 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
 
 recs_categories_110 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                        '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
+                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                               'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                               'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
@@ -120,7 +120,7 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
                                          'Serial#2': [['installation_params', 'serial_two']],
                                          'settings': [['installation_params', 'installation_settings']]},
                                   '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
-                                         'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                         'SoundSpeed': [['ping', 'soundspeed']],
                                          'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                          'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                          'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
@@ -137,7 +137,7 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
 
 oldstyle_recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                             '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                            '102': ['time', 'PingCounter', 'SoundSpeed', 'Ntx', 'SystemSerialNum',
+                            '102': ['time', 'PingCounter', 'SoundSpeed', 'SystemSerialNum',
                                     'rx.TiltAngle', 'rx.Delay', 'rx.CenterFrequency',
                                     'rx.BeamPointingAngle', 'rx.TransmitSectorID', 'rx.DetectionWindowLength',
                                     'rx.QualityFactor', 'rx.TravelTime'],
@@ -153,7 +153,7 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
                                               'Serial#2': [['installation_params', 'serial_two']],
                                               'settings': [['installation_params', 'installation_settings']]},
                                        '102': {'time': [['ping', 'time']], 'PingCounter': [['ping', 'counter']],
-                                               'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                               'SoundSpeed': [['ping', 'soundspeed']],
                                                'SystemSerialNum': [['ping', 'serial_num']],
                                                'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                                'CenterFrequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
@@ -172,7 +172,7 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                                   'installation_settings': None},
-                          'ping': {'time': None, 'counter': None, 'soundspeed': None, 'ntx': None, 'serial_num': None,
+                          'ping': {'time': None, 'counter': None, 'soundspeed': None, 'serial_num': None,
                                    'tiltangle': None, 'delay': None, 'frequency': None,
                                    'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
                                    'qualityfactor': None, 'traveltime': None},
@@ -690,7 +690,7 @@ class AllRead:
                 data_lookup.append(data)
             else:
                 runtime_array[cnt] = {}
-        return runtime_array
+        return runtime_array.astype(np.object)
 
     def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber):
         """
@@ -763,6 +763,8 @@ class AllRead:
 
         if recs_to_read['navigation']['altitude'] is None or len(recs_to_read['navigation']['altitude']) == 0:
             recs_to_read['navigation'].pop('altitude')
+        else:
+            recs_to_read['navigation']['altitude'] = recs_to_read['navigation']['altitude'].astype(np.float32)
         recs_to_read['runtime_params']['runtime_settings'] = self._only_keep_important_runtime(recs_to_read['runtime_params']['runtime_settings'])
         recs_to_read['ping']['counter'] = recs_to_read['ping']['counter'].astype('uint32')
 
