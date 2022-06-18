@@ -31,8 +31,8 @@ recs_categories_translator_7027 = {'1003': {'time': [['navigation', 'time']], 'L
                                    '1009': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                             'SoundSpeed': [['profile', 'soundspeed']]},
                                    '1012': {'time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
-                                            'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heading']]},
-                                   '1013': {'time': [['attitude', 'htime']], 'Heading': [['attitude', 'heave']]},
+                                            'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']]},
+                                   '1013': {'time': [['attitude', 'htime']], 'Heading': [['attitude', 'heading']]},
                                    '7001': {'serial_one': [['installation_params', 'serial_one']],
                                             'serial_two': [['installation_params', 'serial_two']]},
                                    '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
@@ -770,8 +770,12 @@ class X7kRead:
                     else:
                         if dgram in ['latitude', 'longitude']:
                             recs_to_read[rec][dgram] = np.rad2deg(np.array(recs_to_read[rec][dgram]))
-                        elif dgram == 'heading': # convert negative heading to 0-360deg heading
+                        elif dgram == 'heading':  # convert negative heading to 0-360deg heading
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram]) % 360
+                        elif dgram == 'heave':  # heave is positive up kluster wants positive down
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram]) * -1
+                        elif dgram == 'roll':  # TODO: roll also has to be multiplied by negative one?  I don't understand why. sign conventions should be the same
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram]) * -1
                         else:
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'ping':
@@ -1433,6 +1437,8 @@ class Data1012(BaseData):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
         super(Data1012, self).__init__(datablock, read_limit=read_limit)
+        self.Roll = np.rad2deg(self.Roll)
+        self.Pitch = np.rad2deg(self.Pitch)
         self.time = utctime
 
 
@@ -1446,6 +1452,7 @@ class Data1013(BaseData):
         """Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record."""
         super(Data1013, self).__init__(datablock, read_limit=read_limit)
+        self.Heading = np.rad2deg(self.Heading)
         self.time = utctime
 
 
@@ -2085,7 +2092,7 @@ class Data7027(BaseData):
                 decoded = True
         if not decoded:
             raise ValueError('Data7027: Unable to decode datagram, tried all known data format definitions for this datagram')
-        self.RxAngle = [np.rad2deg(self.data['RxAngle']) - self.AppliedRoll]
+        self.RxAngle = [np.rad2deg(self.data['RxAngle'])]
         self.TxAngleArray = [np.full(self.data['RxAngle'].size, self.TxAngle, dtype=np.float32)]
         self.Uncertainty = [self.data['Uncertainty']]
         self.TravelTime = [self.data['DetectionPoint'] / self.SamplingRate]
