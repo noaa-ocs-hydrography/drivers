@@ -3474,7 +3474,7 @@ class Data89(BaseData):
 
     @property
     def Reflectivity(self):  # added to support kluster read
-        return self.center()
+        return [self.center().tolist()]
 
     def get_datablock(self, data=None):
         # FIXME: Not sure what happens if reshape is called
