@@ -774,8 +774,8 @@ class X7kRead:
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram]) % 360
                         elif dgram == 'heave':  # heave is positive up kluster wants positive down
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram]) * -1
-                        elif dgram == 'roll':  # TODO: roll also has to be multiplied by negative one?  I don't understand why. sign conventions should be the same
-                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram]) * -1
+                        elif dgram == 'roll':
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                         else:
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'ping':
@@ -803,14 +803,14 @@ class X7kRead:
         # heading can come from a different record, if the freq is different we address that here
         if 'htime' in recs_to_read['attitude']:
             if recs_to_read['attitude']['time'].size != recs_to_read['attitude']['htime'].size:  # get indices of nearest runtime for each ping
-                hindex = np.searchsorted(recs_to_read['attitude']['htime'], recs_to_read['attitude']['time'])
+                hindex = np.searchsorted(recs_to_read['attitude']['htime'], recs_to_read['attitude']['time']).clip(0, recs_to_read['attitude']['htime'].size - 1)
                 recs_to_read['attitude']['heading'] = recs_to_read['attitude']['heading'][hindex]
             recs_to_read['attitude'].pop('htime')
 
         # reconfigure the ping/runtime results to match what Kluster wants
         recs_to_read['ping']['txsector_beam'] = np.zeros(recs_to_read['ping']['detectioninfo'].shape, dtype='uint8')
         if recs_to_read['ping']['time'].size != recs_to_read['runtime_params']['time'].size:  # get indices of nearest runtime for each ping
-            rindex = np.searchsorted(recs_to_read['runtime_params']['time'], recs_to_read['ping']['time'])
+            rindex = np.searchsorted(recs_to_read['runtime_params']['time'], recs_to_read['ping']['time']).clip(0, recs_to_read['runtime_params']['time'].size - 1)
         else:
             rindex = np.full(recs_to_read['ping']['time'].shape, True, bool)
         recs_to_read['ping']['soundspeed'] = recs_to_read['runtime_params'].pop('soundspeed')[rindex]
@@ -2092,7 +2092,9 @@ class Data7027(BaseData):
                 decoded = True
         if not decoded:
             raise ValueError('Data7027: Unable to decode datagram, tried all known data format definitions for this datagram')
-        self.RxAngle = [np.rad2deg(self.data['RxAngle'])]
+        # June2022/EY - beam angles are always negative to positive in 7027, I find this to be the opposite of what the Reson
+        # convention should be (port + up).  multiplying by neg one appears to resolve this issue.  Not sure why this is.
+        self.RxAngle = [np.rad2deg(self.data['RxAngle']) * -1]
         self.TxAngleArray = [np.full(self.data['RxAngle'].size, self.TxAngle, dtype=np.float32)]
         self.Uncertainty = [self.data['Uncertainty']]
         self.TravelTime = [self.data['DetectionPoint'] / self.SamplingRate]
@@ -2714,7 +2716,11 @@ def translate_detectioninfo(arr):
 
     xxxxxxx0 = amplitude detect, xxxxxxx1 = phase detect
     """
+
     rslt = np.zeros(arr.shape, dtype=int)
+    if rslt.size == 0:
+        return rslt
+
     first_bit_chk = np.bitwise_and(arr, (1 << 0)).astype(bool)
     sec_bit_chk = np.bitwise_and(arr, (1 << 1)).astype(bool)
 
