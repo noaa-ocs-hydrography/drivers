@@ -68,8 +68,8 @@ recs_categories_translator_7027_1016 = {'1003': {'time': [['navigation', 'time']
                                         '1016': {'datatime': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
                                                  'Pitch': [['attitude', 'pitch']], 'Heading': [['attitude', 'heading']],
                                                  'Heave': [['attitude', 'heave']]},
-                                        '7001': {'Serial#': [['installation_params', 'serial_one']],
-                                                 'Serial#2': [['installation_params', 'serial_two']]},
+                                        '7001': {'serial_one': [['installation_params', 'serial_one']],
+                                                 'serial_two': [['installation_params', 'serial_two']]},
                                         '7027': {'time': [['ping', 'time']], 'PingNumber': [['ping', 'counter']],
                                                  'TxAngleArray': [['ping', 'tiltangle']], 'RxAngle': [['ping', 'beampointingangle']],
                                                  'Intensity': [['ping', 'reflectivity']],
@@ -957,6 +957,7 @@ class X7kRead:
         else:
             raise ValueError('prr3: Attempted to read Reson s7k data using either 1012,1013 or 1016 for sensor data, unable to find either')
         has_installation_rec = self.has_datagram(7030, 20)
+        found_installation_rec = False
         decoded_runtime = False
 
         # recs_to_read is the returned dict of records parsed from the file
@@ -1021,10 +1022,11 @@ class X7kRead:
             if first_installation_rec:
                 if datagram_type == '7030':
                     self.eof = True
+                    return {'installation_params': recs_to_read['installation_params']}
                 elif not has_installation_rec and datagram_type == '7503':
                     return self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=recs_to_read['runtime_params']['runtime_settings'][0])
 
-        if first_installation_rec and self.eof:
+        if first_installation_rec and not found_installation_rec:
             raise ValueError('prr3: searched for installation record or runtime parameters, unable to find either!')
         recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo)
         recs_to_read['format'] = 's7k'
