@@ -712,7 +712,7 @@ class X7kRead:
         self.start_ptr = startptr
         return [serialnumber, serialnumbertwo, sonarmodel]
 
-    def return_empty_installparams(self, model_num: str = '', serial_num_one: int = 0, serial_num_two: int = 0):
+    def return_empty_installparams(self, model_num: str = '', serial_num_one: int = 0, serial_num_two: int = 0, runtime: dict = None):
         starttime, _ = self.fast_read_start_end_time(only_start=True)
         isets = {'sonar_model_number': model_num, 'transducer_1_vertical_location': '0.000',
                  'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
@@ -730,13 +730,20 @@ class X7kRead:
                  'tx_serial_number': '0', 'tx_2_serial_number': '0', 'firmware_version': '',
                  'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
                  'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
+        if runtime:
+            isets['transducer_1_along_location'] = runtime['transducer_1_along_refpt_offset']
+            isets['transducer_1_athwart_location'] = runtime['transducer_1_athwart_refpt_offset']
+            isets['transducer_1_vertical_location'] = runtime['transducer_1_vertical_refpt_offset']
+            isets['transducer_2_along_location'] = runtime['transducer_2_along_refpt_offset']
+            isets['transducer_2_athwart_location'] = runtime['transducer_2_athwart_refpt_offset']
+            isets['transducer_2_vertical_location'] = runtime['transducer_2_vertical_refpt_offset']
         finalrec = {'installation_params': {'time': np.array([starttime], dtype=float),
                                             'serial_one': np.array([serial_num_one], dtype=np.dtype('uint16')),
                                             'serial_two': np.array([serial_num_two], dtype=np.dtype('uint16')),
                                             'installation_settings': np.array([isets], dtype=np.object)}}
         return finalrec
 
-    def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber, serialnumber):
+    def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo):
         """
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
         convert to xarray.  Major steps include
@@ -841,12 +848,16 @@ class X7kRead:
         else:
             recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
 
-        # cover the instance where there is no 7030 record for install params
-        if not recs_to_read['installation_params']['time'].any():
-            recs_to_read['installation_params'] = self.return_empty_installparams(sonarmodelnumber, serialnumber)['installation_params']
-
         recs_to_read['runtime_params']['time'] = np.array([recs_to_read['runtime_params']['time'][0]], dtype=float)
         recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
+
+        # cover the instance where there is no 7030 record for install params
+        if not recs_to_read['installation_params']['time'].any():
+            if recs_to_read['runtime_params']['runtime_settings'].any():  # if it is going to be empty, include the offsets from the runtime parameters
+                runtime = recs_to_read['runtime_params']['runtime_settings'][0]
+            else:
+                runtime = None
+            recs_to_read['installation_params'] = self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=runtime)['installation_params']
 
         # # I do this in the other drivers, might include it later...
         #
@@ -946,8 +957,6 @@ class X7kRead:
         else:
             raise ValueError('prr3: Attempted to read Reson s7k data using either 1012,1013 or 1016 for sensor data, unable to find either')
         has_installation_rec = self.has_datagram(7030, 20)
-        if not has_installation_rec and first_installation_rec:
-            return self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo)
         decoded_runtime = False
 
         # recs_to_read is the returned dict of records parsed from the file
@@ -1009,9 +1018,15 @@ class X7kRead:
                             else:
                                 recs_to_read[translated[0]][translated[1]].extend(val)
 
-            if datagram_type == '7030' and first_installation_rec:
-                self.eof = True
-        recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber, serialnumber)
+            if first_installation_rec:
+                if datagram_type == '7030':
+                    self.eof = True
+                elif not has_installation_rec and datagram_type == '7503':
+                    return self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=recs_to_read['runtime_params']['runtime_settings'][0])
+
+        if first_installation_rec and self.eof:
+            raise ValueError('prr3: searched for installation record or runtime parameters, unable to find either!')
+        recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo)
         recs_to_read['format'] = 's7k'
         return recs_to_read
 
@@ -2551,6 +2566,7 @@ class Data7503(BaseData):
         else:
             print('prr3: Expected TxArrayPositionOffsetX in Data7503, unable to build offsets')
         if 'TxArrayPositionOffsetZ' in self.header.dtype.names:  # vertical ship offset from center of RX to center of TX
+            data = self.header['TxArrayPositionOffsetZ'][0]
             settings['transducer_1_vertical_refpt_offset'] = str(round(-float(data), 3))  # TX Down is the reverse (to make it positive down) of (center of rx to center of tx, center of rx is the rp)
             settings['transducer_2_vertical_refpt_offset'] = '0.000'  # RX Offset is always 0 (see ref point)
         else:
