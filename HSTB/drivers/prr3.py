@@ -315,8 +315,8 @@ class X7kRead:
                     self.hdr_read = False
                     self.data_read = False
                     self.last_record_sz = 0
-            except AssertionError:
-                # print "End of file"
+            except:
+                self.eof = True
                 self.tempread = False
         if count != 0:
             if verbose:
@@ -1026,6 +1026,10 @@ class X7kRead:
                 elif not has_installation_rec and datagram_type == '7503':
                     return self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=recs_to_read['runtime_params']['runtime_settings'][0])
 
+        if recs_to_read['attitude']['htime'] is None:  # the 1016 workflow, no interpolation needed
+            recs_to_read['attitude'].pop('htime')
+        if recs_to_read['runtime_params']['time'] is None:
+            raise ValueError('prr3: Runtime parameters record 7503 is required, but not found in this file.')
         if first_installation_rec and not found_installation_rec:
             raise ValueError('prr3: searched for installation record or runtime parameters, unable to find either!')
         recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo)
@@ -1082,6 +1086,10 @@ class Datagram:
         """Calls the correct class to read the data part of the data frame"""
         dgram = get_datagram_by_number(self.dtype)
         if dgram is not None:
+            if self.header['OptionalDataOffset']:  # exclude optional data for now, we probably want to include it later for 7027 processed data
+                # optional data offset is start of datagram to the start of the optional data.  Start of the datagram includes packet header and
+                # datagram header
+                self.datablock = self.datablock[:self.header['OptionalDataOffset'] - self.header.dtype.itemsize]
             if self.dtype == 7030:
                 self.subpack = dgram(self.datablock, self.time, self.header['DeviceIdentifier'])
             else:
@@ -2107,6 +2115,7 @@ class Data7027(BaseData):
             if dtyp.itemsize * self.numdetections == len(datablock):
                 self.data = np.frombuffer(datablock, dtype=dtyp, count=self.numdetections)
                 decoded = True
+                break
         if not decoded:
             raise ValueError('Data7027: Unable to decode datagram, tried all known data format definitions for this datagram')
         # June2022/EY - beam angles are always negative to positive in 7027, I find this to be the opposite of what the Reson
