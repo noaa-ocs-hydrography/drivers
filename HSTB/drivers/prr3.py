@@ -737,6 +737,7 @@ class X7kRead:
             isets['transducer_2_along_location'] = runtime['transducer_2_along_refpt_offset']
             isets['transducer_2_athwart_location'] = runtime['transducer_2_athwart_refpt_offset']
             isets['transducer_2_vertical_location'] = runtime['transducer_2_vertical_refpt_offset']
+
         finalrec = {'installation_params': {'time': np.array([starttime], dtype=float),
                                             'serial_one': np.array([serial_num_one], dtype=np.dtype('uint16')),
                                             'serial_two': np.array([serial_num_two], dtype=np.dtype('uint16')),
@@ -843,20 +844,23 @@ class X7kRead:
             recs_to_read['navigation']['altitude'] = recs_to_read['navigation']['altitude'].astype(np.float32)
 
         # drop the empty reflectivity record if it is empty
-        if recs_to_read['ping']['reflectivity'] is None or all(recs_to_read['ping']['reflectivity'] == None):
+        if recs_to_read['ping']['reflectivity'] is None or (recs_to_read['ping']['reflectivity'] == 0).all():
             recs_to_read['ping'].pop('reflectivity')
         else:
             recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
 
         recs_to_read['runtime_params']['time'] = np.array([recs_to_read['runtime_params']['time'][0]], dtype=float)
         recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
+        if sonarmodelnumber == 'T20':  # the only system I am aware of that has a receive beam width that isn't half the transmit beam width
+            for rrec in recs_to_read['runtime_params']['runtime_settings']:
+                rrec['ReceiveBeamWidth'] = str(float(rrec['ReceiveBeamWidth']) * 2)
 
+        if recs_to_read['runtime_params']['runtime_settings'].any():  # if it is going to be empty, include the offsets from the runtime parameters
+            runtime = recs_to_read['runtime_params']['runtime_settings'][0]
+        else:
+            runtime = None
         # cover the instance where there is no 7030 record for install params
         if not recs_to_read['installation_params']['time'].any():
-            if recs_to_read['runtime_params']['runtime_settings'].any():  # if it is going to be empty, include the offsets from the runtime parameters
-                runtime = recs_to_read['runtime_params']['runtime_settings'][0]
-            else:
-                runtime = None
             recs_to_read['installation_params'] = self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=runtime)['installation_params']
 
         # # I do this in the other drivers, might include it later...
@@ -1021,7 +1025,6 @@ class X7kRead:
 
             if first_installation_rec:
                 if datagram_type == '7030':
-                    self.eof = True
                     return {'installation_params': recs_to_read['installation_params']}
                 elif not has_installation_rec and datagram_type == '7503':
                     return self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=recs_to_read['runtime_params']['runtime_settings'][0])
@@ -2118,8 +2121,8 @@ class Data7027(BaseData):
                 break
         if not decoded:
             raise ValueError('Data7027: Unable to decode datagram, tried all known data format definitions for this datagram')
-        # June2022/EY - beam angles are always negative to positive in 7027, I find this to be the opposite of what the Reson
-        # convention should be (port + up).  multiplying by neg one appears to resolve this issue.  Not sure why this is.
+        # June2022/EY - beam angles are always negative port up, contrary to the rest of the +port up convention.  Found
+        #  this in the 7503 section in the DFD, there is a note at the end with a diagram
         self.RxAngle = [np.rad2deg(self.data['RxAngle']) * -1]
         self.TxAngleArray = [np.full(self.data['RxAngle'].size, self.TxAngle, dtype=np.float32)]
         self.Uncertainty = [self.data['Uncertainty']]
@@ -2127,6 +2130,8 @@ class Data7027(BaseData):
         self.DetectionFlags = [self.data['DetectionFlags']]
         if 'Intensity' in self.data.dtype.names:
             self.Intensity = [self.data['Intensity']]
+        else:
+            self.Intensity = [np.full(self.data['RxAngle'].size, 0.0, dtype=np.float32)]
 
 
 class Data7028(BaseData):
@@ -2582,6 +2587,11 @@ class Data7503(BaseData):
             settings['transducer_2_vertical_refpt_offset'] = '0.000'  # RX Offset is always 0 (see ref point)
         else:
             print('prr3: Expected TxArrayPositionOffsetZ in Data7503, unable to build offsets')
+        if 'ProjectorBeamWidthVertical' in self.header.dtype.names:
+            data = self.header['ProjectorBeamWidthVertical'][0]
+            settings['TransmitBeamWidth'] = str(round(float(np.rad2deg(data)), 3))
+            # rx angle is not a part of the 7503 apparently, but the alongtrack (which we have here) is twice the across, in all Reson systems i am aware of
+            settings['ReceiveBeamWidth'] = str(round(float(np.rad2deg(data)) / 2, 3))
         return settings
 
     @property
