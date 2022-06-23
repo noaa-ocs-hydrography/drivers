@@ -569,9 +569,11 @@ class X7kRead:
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         curptr = self.infile.tell()
         startptr = self.start_ptr
+        cureof = self.eof
 
         # Read the first records till you get one that the given dtype
         found = False
+        self.eof = False
         self.infile.seek(0)
         currecords = 0
         while not self.eof:
@@ -588,7 +590,7 @@ class X7kRead:
 
         self.infile.seek(curptr)
         self.at_right_byte = cur_startstatus
-        self.eof = False
+        self.eof = cureof
         self.start_ptr = startptr
         return found
 
@@ -607,26 +609,26 @@ class X7kRead:
         curptr = self.infile.tell()
         startptr = self.start_ptr
         oldfilelen = self.filelen
+        cureof = self.eof
 
         # Read the first records till you get one that has time in the packet (most recs at this point i believe)
         self.infile.seek(0)
-        while starttime is None:
+        self.eof = False
+        while starttime is None and not self.eof:
             self.read()
-            try:
-                starttime = self.packet.time
-            except AttributeError:  # no time for this packet
-                self.read()
+            # some of the other records can use a different time reference
+            if self.packet.dtype in [1003, 1012, 1013, 1016, 7000, 7027, 7030, 7503]:
                 try:
                     starttime = self.packet.time
-                except AttributeError:
-                    raise ValueError('Prr3: Unable to read the time of the first record.')
+                except AttributeError:  # no time for this packet
+                    continue
         if starttime is None:
             raise ValueError('Prr3: Unable to find a suitable packet to read the start time of the file')
         if only_start:
             self.infile.seek(curptr)
             self.filelen = oldfilelen
             self.at_right_byte = cur_startstatus
-            self.eof = False
+            self.eof = cureof
             self.start_ptr = startptr
             return starttime, None
 
@@ -647,7 +649,8 @@ class X7kRead:
             while not self.eof:
                 try:
                     self.read()
-                    endtime = self.packet.time
+                    if self.packet.dtype in [1003, 1012, 1013, 1016, 7000, 7027, 7030, 7503]:
+                        endtime = self.packet.time
                 except:
                     pass
             if endtime:
@@ -655,7 +658,7 @@ class X7kRead:
         self.infile.seek(curptr)
         self.filelen = oldfilelen
         self.at_right_byte = cur_startstatus
-        self.eof = False
+        self.eof = cureof
         self.start_ptr = startptr
 
         return [starttime, endtime]
@@ -674,6 +677,7 @@ class X7kRead:
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         curptr = self.infile.tell()
         startptr = self.start_ptr
+        cureof = self.eof
 
         serialnumber = 0
         serialnumbertwo = 0
@@ -684,6 +688,7 @@ class X7kRead:
             found_install_params = True
 
         self.infile.seek(0)
+        self.eof = False
         while not found_install_params or not found_modelnum:
             self.read()
             datagram_type = str(self.packet.dtype)
@@ -708,7 +713,7 @@ class X7kRead:
 
         self.infile.seek(curptr)
         self.at_right_byte = cur_startstatus
-        self.eof = False
+        self.eof = cureof
         self.start_ptr = startptr
         return [serialnumber, serialnumbertwo, sonarmodel]
 
@@ -730,7 +735,7 @@ class X7kRead:
                  'tx_serial_number': '0', 'tx_2_serial_number': '0', 'firmware_version': '',
                  'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
                  'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
-        if runtime:
+        if runtime and 'transducer_1_along_refpt_offset' in runtime:  # runtime is the parameters from 7000 or 7503, if 7503 it has these settings below
             isets['transducer_1_along_location'] = runtime['transducer_1_along_refpt_offset']
             isets['transducer_1_athwart_location'] = runtime['transducer_1_athwart_refpt_offset']
             isets['transducer_1_vertical_location'] = runtime['transducer_1_vertical_refpt_offset']
@@ -744,7 +749,7 @@ class X7kRead:
                                             'installation_settings': np.array([isets], dtype=np.object)}}
         return finalrec
 
-    def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo):
+    def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo, has_installation_rec):
         """
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
         convert to xarray.  Major steps include
@@ -860,7 +865,7 @@ class X7kRead:
         else:
             runtime = None
         # cover the instance where there is no 7030 record for install params
-        if not recs_to_read['installation_params']['time'].any():
+        if not recs_to_read['installation_params']['time'].any() and not has_installation_rec:
             recs_to_read['installation_params'] = self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=runtime)['installation_params']
 
         # # I do this in the other drivers, might include it later...
@@ -953,14 +958,18 @@ class X7kRead:
 
         # first determine whether we need to use 1016 or the 1012/1013 pair for sensor data
         if self.has_datagram([1012, 1013], 300):
-            categories = recs_categories_7027
-            category_translator = recs_categories_translator_7027
+            categories = recs_categories_7027.copy()
+            category_translator = recs_categories_translator_7027.copy()
         elif self.has_datagram(1016, 300):
-            categories = recs_categories_7027_1016
-            category_translator = recs_categories_translator_7027_1016
+            categories = recs_categories_7027_1016.copy()
+            category_translator = recs_categories_translator_7027_1016.copy()
         else:
             raise ValueError('prr3: Attempted to read Reson s7k data using either 1012,1013 or 1016 for sensor data, unable to find either')
         has_installation_rec = self.has_datagram(7030, 20)
+        has_remote_settings = self.has_datagram(7503, 300)
+        if not has_remote_settings:
+            categories['7000'] = categories.pop('7503')
+            category_translator['7000'] = category_translator.pop('7503')
         found_installation_rec = False
         decoded_runtime = False
 
@@ -1032,10 +1041,10 @@ class X7kRead:
         if recs_to_read['attitude']['htime'] is None:  # the 1016 workflow, no interpolation needed
             recs_to_read['attitude'].pop('htime')
         if recs_to_read['runtime_params']['time'] is None:
-            raise ValueError('prr3: Runtime parameters record 7503 is required, but not found in this file.')
+            raise ValueError('prr3: Runtime parameters record 7503 or 7000 is required, but not found in this file.')
         if first_installation_rec and not found_installation_rec:
-            raise ValueError('prr3: searched for installation record or runtime parameters, unable to find either!')
-        recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo)
+            raise ValueError('prr3: searched for installation record or runtime parameters, unable to find either 7030 or 7503!')
+        recs_to_read = self._finalize_records(recs_to_read, recs_count, sonarmodelnumber, serialnumber, serialnumbertwo, has_installation_rec)
         recs_to_read['format'] = 's7k'
         return recs_to_read
 
@@ -1575,10 +1584,116 @@ class Data7000(BaseData):
         super(Data7000, self).__init__(datablock, read_limit=read_limit)
         self.time = utctime
         self.settings = None
-        self.translate_settings()
+        self.ky_data7000_translator = {'SonarID': 'sonar_id', 'SampleRate': 'sample_rate_hertz', 'ReceiverBandwidth': 'receiver_bandwidth_3db_hertz',
+                                       'TXPulseWidth': 'tx_pulse_width_seconds', 'TXPulseTypeID': 'tx_pulse_type_id',
+                                       'TXPulseEnvelope': 'tx_pulse_envelope_identifier', 'TXPulseEnvelopeParameter': 'tx_pulse_envelope_parameter',
+                                       'TXPulseMode': 'tx_single_multiping_mode', 'MaxPingRate': 'maximum_ping_rate_per_second',
+                                       'PingPeriod': 'ping_period_seconds', 'RangeSelection': 'range_selection_meters',
+                                       'PowerSelection': 'power_selection_db_re_1micropascal', 'GainSelection': 'gain_selection_db',
+                                       'ProjectorIdentifier': 'projector_selection', 'ProjectorBeamWeightingWindowType': 'projector_weighting_window_type',
+                                       'HydrophoneIdentifier': 'hydrophone_identifier', 'ReceiveBeamWeightingWindow': 'receiver_weighting_window_type',
+                                       'ReceiveBeamWidth': 'ReceiverBeamwidthHorizontal',
+                                       'BottomDetectionFilterMinRange': 'bottom_detect_filter_min_range', 'BottomDetectionFilterMaxRange': 'bottom_detect_filter_max_range',
+                                       'BottomDetectionFilterMinDepth': 'bottom_detect_filter_min_depth', 'BottomDetectionFilterMaxDepth': 'bottom_detect_filter_max_depth',
+                                       'Absorption': 'absorption_db_km', 'SoundVelocity': 'sound_velocity_meters_per_sec',
+                                       'Spreading': 'spreading_loss_db'}
+        self.ky_data7000_val_translator = {'TXPulseTypeID': {0: 'CW', 1: 'FM'},
+                                           'TXPulseEnvelope': {0: 'tapered_rectangular', 1: 'tukey', 2: 'hamming',
+                                                               3: 'han', 4: 'rectangular'},
+                                           'TXPulseMode': {1: 'single_ping', 2: 'multiping2', 3: 'multiping3',
+                                                           4: 'multiping4'},
+                                           'ProjectorBeamWeightingWindowType': {0: 'rectangular', 1: 'chebychev'},
+                                           'ReceiveBeamWeightingWindow': {0: 'chebychev', 1: 'kaiser'}}
 
-    def translate_settings(self):
-        self.settings = {}
+    @property
+    def control_flags(self):
+        """
+        Return the translated control flags
+        """
+        settings = {}
+        if 'ControlFlags' in self.header.dtype.names:
+            data = self.header['ControlFlags'][0]
+            binctrl = format(data, '#034b')  # convert to binary, string length 34 to account for the leading '0b' and 32 bits
+            settings['auto_range_method'] = str(int(binctrl[-4:], 2))
+            settings['auto_bottom_detection_filter_method'] = str(int(binctrl[-8:-4], 2))
+            settings['bottom_detection_range_filter_enabled'] = str(bool(int(binctrl[-9], 2)))
+            settings['bottom_detection_depth_filter_enabled'] = str(bool(int(binctrl[-10], 2)))
+            settings['receiver_gain_autogain'] = str(bool(int(binctrl[-11], 2)))
+            settings['receiver_gain_fixedgain'] = str(bool(int(binctrl[-12], 2)))
+            settings['trigger_out_high'] = str(bool(int(binctrl[-15], 2)))
+            settings['system_active'] = str(bool(int(binctrl[-16], 2)))
+            settings['adaptive_search_window_passive'] = str(bool(int(binctrl[-20], 2)))
+            settings['pipe_gating_filter_enabled'] = str(bool(int(binctrl[-21], 2)))
+            settings['adaptive_gate_depth_filter_fixed'] = str(bool(int(binctrl[-22], 2)))
+            settings['adaptive_gate_enabled'] = str(bool(int(binctrl[-23], 2)))
+            settings['adaptive_gate_depth_filter_enabled'] = str(bool(int(binctrl[-24], 2)))
+            settings['trigger_out_enabled'] = str(bool(int(binctrl[-25], 2)))
+            settings['trigger_in_edge_negative'] = str(bool(int(binctrl[-26], 2)))
+            settings['pps_edge_negative'] = str(bool(int(binctrl[-27], 2)))
+            settings['timestamp_state_ok'] = str(int(binctrl[-29:-27], 2) == 3)
+            settings['depth_filter_follow_seafloor'] = str(bool(int(binctrl[-30], 2)))
+            settings['reduced_coverage_for_constant_spacing'] = str(bool(int(binctrl[-31], 2)))
+            settings['is_simulator'] = str(bool(int(binctrl[-32], 2)))
+        return settings
+
+    @property
+    def receive_flags(self):
+        """
+        Return the translated receive flags
+        """
+        settings = {}
+        if 'ReceiveFlags' in self.header.dtype.names:
+            data = self.header['ReceiveFlags'][0]
+            binctrl = format(data, '#034b')  # convert to binary, string length 34 to account for the leading '0b' and 32 bits
+            settings['roll_compensation_indicator'] = str(bool(int(binctrl[-1], 2)))
+            settings['heave_compensation_indicator'] = str(bool(int(binctrl[-3], 2)))
+            settings['dynamic_focusing_method'] = str(int(binctrl[-8:-4], 2))
+            settings['doppler_compensation_method'] = str(int(binctrl[-12:-8], 2))
+            settings['match_filtering_method'] = str(int(binctrl[-16:-12], 2))
+            settings['tvg_method'] = str(int(binctrl[-20:-16], 2))
+            settings['multi_ping_number_of_pings'] = str(int(binctrl[-24:-20], 2))
+        return settings
+
+    @property
+    def beam_opening_angles(self):
+        """
+        Return the translated beam angles in a format that matches our Kluster/Kongsberg format.
+        """
+        settings = {}
+
+        data = self.header['ProjectorBeamWidthVertical'][0]
+        settings['TransmitBeamWidth'] = str(round(float(np.rad2deg(data)), 3))
+        data = self.header['ReceiveBeamWidth'][0]
+        settings['ReceiveBeamWidth'] = str(round(float(np.rad2deg(data)), 3))
+        return settings
+
+    @property
+    def BeamSpacingMode(self):
+        # this record is not available in 7000, kluster can use 7503 where it is available, so to support Kluster,
+        #   just return a value that will not be translated in translate_mode_two
+        return np.array([0], dtype='uint16')
+
+    @property
+    def full_settings(self):
+        """
+        Return the dict that includes all the useful entries in the 7503 record translated so that you can understand them
+        """
+        settings = self.control_flags
+        settings.update(self.receive_flags)
+        settings.update(self.beam_opening_angles)
+        for entry in self.header.dtype.names:
+            data = self.header[entry][0]
+            if entry in self.ky_data7000_translator:
+                newkey = self.ky_data7000_translator[entry]
+                if entry in self.ky_data7000_val_translator:
+                    try:
+                        data = self.ky_data7000_val_translator[entry][data]
+                    except KeyError:
+                        pass
+                settings[newkey] = str(data)
+            else:
+                settings[entry] = str(data)
+        return settings
 
 
 class Data7001(BaseData):
@@ -2612,6 +2727,8 @@ class Data7503(BaseData):
                     except KeyError:
                         pass
                 settings[newkey] = str(data)
+            else:
+                settings[entry] = str(data)
         return settings
 
 
