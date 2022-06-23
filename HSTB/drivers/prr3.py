@@ -2764,3 +2764,87 @@ def translate_detectioninfo(arr):
     rslt[np.where(sec_bit_chk)] = 1
     rslt[np.where(first_bit_chk)] = 0
     return rslt
+
+
+def print_some_records(file_object: X7kRead, recordnum: int = 50):
+    """
+    Used in Kluster file analyzer, print out the first x records in the file for the user to examine
+    """
+    cur_counter = 0
+    if isinstance(file_object, str):
+        file_object = X7kRead(file_object)
+    if isinstance(file_object, X7kRead):
+        file_object.infile.seek(0)
+        file_object.eof = False
+        while not file_object.eof and cur_counter < recordnum + 1:
+            cur_counter += 1
+            print('*****************************************************')
+            file_object.read()
+            try:
+                print(file_object.packet.display())
+            except:
+                print('unable to display packet')
+                continue
+            try:
+                file_object.get()
+            except:
+                print('unable to decode record')
+                continue
+            try:
+                print(file_object.packet.subpack)
+            except:
+                print('no decoded data found to display')
+                continue
+    else:
+        print(f'prr3: Found file object that is not an instance of AllRead: {X7kRead}')
+
+
+def kluster_read_test(file_object, byte_count: int = 2000000):
+    """
+    Used in Kluster file analyzer, print out the kluster desired records in a chunk of the file with byte length byte_count
+    """
+    if isinstance(file_object, str):
+        file_object = X7kRead(file_object)
+    if isinstance(file_object, X7kRead):
+        print(f'File: {file_object.infilename}')
+        print(f'File size: {file_object.max_filelen}')
+        print(f'Has Data1003 record (position): {file_object.has_datagram(1003, 300)}')
+        print(f'Has Data1009 record (optional soundvelocityprofile): {file_object.has_datagram(1009, 500)}')
+        print(f'Has Data1012 record (attitude if 1016 not available): {file_object.has_datagram(1012, 300)}')
+        print(f'Has Data1013 record (heading if 1016 not available): {file_object.has_datagram(1013, 300)}')
+        print(f'Has Data1016 record (attitude/heading): {file_object.has_datagram(1016, 300)}')
+        print(f'Has Data7030 record (installation parameters): {file_object.has_datagram(7030, 300)}')
+        if byte_count == -1:
+            byte_count = file_object.max_filelen
+        else:
+            byte_count = min(byte_count, file_object.max_filelen)
+        file_object.infile.seek(0)
+        file_object.end_ptr = byte_count
+        file_object.start_ptr = 0
+        file_object.filelen = int(file_object.end_ptr - file_object.start_ptr)
+        data = file_object.sequential_read_records(first_installation_rec=False)
+        for ky, val in data.items():
+            if isinstance(val, dict):
+                for subky, subval in val.items():
+                    if isinstance(subval, dict):
+                        for subsubky, subsubval in subval.items():
+                            try:
+                                print(subsubky, subsubval.shape, f'Found NaN values: {np.count_nonzero(np.isnan(subsubval))}', f'Found zero values: {np.count_nonzero(subsubval == 0)}')
+                            except:
+                                print(subsubky)
+                            print(subsubval)
+                    else:
+                        try:
+                            print(subky, subval.shape, f'Found NaN values: {np.count_nonzero(np.isnan(subval))}', f'Found zero values: {np.count_nonzero(subval == 0)}')
+                        except:
+                            print(subky)
+                        print(subval)
+            else:
+                try:
+                    print(ky, val.shape, f'Found NaN values: {np.count_nonzero(np.isnan(val))}', f'Found zero values: {np.count_nonzero(val == 0)}')
+                except:
+                    print(ky)
+                print(val)
+    else:
+        print(f'PAR3: Found file object that is not an instance of AllRead: {file_object}')
+
