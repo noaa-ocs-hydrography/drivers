@@ -197,6 +197,12 @@ class X7kRead:
                 self.eof = True
                 self.hdr_read = False
                 self.data_read = False
+            except IndexError:
+                print(f'prr3: unable to decode packet at {self.infile.tell()}')
+                self.infile.seek(5, 1)
+                self.at_right_byte = False
+                self.seek_next_startbyte()
+                self.read(verbose=verbose)
 
     def reads7k(self, verbose=True):
         """Processes data block according to the s7k format"""
