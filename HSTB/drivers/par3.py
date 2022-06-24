@@ -773,11 +773,13 @@ class AllRead:
             recs_to_read['navigation'].pop('altitude')
         else:
             recs_to_read['navigation']['altitude'] = recs_to_read['navigation']['altitude'].astype(np.float32)
+        recs_to_read['navigation']['longitude'] = recs_to_read['navigation']['longitude'].astype(float)
+        recs_to_read['navigation']['latitude'] = recs_to_read['navigation']['latitude'].astype(float)
 
         # reflectivity comes from a different record, if it exists, we deal with it here
         if recs_to_read['ping']['rtime'] is not None:
             if recs_to_read['ping']['time'].size != recs_to_read['ping']['rtime'].size:  # get indices of nearest intensity for each ping
-                rindex = np.searchsorted(recs_to_read['ping']['rtime'], recs_to_read['ping']['time'])
+                rindex = np.searchsorted(recs_to_read['ping']['rtime'], recs_to_read['ping']['time']).clip(0, recs_to_read['ping']['rtime'].size - 1)
                 recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'][rindex]
             recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
         else:
@@ -3519,6 +3521,8 @@ class Data89(BaseData):
         # sample in each beam, so the center is the start + the center count -1
         # GAR 20150127
         idx = self.beam_position + self.beaminfo['CenterSample#'] - 1
+        # cover for when idx == -1 (overflow)
+        idx[idx == 4294967295] = 0
         center = self.samples[idx]
         sidx = np.nonzero(self.beaminfo['SortingDirection'] == -1)[0]
         idx = self.beam_position[sidx + 1] - self.beaminfo['CenterSample#'][sidx]
