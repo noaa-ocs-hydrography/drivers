@@ -1732,7 +1732,12 @@ class CarisAPI():
         if type == 'SIPS_SIDESCAN':
             fullcommand += ' --extrapolate-time 5.0 --beam-pattern BOTH --tvg 10db 10db'
         if type == 'SIPS_BACKSCATTER':
-            pass
+            #  Build in a check to see if you are running 11.4.6 or greater.  If so, we want to use the new BACKSCATTER engine.
+            if self.exact_hipsversion.find('.') == 2:
+                major, sp, minor = self.exact_hipsversion.split('.')
+                # this next part applies for 11.1.5 and greater (thats when the overwrite flag started requiring existing data)
+                if (int(major) == 11 and int(sp) >= 4 and int(minor) >= 6) or (int(major) >= 11 and int(sp) >= 5) or (int(major) >= 12):
+                    fullcommand = self.hipscommand + ' --run CreateSIPSMosaic --mosaic-engine SIPS_BACKSCATTER_WMA_AREA_AVG --output-crs EPSG:' + epsg
         fullcommand += ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
         fullcommand += ' --resolution ' + resolution + ' --beam-pattern-file "' + beampattern + '" '
         fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
