@@ -1915,7 +1915,7 @@ class BaseData(object, metaclass=BaseMeta):
             num_packets = read_limit
         else:
             num_packets = int(len(datablock) / self.hdr_sz) - read_limit
-        read_sz = self.hdr_sz * num_packets
+        read_sz = int(self.hdr_sz * num_packets)
 
         tmp_header = np.frombuffer(datablock[:read_sz], dtype=raw_dtype)
 
