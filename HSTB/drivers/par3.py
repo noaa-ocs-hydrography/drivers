@@ -72,12 +72,13 @@ from matplotlib import pyplot as plt
 
 recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                       '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                      '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
+                      '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                              'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                              'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
                       '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                       '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                      '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
+                      '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude'],
+                      '89': ['time', 'Reflectivity']}
 
 recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
                                         'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
@@ -87,7 +88,7 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
                                         'Serial#2': [['installation_params', 'serial_two']],
                                         'settings': [['installation_params', 'installation_settings']]},
                                  '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
-                                        'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                        'SoundSpeed': [['ping', 'soundspeed']],
                                         'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                         'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                         'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
@@ -100,15 +101,17 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
                                         'SoundSpeed': [['profile', 'soundspeed']]},
                                  '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                         'Longitude': [['navigation', 'longitude']],
-                                        'Altitude': [['navigation', 'altitude']]}}
+                                        'Altitude': [['navigation', 'altitude']]},
+                                 '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]}}
 
 recs_categories_110 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                        '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Ntx', 'header.Serial#',
+                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                               'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                               'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                        '85': ['time', 'data.Depth', 'data.SoundSpeed'],
+                       '89': ['time', 'Reflectivity'],
                        '110': ['data.Time', 'source_data.Latitude', 'source_data.Longitude',
                                'source_data.Altitude']}
 
@@ -120,7 +123,7 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
                                          'Serial#2': [['installation_params', 'serial_two']],
                                          'settings': [['installation_params', 'installation_settings']]},
                                   '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
-                                         'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                         'SoundSpeed': [['ping', 'soundspeed']],
                                          'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                          'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                          'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
@@ -131,18 +134,20 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
                                          'settings': [['runtime_params', 'runtime_settings']]},
                                   '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                          'SoundSpeed': [['profile', 'soundspeed']]},
+                                  '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]},
                                   '110': {'Time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                           'Longitude': [['navigation', 'longitude']],
                                           'Altitude': [['navigation', 'altitude']]}}
 
 oldstyle_recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                             '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                            '102': ['time', 'PingCounter', 'SoundSpeed', 'Ntx', 'SystemSerialNum',
+                            '102': ['time', 'PingCounter', 'SoundSpeed', 'SystemSerialNum',
                                     'rx.TiltAngle', 'rx.Delay', 'rx.CenterFrequency',
                                     'rx.BeamPointingAngle', 'rx.TransmitSectorID', 'rx.DetectionWindowLength',
                                     'rx.QualityFactor', 'rx.TravelTime'],
                             '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                             '85': ['time', 'data.Depth', 'data.SoundSpeed'],
+                            '89': ['time', 'Reflectivity'],
                             '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
 
 oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
@@ -153,7 +158,7 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
                                               'Serial#2': [['installation_params', 'serial_two']],
                                               'settings': [['installation_params', 'installation_settings']]},
                                        '102': {'time': [['ping', 'time']], 'PingCounter': [['ping', 'counter']],
-                                               'SoundSpeed': [['ping', 'soundspeed']], 'Ntx': [['ping', 'ntx']],
+                                               'SoundSpeed': [['ping', 'soundspeed']],
                                                'SystemSerialNum': [['ping', 'serial_num']],
                                                'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                                'CenterFrequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
@@ -165,6 +170,7 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
                                               'settings': [['runtime_params', 'runtime_settings']]},
                                        '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                               'SoundSpeed': [['profile', 'soundspeed']]},
+                                       '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]},
                                        '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                               'Longitude': [['navigation', 'longitude']],
                                               'Altitude': [['navigation', 'altitude']]}}
@@ -172,8 +178,8 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
 recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
                           'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
                                                   'installation_settings': None},
-                          'ping': {'time': None, 'counter': None, 'soundspeed': None, 'ntx': None, 'serial_num': None,
-                                   'tiltangle': None, 'delay': None, 'frequency': None,
+                          'ping': {'time': None, 'rtime': None, 'counter': None, 'soundspeed': None, 'serial_num': None,
+                                   'tiltangle': None, 'delay': None, 'frequency': None, 'reflectivity': None,
                                    'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
                                    'qualityfactor': None, 'traveltime': None},
                           'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
@@ -690,7 +696,7 @@ class AllRead:
                 data_lookup.append(data)
             else:
                 runtime_array[cnt] = {}
-        return runtime_array
+        return runtime_array.astype(np.object)
 
     def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber):
         """
@@ -708,7 +714,7 @@ class AllRead:
             minlen = len(min(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
             if minlen != maxlen:
-                print('par3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
+                # print('par3: Found uneven number of beams from {} to {}'.format(minlen, maxlen))
                 uneven = True
 
         for rec in recs_to_read:
@@ -729,17 +735,19 @@ class AllRead:
                         except:  # data80 approach, cast as numpy array, just one list of values
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'ping':
-                    if dgram == 'detectioninfo':
+                    if dgram in ['reflectivity', 'rtime'] and not recs_to_read[rec][dgram]:
+                        pass
+                    elif dgram == 'detectioninfo':
                         # same for detection info, but it also needs to be converted to something other than int8
                         recs_to_read[rec][dgram] = self._translate_to_array(recs_to_read[rec][dgram], override_type=np.int32, uneven=uneven, maxlen=maxlen, fullwith=2)
                     elif dgram == 'qualityfactor':
                         if uneven:
-                            newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=np.int32)
+                            newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=np.float32)
                             for i, j in enumerate(recs_to_read[rec][dgram]):
                                 newrec[i][0:len(j)] = j
                             recs_to_read[rec][dgram] = newrec
                         else:
-                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.int32)
+                            recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.float32)
                     else:
                         if uneven and isinstance(recs_to_read[rec][dgram][0], np.ndarray):
                             newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=recs_to_read[rec][dgram][0].dtype)
@@ -763,7 +771,23 @@ class AllRead:
 
         if recs_to_read['navigation']['altitude'] is None or len(recs_to_read['navigation']['altitude']) == 0:
             recs_to_read['navigation'].pop('altitude')
+        else:
+            recs_to_read['navigation']['altitude'] = recs_to_read['navigation']['altitude'].astype(np.float32)
+        recs_to_read['navigation']['longitude'] = recs_to_read['navigation']['longitude'].astype(float)
+        recs_to_read['navigation']['latitude'] = recs_to_read['navigation']['latitude'].astype(float)
+
+        # reflectivity comes from a different record, if it exists, we deal with it here
+        if recs_to_read['ping']['rtime'] is not None:
+            if recs_to_read['ping']['time'].size != recs_to_read['ping']['rtime'].size:  # get indices of nearest intensity for each ping
+                rindex = np.searchsorted(recs_to_read['ping']['rtime'], recs_to_read['ping']['time']).clip(0, recs_to_read['ping']['rtime'].size - 1)
+                recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'][rindex]
+            recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
+        else:
+            recs_to_read['ping'].pop('reflectivity')
+        recs_to_read['ping'].pop('rtime')
+
         recs_to_read['runtime_params']['runtime_settings'] = self._only_keep_important_runtime(recs_to_read['runtime_params']['runtime_settings'])
+        recs_to_read['ping']['counter'] = recs_to_read['ping']['counter'].astype('uint32')
 
         # finding spikes in latitude/longitude that go to 0 (only seen this once with old data), have to identify and remove
         for var in ['latitude', 'longitude']:
@@ -802,6 +826,13 @@ class AllRead:
             recs_to_read['ping']['time'][0] += 0.000010
             if recs_to_read['ping']['serial_num'][0] != recs_to_read['ping']['serial_num'][1]:
                 recs_to_read['ping']['time'][1] += 0.000010
+
+        # mask the empty beams that we add where there are no beams to get nice squared arrays.  By setting detection
+        #  to rejected and traveltime to NaN, the processed data will be automatically rejected.
+        if uneven:
+            msk = recs_to_read['ping']['traveltime'] == 0
+            recs_to_read['ping']['detectioninfo'][msk] = 2
+            recs_to_read['ping']['traveltime'][msk] = np.float32(np.nan)
 
         # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
         for dset_name in ['attitude', 'navigation']:
@@ -3443,6 +3474,10 @@ class Data89(BaseData):
         for n in range(len(self.beam_position) - 1):
             self.beam_position[n + 1] = self.beaminfo['#SamplesPerBeam'][n] + self.beam_position[n]
 
+    @property
+    def Reflectivity(self):  # added to support kluster read
+        return [self.center().tolist()]
+
     def get_datablock(self, data=None):
         # FIXME: Not sure what happens if reshape is called
         part1 = super(Data89, self).get_datablock()
@@ -3486,6 +3521,8 @@ class Data89(BaseData):
         # sample in each beam, so the center is the start + the center count -1
         # GAR 20150127
         idx = self.beam_position + self.beaminfo['CenterSample#'] - 1
+        # cover for when idx == -1 (overflow)
+        idx[idx == 4294967295] = 0
         center = self.samples[idx]
         sidx = np.nonzero(self.beaminfo['SortingDirection'] == -1)[0]
         idx = self.beam_position[sidx + 1] - self.beaminfo['CenterSample#'][sidx]
