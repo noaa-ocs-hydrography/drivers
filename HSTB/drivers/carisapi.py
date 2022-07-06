@@ -1355,7 +1355,14 @@ class CarisAPI():
 
             fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
             if float(self.hipsversion) < 11:
-                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+                if self.vessel_name and self.day_num:
+                    fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+                elif self.vessel_name:
+                    fullcommand += '?Vessel=' + self.vessel_name + '"'
+                elif self.day_num:
+                    fullcommand += '?Day=' + self.day_num + '"'
+                else:
+                    fullcommand += '"'
             else:
                 fullcommand += '"'
 
@@ -1685,7 +1692,14 @@ class CarisAPI():
             fullcommand += rawfil
             fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
             if float(self.hipsversion) < 11:
-                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+                if self.vessel_name and self.day_num:
+                    fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+                elif self.vessel_name:
+                    fullcommand += '?Vessel=' + self.vessel_name + '"'
+                elif self.day_num:
+                    fullcommand += '?Day=' + self.day_num + '"'
+                else:
+                    fullcommand += '"'
             else:
                 fullcommand += '"'
 
@@ -1701,8 +1715,9 @@ class CarisAPI():
 
         fullcommand = self.hipscommand + ' --run CreateSIPSBeamPattern --mosaic-engine ' + type
         fullcommand += ' --beam-pattern-file "' + bbpfile + '" '
-        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         if querybyline:
+            fullcommand += '?'
             for line in self.converted_lines:
                 linename = os.path.split(line)[1]
                 fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -1712,7 +1727,14 @@ class CarisAPI():
                 else:
                     fullcommand += '&'
         else:
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name + '"'
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num + '"'
+            else:
+                fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1740,8 +1762,9 @@ class CarisAPI():
                     fullcommand = self.hipscommand + ' --run CreateSIPSMosaic --mosaic-engine SIPS_BACKSCATTER_WMA_AREA_AVG --output-crs EPSG:' + epsg
         fullcommand += ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
         fullcommand += ' --resolution ' + resolution + ' --beam-pattern-file "' + beampattern + '" '
-        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         if querybyline:
+            fullcommand += '?'
             for line in self.converted_lines:
                 linename = os.path.split(line)[1]
                 fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -1751,7 +1774,12 @@ class CarisAPI():
                 else:
                     fullcommand += '&'
         else:
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
@@ -1768,8 +1796,9 @@ class CarisAPI():
 
         fullcommand = self.hipscommand + ' --run ComputeSIPSTowfishNavigation '
         # fullcommand += '--smooth-sensor SSSSensor --smooth-sensor SSSCable --use-cmg '
-        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         if querybyline:
+            fullcommand += '?'
             for line in self.converted_lines:
                 linename = os.path.split(line)[1]
                 fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -1779,7 +1808,14 @@ class CarisAPI():
                 else:
                     fullcommand += '&'
         else:
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name + '"'
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num + '"'
+            else:
+                fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1793,8 +1829,15 @@ class CarisAPI():
         fullcommand = self.hipscommand + ' --run ImportTideToHIPS --tide-file "' + tide_file + '" '
         if zdf:
             fullcommand += '--interpolation-type MULTI_STATION '
-        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name + '"'
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num + '"'
+        else:
+            fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1830,8 +1873,9 @@ class CarisAPI():
             print([height, delheave, height_rms, delheave_rms, nav, nav_rms])
             print("{} not a valid process type".format(datatype))
             fullcommand = ''
-        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         if querybyline:
+            fullcommand += '?'
             for line in self.converted_lines:
                 linename = os.path.split(line)[1]
                 fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -1841,7 +1885,14 @@ class CarisAPI():
                 else:
                     fullcommand += '&'
         else:
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name + '"'
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num + '"'
+            else:
+                fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1862,8 +1913,15 @@ class CarisAPI():
             fullcommand += ' --profile-selection-method ' + select_method
             fullcommand += ' --nearest-distance-hours 4'
         fullcommand += ' --heave-source "' + heavesource + '" --ssp '
-        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name + '"'
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num + '"'
+        else:
+            fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1888,8 +1946,15 @@ class CarisAPI():
             fullcommand += ' --mru-remote-heave'
         if waterline:
             fullcommand += ' --waterline ' + waterline
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name + '"'
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num + '"'
+        else:
+            fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1904,8 +1969,15 @@ class CarisAPI():
         fullcommand = self.hipscommand + ' --run ComputeHIPSSeparationModel --resolution 10m'
         fullcommand += '" --dynamic-heave ' + heave_or_delayed
         fullcommand += ' --mru-remote-heave --antenna-offset --dynamic-draft --waterline REALTIME '
-        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name + '"'
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num + '"'
+        else:
+            fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1916,8 +1988,15 @@ class CarisAPI():
         '''Runs MergeHIPS with all the options.  Example: carisbatch.exe --run MergeHIPS --tide GPS
         file:///C:/HIPSData/HDCS_Data/Test/Test.hips'''
         fullcommand = self.hipscommand + ' --run MergeHIPS --tide ' + tide_or_gps + ' --heave-source ' + heave_or_delayed
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name + '"'
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num + '"'
+        else:
+            fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -1961,8 +2040,15 @@ class CarisAPI():
             fullcommand += ' --sv-measured ' + sv_meas + ' --sv-surface ' + sv_surf + ' --source-navigation ' + source_nav
             fullcommand += ' --source-sonar ' + source_sonar + ' --source-gyro ' + source_gyro + ' --source-pitch ' + source_pitch
             fullcommand += ' --source-roll ' + source_roll + ' --source-heave ' + source_heave + ' --source-tide ' + source_tide
-            fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name + '"'
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num + '"'
+            else:
+                fullcommand += '"'
 
             if self.bench:
                 self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -2059,8 +2145,9 @@ class CarisAPI():
         fullcommand += ' --source-tide ' + tpuopts['source']['source_tide']
         fullcommand += ' --output-components'
 
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         if querybyline:
+            fullcommand += '?'
             for line in self.converted_lines:
                 linename = os.path.split(line)[1]
                 fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -2070,7 +2157,14 @@ class CarisAPI():
                 else:
                     fullcommand += '&'
         else:
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num + '"'
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name + '"'
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num + '"'
+            else:
+                fullcommand += '"'
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
@@ -2104,8 +2198,9 @@ class CarisAPI():
         if self.noaa_support_files:
             fullcommand += ' --cube-config-file="' + self.cubeparams + '" --cube-config-name="' + cuberes + '"'
         fullcommand += ' --resolution ' + resolution + ' --iho-order ' + iho + ' "file:///'
-        fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+        fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         if querybyline:
+            fullcommand += '?'
             for line in self.converted_lines:
                 linename = os.path.split(line)[1]
                 fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -2115,7 +2210,12 @@ class CarisAPI():
                 else:
                     fullcommand += '&'
         else:
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num
 
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
@@ -2175,8 +2275,9 @@ class CarisAPI():
                 fullcommand += ' --range-file "' + depthrange
             fullcommand += '" --keep-partial-bins --input-band DEPTH --max-grid-size ' + maxgrid
             fullcommand += ' --min-grid-size ' + mingrid + ' --include-flag ACCEPTED "file:///'
-            fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+            fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
             if querybyline:
+                fullcommand += '?'
                 for line in self.converted_lines:
                     linename = os.path.splitext(os.path.split(line)[1])[0]
                     fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -2186,7 +2287,12 @@ class CarisAPI():
                     else:
                         fullcommand += '&'
             else:
-                fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+                if self.vessel_name and self.day_num:
+                    fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+                elif self.vessel_name:
+                    fullcommand += '?Vessel=' + self.vessel_name
+                elif self.day_num:
+                    fullcommand += '?Day=' + self.day_num
             if self.onlysurface_additionalvessel:
                 fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
             fullcommand += '"'
@@ -2198,8 +2304,9 @@ class CarisAPI():
             fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 16.0m --points-per-cell 15'
             fullcommand += ' --area SWATH --keep-partial-bins'
             fullcommand += ' --max-grid-size ' + maxgrid + ' --min-grid-size ' + mingrid + ' --include-flag ACCEPTED "file:///'
-            fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+            fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
             if querybyline:
+                fullcommand += '?'
                 for line in self.converted_lines:
                     linename = os.path.splitext(os.path.split(line)[1])[0]
                     fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -2209,7 +2316,12 @@ class CarisAPI():
                     else:
                         fullcommand += '&'
             else:
-                fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+                if self.vessel_name and self.day_num:
+                    fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+                elif self.vessel_name:
+                    fullcommand += '?Vessel=' + self.vessel_name
+                elif self.day_num:
+                    fullcommand += '?Day=' + self.day_num
             if self.onlysurface_additionalvessel:
                 fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
             fullcommand += '"'
@@ -2229,8 +2341,9 @@ class CarisAPI():
         fullcommand += ' --horizontal-uncertainty "Position TPU" --display-bias HIGHEST --disambiguation-method DENSITY_LOCALE'
         if self.noaa_support_files:
             fullcommand += ' --cube-config-file="' + self.cubeparams + '" --cube-config-name="NOAA_VR"'
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         if querybyline:
+            fullcommand += '?'
             for line in self.converted_lines:
                 linename = os.path.split(line)[1]
                 fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
@@ -2240,7 +2353,12 @@ class CarisAPI():
                 else:
                     fullcommand += '&'
         else:
-            fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
@@ -2255,8 +2373,13 @@ class CarisAPI():
         '''Runs AddtoHIPSGrid with all the options.  Example: carisbatch.exe --run AddtoHIPSGrid
                  file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
         fullcommand = self.hipscommand + ' --run AddtoHIPSGrid'
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
@@ -2270,8 +2393,13 @@ class CarisAPI():
         '''Runs RemoveFromHIPSGrid with all the options.  Example: carisbatch.exe --run RemoveFromHIPSGrid
                  file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
         fullcommand = self.hipscommand + ' --run RemoveFromHIPSGrid'
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
@@ -2285,8 +2413,13 @@ class CarisAPI():
         '''Runs AddtoVRSurface with all the options.  Example: carisbatch.exe --run AddToVRSurface
                  file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
         fullcommand = self.hipscommand + ' --run AddtoVRSurface --update-type BOTH'
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
@@ -2300,8 +2433,13 @@ class CarisAPI():
         '''Runs RemoveFromVRSurface with all the options.  Example: carisbatch.exe --run RemoveFromVRSurface
                  file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
         fullcommand = self.hipscommand + ' --run RemoveFromVRSurface --update-type BOTH'
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
@@ -2318,8 +2456,13 @@ class CarisAPI():
 
         fullcommand = self.hipscommand + ' --run AddtoSIPSMosaic --mosaic-engine ' + type
         fullcommand += ' --beam-pattern-file "' + beampattern + '"'
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
@@ -2335,8 +2478,13 @@ class CarisAPI():
         C:\HIPSData\Products\Mosaic.csar'''
 
         fullcommand = self.hipscommand + ' --run RemoveFromSIPSMosaic'
-        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips?')
-        fullcommand += 'Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        fullcommand += ' "file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if self.vessel_name and self.day_num:
+            fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+        elif self.vessel_name:
+            fullcommand += '?Vessel=' + self.vessel_name
+        elif self.day_num:
+            fullcommand += '?Day=' + self.day_num
         if self.onlysurface_additionalvessel:
             fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
         fullcommand += '"'
