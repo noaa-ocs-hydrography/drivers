@@ -740,6 +740,8 @@ class AllRead:
                     elif dgram == 'detectioninfo':
                         # same for detection info, but it also needs to be converted to something other than int8
                         recs_to_read[rec][dgram] = self._translate_to_array(recs_to_read[rec][dgram], override_type=np.int32, uneven=uneven, maxlen=maxlen, fullwith=2)
+                    elif dgram == 'serial_num':
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint64')
                     elif dgram == 'qualityfactor':
                         if uneven:
                             newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=np.float32)
@@ -834,26 +836,27 @@ class AllRead:
             recs_to_read['ping']['detectioninfo'][msk] = 2
             recs_to_read['ping']['traveltime'][msk] = np.float32(np.nan)
 
-        # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
-        for dset_name in ['attitude', 'navigation']:
+        # need to sort/drop uniques, keep finding duplicate times
+        for dset_name in ['attitude', 'navigation', 'ping']:
             # first handle these cases where variables are of a different size vs time, I believe this is some issue with older datasets
             #  and the data65 record, need to determine the actual cause as the 'fix' used here is not great
-            for dgram in recs_to_read[dset_name]:
-                if dgram != 'time':
-                    try:
-                        assert recs_to_read[dset_name][dgram].shape[0] == recs_to_read[dset_name]['time'].shape[0]
-                    except AssertionError:
-                        dgramsize = recs_to_read[dset_name][dgram].shape[0]
-                        timesize = recs_to_read[dset_name]["time"].shape[0]
-                        msg = f'variable {dgram} has a length of {dgramsize}, where time has a length of {timesize}'
-                        if recs_to_read[dset_name][dgram].ndim == 2:  # shouldn't be seen with attitude/navigation datasets anyway
-                            raise NotImplementedError(msg + ', handling this for 2 dimensional cases is not implemented')
-                        elif timesize < dgramsize:  # trim to time size
-                            recs_to_read[dset_name][dgram] = recs_to_read[dset_name][dgram][:timesize]
-                            print('Warning: ' + msg + f', trimming {dgram} to length {timesize}')
-                        else:
-                            recs_to_read[dset_name][dgram] = np.concatenate([recs_to_read[dset_name][dgram], [recs_to_read[dset_name][dgram][-1]] * (timesize - dgramsize)])
-                            print('Warning: ' + msg + f', filling {dgram} by repeating last element {timesize - dgramsize} times')
+            if dset_name in ['attitude', 'navigation']:
+                for dgram in recs_to_read[dset_name]:
+                    if dgram != 'time':
+                        try:
+                            assert recs_to_read[dset_name][dgram].shape[0] == recs_to_read[dset_name]['time'].shape[0]
+                        except AssertionError:
+                            dgramsize = recs_to_read[dset_name][dgram].shape[0]
+                            timesize = recs_to_read[dset_name]["time"].shape[0]
+                            msg = f'variable {dgram} has a length of {dgramsize}, where time has a length of {timesize}'
+                            if recs_to_read[dset_name][dgram].ndim == 2:  # shouldn't be seen with attitude/navigation datasets anyway
+                                raise NotImplementedError(msg + ', handling this for 2 dimensional cases is not implemented')
+                            elif timesize < dgramsize:  # trim to time size
+                                recs_to_read[dset_name][dgram] = recs_to_read[dset_name][dgram][:timesize]
+                                print('Warning: ' + msg + f', trimming {dgram} to length {timesize}')
+                            else:
+                                recs_to_read[dset_name][dgram] = np.concatenate([recs_to_read[dset_name][dgram], [recs_to_read[dset_name][dgram][-1]] * (timesize - dgramsize)])
+                                print('Warning: ' + msg + f', filling {dgram} by repeating last element {timesize - dgramsize} times')
 
             dset = recs_to_read[dset_name]
             _, index = np.unique(dset['time'], return_index=True)

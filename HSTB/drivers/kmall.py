@@ -3849,8 +3849,8 @@ class kmall():
             inst_params = recs_to_read['installation_params']['installation_settings'][0]
             if inst_params is not None and serial_translator is not None:
                 serialnums = list(serial_translator.values())
-                recs_to_read['installation_params']['serial_one'] = np.array(serialnums[0], dtype='uint16')
-                recs_to_read['installation_params']['serial_two'] = np.array(serialnums[1], dtype='uint16')
+                recs_to_read['installation_params']['serial_one'] = np.array(serialnums[0], dtype='uint64')
+                recs_to_read['installation_params']['serial_two'] = np.array(serialnums[1], dtype='uint64')
                 recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 0] = serialnums[0]
                 recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 1] = serialnums[1]
 
@@ -3879,7 +3879,7 @@ class kmall():
                     elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor', 'reflectivity']:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
                     elif dgram == 'serial_num':
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint16')
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint64')
                     elif dgram == 'txsector_beam':
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint8')
                     elif dgram == 'counter':
@@ -3899,6 +3899,20 @@ class kmall():
         # recs_to_read = self._interpolate_skm_time_spikes(recs_to_read)
         recs_to_read = self._skm_remove_empty_navigation(recs_to_read)
         recs_to_read = self._merge_detectioninfo_detectionmethod(recs_to_read)
+
+        # need to sort/drop uniques, keep finding duplicate times
+        for dset_name in ['attitude', 'navigation', 'ping']:
+            dset = recs_to_read[dset_name]
+            _, index = np.unique(dset['time'], return_index=True)
+            if dset['time'].size != index.size:
+                # print('kmall: Found duplicate times in {}, removing...'.format(dset_name))
+                for var in dset:
+                    dset[var] = dset[var][index]
+            if not np.all(dset['time'][:-1] <= dset['time'][1:]):
+                # print('kmall: {} is not sorted, sorting...'.format(dset_name))
+                index = np.argsort(dset['time'])
+                for var in dset:
+                    dset[var] = dset[var][index]
 
         # some dtype setting to appease the Kluster check
         recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
@@ -4311,11 +4325,10 @@ class kmall():
         if rec is None:
             raise ValueError('kmall: Unable to find installation parameters in file {}'.format(self.filename))
 
-        try:
-            serialnumber = int(rec['install_txt']['pu_serial_number'])
-            serialnumbertwo = 0  # currently there is no support for dual head in kmall files
-        except:
-            raise ValueError('Error: Unable to find pu_serial_number in kmall IIP install_txt')
+        serial_trans = self.fast_read_serial_number_translator()
+        serialnumber = serial_trans[0]
+        serialnumbertwo = serial_trans[1]
+
         try:
             sonarmodel = rec['install_txt']['sonar_model_number'].lower()
         except:

@@ -750,8 +750,8 @@ class X7kRead:
             isets['transducer_2_vertical_location'] = runtime['transducer_2_vertical_refpt_offset']
 
         finalrec = {'installation_params': {'time': np.array([starttime], dtype=float),
-                                            'serial_one': np.array([serial_num_one], dtype=np.dtype('uint16')),
-                                            'serial_two': np.array([serial_num_two], dtype=np.dtype('uint16')),
+                                            'serial_one': np.array([serial_num_one], dtype=np.dtype('uint64')),
+                                            'serial_two': np.array([serial_num_two], dtype=np.dtype('uint64')),
                                             'installation_settings': np.array([isets], dtype=np.object)}}
         return finalrec
 
@@ -845,7 +845,7 @@ class X7kRead:
         recs_to_read['ping']['detectioninfo'] = translate_detectioninfo(recs_to_read['ping']['detectioninfo'])
 
         # empty records we expect with sector wise systems that we need to cover for Kluster
-        recs_to_read['ping']['serial_num'] = np.full(recs_to_read['ping']['counter'].shape, serialnumber, dtype='uint16')
+        recs_to_read['ping']['serial_num'] = np.full(recs_to_read['ping']['counter'].shape, serialnumber, dtype='uint64')
         recs_to_read['ping']['delay'] = np.full_like(recs_to_read['ping']['tiltangle'], 0.0)
 
         # drop the empty altitude record if it is empty
@@ -920,35 +920,16 @@ class X7kRead:
             recs_to_read['ping']['detectioninfo'][msk] = 2
             recs_to_read['ping']['traveltime'][msk] = np.float32(np.nan)
 
-        # need to sort/drop uniques, keep finding duplicate times in attitude/navigation datasets
-        for dset_name in ['attitude', 'navigation']:
-            # first handle these cases where variables are of a different size vs time, I believe this is some issue with older datasets
-            #  and the data65 record, need to determine the actual cause as the 'fix' used here is not great
-            for dgram in recs_to_read[dset_name]:
-                if dgram != 'time':
-                    try:
-                        assert recs_to_read[dset_name][dgram].shape[0] == recs_to_read[dset_name]['time'].shape[0]
-                    except AssertionError:
-                        dgramsize = recs_to_read[dset_name][dgram].shape[0]
-                        timesize = recs_to_read[dset_name]["time"].shape[0]
-                        msg = f'variable {dgram} has a length of {dgramsize}, where time has a length of {timesize}'
-                        if recs_to_read[dset_name][dgram].ndim == 2:  # shouldn't be seen with attitude/navigation datasets anyway
-                            raise NotImplementedError(msg + ', handling this for 2 dimensional cases is not implemented')
-                        elif timesize < dgramsize:  # trim to time size
-                            recs_to_read[dset_name][dgram] = recs_to_read[dset_name][dgram][:timesize]
-                            print('Warning: ' + msg + f', trimming {dgram} to length {timesize}')
-                        else:
-                            recs_to_read[dset_name][dgram] = np.concatenate([recs_to_read[dset_name][dgram], [recs_to_read[dset_name][dgram][-1]] * (timesize - dgramsize)])
-                            print('Warning: ' + msg + f', filling {dgram} by repeating last element {timesize - dgramsize} times')
-
+        # need to sort/drop uniques, keep finding duplicate times
+        for dset_name in ['attitude', 'navigation', 'ping']:
             dset = recs_to_read[dset_name]
             _, index = np.unique(dset['time'], return_index=True)
             if dset['time'].size != index.size:
-                # print('par3: Found duplicate times in {}, removing...'.format(dset_name))
+                # print('prr3: Found duplicate times in {}, removing...'.format(dset_name))
                 for var in dset:
                     dset[var] = dset[var][index]
             if not np.all(dset['time'][:-1] <= dset['time'][1:]):
-                # print('par3: {} is not sorted, sorting...'.format(dset_name))
+                # print('prr3: {} is not sorted, sorting...'.format(dset_name))
                 index = np.argsort(dset['time'])
                 for var in dset:
                     dset[var] = dset[var][index]
