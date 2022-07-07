@@ -750,8 +750,8 @@ class X7kRead:
             isets['transducer_2_vertical_location'] = runtime['transducer_2_vertical_refpt_offset']
 
         finalrec = {'installation_params': {'time': np.array([starttime], dtype=float),
-                                            'serial_one': np.array([serial_num_one], dtype=np.dtype('uint16')),
-                                            'serial_two': np.array([serial_num_two], dtype=np.dtype('uint16')),
+                                            'serial_one': np.array([serial_num_one], dtype=np.dtype('uint64')),
+                                            'serial_two': np.array([serial_num_two], dtype=np.dtype('uint64')),
                                             'installation_settings': np.array([isets], dtype=np.object)}}
         return finalrec
 
@@ -845,7 +845,7 @@ class X7kRead:
         recs_to_read['ping']['detectioninfo'] = translate_detectioninfo(recs_to_read['ping']['detectioninfo'])
 
         # empty records we expect with sector wise systems that we need to cover for Kluster
-        recs_to_read['ping']['serial_num'] = np.full(recs_to_read['ping']['counter'].shape, serialnumber, dtype='uint16')
+        recs_to_read['ping']['serial_num'] = np.full(recs_to_read['ping']['counter'].shape, serialnumber, dtype='uint64')
         recs_to_read['ping']['delay'] = np.full_like(recs_to_read['ping']['tiltangle'], 0.0)
 
         # drop the empty altitude record if it is empty

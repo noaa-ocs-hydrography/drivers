@@ -740,6 +740,8 @@ class AllRead:
                     elif dgram == 'detectioninfo':
                         # same for detection info, but it also needs to be converted to something other than int8
                         recs_to_read[rec][dgram] = self._translate_to_array(recs_to_read[rec][dgram], override_type=np.int32, uneven=uneven, maxlen=maxlen, fullwith=2)
+                    elif dgram == 'serial_num':
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint64')
                     elif dgram == 'qualityfactor':
                         if uneven:
                             newrec = np.zeros((len(recs_to_read[rec][dgram]), maxlen), dtype=np.float32)

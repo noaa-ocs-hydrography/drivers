@@ -3849,8 +3849,8 @@ class kmall():
             inst_params = recs_to_read['installation_params']['installation_settings'][0]
             if inst_params is not None and serial_translator is not None:
                 serialnums = list(serial_translator.values())
-                recs_to_read['installation_params']['serial_one'] = np.array(serialnums[0], dtype='uint16')
-                recs_to_read['installation_params']['serial_two'] = np.array(serialnums[1], dtype='uint16')
+                recs_to_read['installation_params']['serial_one'] = np.array(serialnums[0], dtype='uint64')
+                recs_to_read['installation_params']['serial_two'] = np.array(serialnums[1], dtype='uint64')
                 recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 0] = serialnums[0]
                 recs_to_read['ping']['serial_num'][recs_to_read['ping']['serial_num'] == 1] = serialnums[1]
 
@@ -3879,7 +3879,7 @@ class kmall():
                     elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor', 'reflectivity']:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
                     elif dgram == 'serial_num':
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint16')
+                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint64')
                     elif dgram == 'txsector_beam':
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint8')
                     elif dgram == 'counter':
@@ -4311,11 +4311,10 @@ class kmall():
         if rec is None:
             raise ValueError('kmall: Unable to find installation parameters in file {}'.format(self.filename))
 
-        try:
-            serialnumber = int(rec['install_txt']['pu_serial_number'])
-            serialnumbertwo = 0  # currently there is no support for dual head in kmall files
-        except:
-            raise ValueError('Error: Unable to find pu_serial_number in kmall IIP install_txt')
+        serial_trans = self.fast_read_serial_number_translator()
+        serialnumber = serial_trans[0]
+        serialnumbertwo = serial_trans[1]
+
         try:
             sonarmodel = rec['install_txt']['sonar_model_number'].lower()
         except:
