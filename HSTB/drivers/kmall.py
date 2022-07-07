@@ -3900,6 +3900,20 @@ class kmall():
         recs_to_read = self._skm_remove_empty_navigation(recs_to_read)
         recs_to_read = self._merge_detectioninfo_detectionmethod(recs_to_read)
 
+        # need to sort/drop uniques, keep finding duplicate times
+        for dset_name in ['attitude', 'navigation', 'ping']:
+            dset = recs_to_read[dset_name]
+            _, index = np.unique(dset['time'], return_index=True)
+            if dset['time'].size != index.size:
+                # print('kmall: Found duplicate times in {}, removing...'.format(dset_name))
+                for var in dset:
+                    dset[var] = dset[var][index]
+            if not np.all(dset['time'][:-1] <= dset['time'][1:]):
+                # print('kmall: {} is not sorted, sorting...'.format(dset_name))
+                index = np.argsort(dset['time'])
+                for var in dset:
+                    dset[var] = dset[var][index]
+
         # some dtype setting to appease the Kluster check
         recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
         # empty processing status that we append for Kluster to use later
