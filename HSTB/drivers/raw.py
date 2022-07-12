@@ -880,6 +880,9 @@ class Raw3:
         self.header = tmp.astype(Raw3.hdr_dtype)
         self.numsamples = self.header['Count'] - self.header['Offset']
         pointer = hdr_sz
+        self.power = None
+        self.angle = None
+        self.complexsamples = None
         # Read the samples
         if self.header['Mode_Low'] < 4:
             npointer = pointer + 2 * self.numsamples
@@ -887,18 +890,16 @@ class Raw3:
             self.power = power * 10 * np.log10(2) / 256
             pointer = npointer
             if self.header['Mode_Low'] == 3:
-                angle_dtype = np.dtype(['Alongship', 'B'], ['Athwartship', 'B'])
+                angle_dtype = np.dtype([('Alongship', 'B'), ('Athwartship', 'B')])
                 npointer = pointer + 2 * self.numsamples
-                self.angle = np.frombuffer(datablock[pointer: npointer],
-                                           dtype=angle_dtype)
+                self.angle = np.frombuffer(datablock[pointer: npointer], dtype=angle_dtype)
         elif self.header['Mode_Low'] == 8:
             ncomplex = self.header['Mode_High']  # of 2x4-byte Re+Im pairs/samp
             npointer = 8 * ncomplex * self.numsamples + pointer
-            self.complexsamples = np.frombuffer(datablock[pointer:npointer],
-                                                dtype='complex64')
+            self.complexsamples = np.frombuffer(datablock[pointer:npointer], dtype='complex64')
             self.complexsamples.shape = (-1, ncomplex)
         else:
-            print('Unknown Sample Mode')
+            raise ValueError(f'raw: RAW3 datagram found with unknown mode - ModeLow:{self.header["Mode_Low"]}, ModeHigh:{self.header["Mode_High"]}')
 
     def display(self):
         """
