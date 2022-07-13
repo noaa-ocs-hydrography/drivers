@@ -27,13 +27,15 @@ with data that follows the format from the er60 reference manual, but has been
 extended by converting various matlab readers to add additional datagrams, such
 as RAW1. 
 """
-
+import glob
+import os.path
 import sys
 import pickle
 import xml.etree.ElementTree as et
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timezone
+
 import warnings
 
 plt.ion()
@@ -370,11 +372,11 @@ class readraw:
 
         self.read()
         datagram_type = str(self.packet.dtype)
-        if datagram_type in 'CON0':
+        if datagram_type == 'CON0':
             self.get()
             sonarmodel = 'EK60'
             serialnumber = int(self.packet.subpack.serial_numbers[0])  # get the lowest freq serial number as the identifier
-        elif datagram_type in 'XML0':
+        elif datagram_type == 'XML0':
             self.get()
             sonarmodel = 'EK80'
             serialnumber = 0
@@ -400,6 +402,54 @@ class readraw:
         self.eof = cureof
         self.start_ptr = startptr
         return [serialnumber, 0, sonarmodel]
+
+    def has_position(self):
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
+        cureof = self.eof
+
+        self.infile.seek(0)
+        self.eof = False
+        found = False
+        for i in range(200):
+            self.read()
+            datagram_type = str(self.packet.dtype)
+            if datagram_type == 'NME0':
+                self.get()
+                rec_nme0 =  self.packet.subpack
+                if rec_nme0.header:
+                    if 'lat' in self.packet.subpack.header:
+                        found = True
+                        break
+
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
+        self.eof = cureof
+        return found
+
+    def has_attitude(self):
+        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
+        curptr = self.infile.tell()
+        cureof = self.eof
+
+        self.infile.seek(0)
+        self.eof = False
+        found = False
+        for i in range(200):
+            self.read()
+            datagram_type = str(self.packet.dtype)
+            if datagram_type == 'NME0':
+                self.get()
+                rec_nme0 =  self.packet.subpack
+                if rec_nme0.header:
+                    if 'roll' in self.packet.subpack.header:
+                        found = True
+                        break
+
+        self.infile.seek(curptr)
+        self.at_right_byte = cur_startstatus
+        self.eof = cureof
+        return found
 
 
 class Datagram:
@@ -1068,7 +1118,7 @@ class Nme0:
                 try:
                     self.header = readmethod()
                 except:
-                    print(f'raw: Malformed {self.string[0]} found: {self.string}')
+                    # print(f'raw: Malformed {self.string[0]} found: {self.string}')
                     self.header = None
             else:
                 self.header = None
@@ -1128,7 +1178,7 @@ class Nme0:
         hdt['heading'] = float(self.string[1])
         return hdt
 
-    def _PASHR(self):  # Novatel inertial attitude data
+    def _SHR(self):  # Novatel inertial attitude data ($PASHR)
         pashr = {}
         pashr['type'] = 'PASHR'
         pashr['daysec'] = (int(self.string[1][:2]) * 3600. +
@@ -1433,3 +1483,85 @@ def basetime(year, month, day, time_type=0):
         POSIXdays = ordinal - 719163
     base = POSIXdays * 24 * 3600
     return base
+
+
+def get_saildrone_navigation(raw_file: str):
+    """
+    Get all the navigation found in .gps.csv files that are in the same directory as the given .raw file
+
+    Parameters
+    ----------
+    raw_file
+        path to a .raw file
+
+    Returns
+    -------
+    np.ndarray
+        1d array of utctime in seconds
+    np.ndarray
+        1d array of latitude in degrees
+    np.ndarray
+        1d array of longitude in degrees
+    """
+
+    raw_dir = os.path.dirname(raw_file)
+    possible_nav_files = glob.glob(raw_dir + r'/*.gps.csv')
+    utctime = []
+    latitude = []
+    longitude = []
+    for nf in possible_nav_files:
+        newtme, newlat, newlon = read_saildrone_csv(nf)
+        if newtme is not None:
+            utctime.append(newtme)
+            latitude.append(newlat)
+            longitude.append(newlon)
+    if utctime:
+        utctime = np.concatenate(utctime)
+        latitude = np.concatenate(latitude)
+        longitude = np.concatenate(longitude)
+        sortidx = np.argsort(utctime)
+        utctime = utctime[sortidx]
+        latitude = latitude[sortidx]
+        longitude = longitude[sortidx]
+    else:
+        print(f"raw: ERROR - Unable to find any *.gps.csv files for saildrone navigation")
+    return utctime, latitude, longitude
+
+
+def read_saildrone_csv(csvpath: str):
+    """
+    Read one of the saildrone gps.csv files, to get navigation
+
+    Parameters
+    ----------
+    csvpath
+        path to a .gps.csv navigation file
+
+    Returns
+    -------
+    np.ndarray
+        1d array of utctime in seconds
+    np.ndarray
+        1d array of latitude in degrees
+    np.ndarray
+        1d array of longitude in degrees
+    """
+
+    try:
+        data = np.recfromcsv(csvpath, encoding='utf8')
+    except:
+        print(f"raw: ERROR - Unable to read {csvpath} as csv")
+        return None, None, None
+    expected_columns = ('gps_fix', 'gps_date', 'gps_time', 'latitude', 'longitude')
+    try:
+        assert data.dtype.names == expected_columns
+    except AssertionError:
+        print(f"raw: ERROR - Attempted to read {csvpath}, expected columns {expected_columns}, found {data.dtype.names}")
+        return None, None, None
+    utctime = []
+    date_time_data = np.concatenate([data['gps_date'][:, None], data['gps_time'][:, None]], axis=1)
+    for dtdat in date_time_data:
+        rawdat = datetime.strptime(f'{dtdat[0]}-{dtdat[1]}', '%Y-%m-%d-%H:%M:%S')
+        rawdat = rawdat.replace(tzinfo=timezone.utc)
+        utctime.append(float(rawdat.timestamp()))
+    return np.array(utctime), data['latitude'], data['longitude']
