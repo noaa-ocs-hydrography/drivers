@@ -36,6 +36,8 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 from datetime import datetime, timezone
+from scipy import ndimage
+import cv2
 
 import warnings
 
@@ -493,6 +495,34 @@ class readraw:
         elif 'GLL' in list_of_pos_records:
             return 'GLL'
 
+    def _process_raw_group_ek60(self, raw_group: list):
+        pulselengths = np.array([rg.header['PulseLength'] for rg in raw_group])
+        sampleintervals = np.array([rg.header['SampleInterval'] for rg in raw_group])
+        offsets = np.array([rg.header['Offset'] for rg in raw_group])
+        drafts = np.array([rg.header['TransducerDepth'] for rg in raw_group])
+        max_samples = max([rg.numsamples for rg in raw_group])
+
+        max_pulse_len = pulselengths.max()
+        if not np.all([sampleintervals[0] == si for si in sampleintervals]):
+            raise ValueError('raw: All Sampling intervals are assumed to be the same but are not...')
+
+        powers = np.full((max_samples, len(raw_group)), np.nan)
+        for cnt, rg in enumerate(raw_group):
+            offset = rg.header['Offset']
+            powers[offset:rg.numsamples, cnt] = rg.power
+        detect_idx = _image_detection(powers, threshold=30)
+        pulse_samps = pulselengths / sampleintervals
+        tx_corr = offsets + detect_idx - pulse_samps / 2
+        twowaytraveltime = tx_corr * sampleintervals
+        return twowaytraveltime, max_pulse_len, drafts
+
+    def _process_raw_group(self, raw_group: list, xml_group: list = None):
+        if raw_group:
+            if isinstance(raw_group[0], Raw0):
+                return self._process_raw_group_ek60(raw_group)
+            elif isinstance(raw_group[0], Raw3):
+                return self._process_raw_group_ek80(raw_group, xml_group)
+
     def sequential_read_records(self, first_installation_rec=False):
         """
         Using global recs_categories, parse out only the given datagram types by reading headers and decoding only
@@ -502,14 +532,12 @@ class readraw:
 
         if first_installation_rec:  # only return the needed installation parameters
             return self.return_installation_parameters()
-        elif self.start_ptr == 0:  # the first read will always include the installation parameters
+        else:
             iparams = self.return_installation_parameters()
-            serialnumber = iparams['tx_serial_number']
-            serialnumbertwo = iparams['tx_2_serial_number']
-            sonarmodelnumber = iparams['sonar_model_number']
-        else:  # reads that don't include the first part of the file will not include those parameters
-            iparams = None
-            serialnumber, serialnumbertwo, sonarmodelnumber = self.fast_read_serial_number()
+            serialnumber = iparams['installation_params']['installation_settings'][0]['tx_serial_number']
+            serialnumbertwo = iparams['installation_params']['installation_settings'][0]['tx_2_serial_number']
+            sonarmodelnumber = iparams['installation_params']['installation_settings'][0]['sonar_model_number']
+            transducer_names = iparams['installation_params']['installation_settings'][0]['ektransducer_names']
 
         if sonarmodelnumber == 'EK60':
             desired_record = 'RAW0'
@@ -530,9 +558,50 @@ class readraw:
         self.infile.seek(self.start_ptr)
         self.eof = False
 
+        heads = []
+        xml_parameters = []
+        rectime = 0
+        first_rec = True
         while not self.eof:
             self.read()  # find the start of the record and read the header
             datagram_type = str(self.packet.dtype)
+            if datagram_type in [desired_record, 'XML0']:
+                self.get()
+                if datagram_type == 'XML0' and self.packet.subpack.type != 'Channel':
+                    continue
+                rec = self.packet.subpack
+                # first head in the transducer group, or the first xml message (ideally we could assume xml is first, but Im not sure about that)
+                if (not heads and datagram_type == desired_record) or (not xml_parameters and datagram_type == 'XML0'):
+                    if datagram_type == 'XML0':
+                        xml_parameters.append(rec)
+                    else:
+                        heads.append(rec)
+                    if rectime and rec.time != rectime:
+                        raise ValueError('raw: Found XML0/RAW3 datagrams out of sequence!')
+                    rectime = rec.time
+                else:  # one of the accompanying heads or messages
+                    if rec.time == rectime:  # the rec is in the current group
+                        if datagram_type == 'XML0':
+                            xml_parameters.append(rec)
+                        else:
+                            heads.append(rec)
+                    else:  # the time is different, so this must not belong to the current group
+                        if (len(heads) != len(transducer_names)) or (len(xml_parameters) != len(transducer_names) and desired_record == 'RAW3'):
+                            if self.start_ptr and first_rec:  # if you start in the middle of a group, just skip it, the other sequential_read will pick it up
+                                heads = []
+                                xml_parameters = []
+                                rectime = 0
+                            else:
+                                print(f'raw: WARNING - found {desired_record} grouping at record time {rectime} that only contained {len(heads)}/{len(xml_parameters)} records/parameters, expected {len(transducer_names)}')
+                        self._process_raw_group(heads, xml_parameters)
+                        first_rec = False
+                        heads = []
+                        xml_parameters = []
+                        if datagram_type == 'XML0':
+                            xml_parameters.append(rec)
+                        else:
+                            heads.append(rec)
+                        rectime = rec.time
 
 
 class Datagram:
@@ -700,6 +769,7 @@ class Con0:
     @property
     def installation_parameters(self):
         transsets = {}
+        transducer_names = []
         for i in range(len(self.transducers)):
             for nme in self.transducers.dtype.names:
                 if nme[:5].lower() != 'spare':
@@ -708,6 +778,8 @@ class Con0:
                     else:
                         val = self.transducers[i][nme]
                     transsets[f'ektransducer{i}_{nme}'] = val
+                    if nme.lower() == 'channelid':
+                        transducer_names.append(val)
         # isets represents the minimum information Kluster needs for processing
         isets = {'sonar_model_number': 'EK60', 'transducer_1_vertical_location': '0.000',
                  'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
@@ -725,6 +797,7 @@ class Con0:
                  'tx_serial_number': self.serial_numbers[0], 'tx_2_serial_number': '0', 'active_position_system_number': '1',
                  'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84'}
         transsets.update(isets)
+        transsets['ektransducer_names'] = transducer_names
         return transsets
 
 
@@ -1193,6 +1266,23 @@ class Xml0:
         if root.tag == 'Configuration':
             self._iparams = self.xmldata.copy()
 
+    def _build_settings_dtype(self, record):
+        """
+        Build a numpy datatype based on the information in the provided
+        datatype.
+        """
+        keys = ['Time', 'ChannelIndex']
+        keys.extend(record.keys())
+        idx = keys.index('ChannelID')
+        keys.pop(idx)
+        dtypes = []
+        for n in range(len(keys)):
+            dtypes.append('f')
+        dtypes[0] = 'd'
+        dtypes[1] = 'B'
+        final = list(zip(keys, dtypes))
+        return final
+
     @property
     def installation_parameters(self):
         if self.type == 'Configuration':
@@ -1214,6 +1304,7 @@ class Xml0:
                      'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
                      'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
             isets.update(tsets)
+            isets['ektransducer_names'] = self.return_transceiver_names()
             return isets
         else:
             return None
@@ -1741,3 +1832,167 @@ def read_saildrone_csv(csvpath: str):
         rawdat = rawdat.replace(tzinfo=timezone.utc)
         utctime.append(float(rawdat.timestamp()))
     return np.array(utctime), data['latitude'], data['longitude']
+
+
+def _expand_class_to_zero_gradient(classified, grad):
+    """
+    Extend the areas of large gradients to include the return to zero gradient
+    and the likely area of maximum response.
+
+    Parameters
+    ----------
+    classified : TYPE
+        DESCRIPTION.
+    grad : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    numsamples, numpings = classified.shape
+    extended = classified.copy()
+    grad_diff = np.diff(grad, axis=0)
+    for n in range(numpings):
+        ping = classified[:, n]
+        classification, idx = np.unique(ping, return_index=True)
+        for m, c in enumerate(classification):
+            if c == 0:
+                continue
+            # find where the gradient goes to zero since this is where the max value should be
+            # this is one of those lines of code that I won't understand later...
+            zero_rel_idx = np.argwhere(grad[idx[m]:, n] < 0)
+            if len(zero_rel_idx) == 0:
+                feat_end_idx = -1
+            else:
+                zero_idx = int(zero_rel_idx[0][0] + idx[m])
+                min_rel_idx = np.argwhere(grad_diff[zero_idx:, n] > 0)
+                if len(min_rel_idx) == 0:
+                    feat_end_idx = -1
+                else:
+                    feat_end_idx = int(min_rel_idx[0][0] + zero_idx)
+            extended[idx[m]:feat_end_idx, n] = c
+    return extended
+
+
+def _get_detections_within_classes(classified, powers, grad):
+    """
+    Get the detections within each class for each ping.
+
+    Parameters
+    ----------
+    expanded_class : TYPE
+        DESCRIPTION.
+    powers : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    numsamples, numpings = classified.shape
+    detect_class = np.full_like(classified, 0)
+    detect_powers = np.full(classified.shape, np.nan)
+    detect_noise = np.full(classified.shape, np.nan)
+    for n in range(numpings):
+        class_ping = classified[:,n]
+        power_ping = powers[:,n]
+        classification= np.unique(class_ping)
+        post_tx_idx = np.argwhere(grad[:,n] > 0)[0][0]
+        for m,c in enumerate(classification):
+            if c == 0:
+                continue
+            class_idx = np.argwhere(class_ping == c)
+            rel_idx = np.argmax(power_ping[class_idx])
+            detect_idx = class_idx[rel_idx][0]
+            detect_class[detect_idx, n] = c
+            detect_powers[detect_idx, n] = powers[detect_idx, n]
+            detect_noise[detect_idx, n] = np.mean(power_ping[post_tx_idx:detect_idx])
+    classification= np.unique(classified)
+    class_sums = np.zeros((len(classification),3))
+    class_sums[0,:] = np.nan
+    class_idx = np.arange(1, len(classification))
+    for n in class_idx:
+        idx = np.where(detect_class == n)
+        sig = detect_powers[idx]
+        noise = detect_noise[idx]
+        total = np.sum(10**(sig/10))
+        class_sums[n,0] = len(sig)
+        class_sums[n,1] = 10 * np.log10(total)
+        class_sums[n,2] = np.mean(sig - noise)
+    return detect_class, class_sums
+
+
+def _select_class_detections(detects, class_sums, threshold):
+    """
+    Using the classified detections within the provided array and the number of
+    points, sum power for all points in the class, and the average signal to
+    noise for the class, determine the best seafloor.
+
+    Parameters
+    ----------
+    detects : TYPE
+        DESCRIPTION.
+    class_sums : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    numsamples, numpings = detects.shape
+    detect_idx = np.full(numpings, -1)
+    # look for the strongest signal classes first
+    sorted_class_idx = np.argsort(class_sums[:,1])[::-1]
+    dcols = set()
+    for idx in sorted_class_idx:
+        if idx == 0:
+            continue
+        if class_sums[idx,2] < threshold:
+            continue
+        class_detect_idx = np.argwhere(detects == idx)
+        scols = set(class_detect_idx[:,1])
+        overlap = scols.intersection(dcols)
+        # test for no overlap between classes
+        if len(overlap) == 0:
+            dcols = dcols.union(scols)
+            detect_idx[class_detect_idx[:,1]] = class_detect_idx[:,0]
+    return detect_idx
+
+
+def _image_detection(powers, threshold: int = 30):
+    """
+    Perform a bottom detection by finding the maximum value per ping after
+    applying  gausian and sobel filters.
+
+    Parameters
+    ----------
+    powers : TYPE
+        DESCRIPTION.
+    blankidx : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    numsamples, numpings = powers.shape
+    # use image edge detection to find the approximate seafloor
+    im = ndimage.gaussian_filter(powers, 8)
+    grad = ndimage.sobel(im, axis = 0, mode = 'constant')
+    grad_threshold = grad[1:-1,:].std()
+    # turn the positive gradient image into binary
+    bgrad = np.full(grad.shape, False)
+    bgrad[grad > grad_threshold] = True
+    bgrad[[0,-1], :] = False # remove edge artifacts from the sobel filter
+    # classify the gradient results
+    numclass, classified = cv2.connectedComponents(bgrad.astype(np.uint8), connectivity = 8)
+    expanded_class = _expand_class_to_zero_gradient(classified, grad)
+    # get the max value within each ping for each class
+    detects, class_sums = _get_detections_within_classes(expanded_class, powers,grad)
+    detect_idx = _select_class_detections(detects, class_sums, threshold)
+    return detect_idx
