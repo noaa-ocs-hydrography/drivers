@@ -42,15 +42,13 @@ import warnings
 plt.ion()
 
 
-recs_categories_ek60 = {'NME0': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
+recs_categories_ek60 = {'NME0': ['time', 'lat', 'lon', 'altitude'],
+                        'RAW0': ['time', 'roll', 'pitch', 'heave', 'heading'],
                         '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
                         '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                                'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
                                'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
-                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
-                        '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                        '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude'],
-                        '89': ['time', 'Reflectivity']}
+                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings']}
 
 recs_categories_translator_ek60 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
                                         'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
@@ -401,6 +399,26 @@ class readraw:
         self._load_state(stateblock)
         return [serialnumber, 0, sonarmodel]
 
+    def return_installation_parameters(self):
+        stateblock = self._save_state()
+
+        self.infile.seek(0)
+        self.eof = False
+        self.read()
+        try:
+            assert self.packet.dtype in ['CON0', 'XML0']
+        except AssertionError:
+            print(f'raw: ERROR - we assume the first record is always either CON0 or XML0, and that is not the case for this file ({self.infilename})')
+        self.get()
+        iparams = self.packet.subpack.installation_parameters
+        finalrec = {'installation_params': {'time': np.array([self.packet.subpack.time], dtype=float),
+                                            'serial_one': np.array([iparams['tx_serial_number']], dtype=np.dtype('uint64')),
+                                            'serial_two': np.array([iparams['tx_2_serial_number']], dtype=np.dtype('uint64')),
+                                            'installation_settings': np.array([iparams], dtype=np.object)}}
+
+        self._load_state(stateblock)
+        return finalrec
+
     def has_position(self):
         """
         Return True if we find any position data in the NMEA records within the first 200 records of the file
@@ -445,23 +463,65 @@ class readraw:
         self._load_state(stateblock)
         return found
 
+    def preferred_nmea_position_record(self):
+        """
+        Get a list of the available position records in the file.  We want to prefer GGA, as the lat/lon data appears to have
+        a higher precision for some reason, and it has altitude, which can be useful.
+        """
+
+        stateblock = self._save_state()
+        self.infile.seek(0)
+        self.eof = False
+        list_of_pos_records = []
+        for i in range(100):
+            self.read()
+            datagram_type = str(self.packet.dtype)
+            if datagram_type == 'NME0':
+                self.get()
+                rec_nme0 =  self.packet.subpack
+                if rec_nme0.header:
+                    if rec_nme0.header['type'] not in list_of_pos_records:
+                        list_of_pos_records.append(rec_nme0.header['type'])
+
+        self._load_state(stateblock)
+        if not list_of_pos_records:
+            return None
+        elif 'GGA' in list_of_pos_records:
+            return 'GGA'
+        elif 'RMC' in list_of_pos_records:
+            return 'RMC'
+        elif 'GLL' in list_of_pos_records:
+            return 'GLL'
+
     def sequential_read_records(self, first_installation_rec=False):
         """
         Using global recs_categories, parse out only the given datagram types by reading headers and decoding only
         the necessary datagrams.
 
         """
-        serialnumber, serialnumbertwo, sonarmodelnumber = self.fast_read_serial_number()
+
+        if first_installation_rec:  # only return the needed installation parameters
+            return self.return_installation_parameters()
+        elif self.start_ptr == 0:  # the first read will always include the installation parameters
+            iparams = self.return_installation_parameters()
+            serialnumber = iparams['tx_serial_number']
+            serialnumbertwo = iparams['tx_2_serial_number']
+            sonarmodelnumber = iparams['sonar_model_number']
+        else:  # reads that don't include the first part of the file will not include those parameters
+            iparams = None
+            serialnumber, serialnumbertwo, sonarmodelnumber = self.fast_read_serial_number()
+
         if sonarmodelnumber == 'EK60':
             desired_record = 'RAW0'
         else:
             desired_record = 'RAW3'
-        haspos = self.has_position()
-        if not haspos:
+        navrec = self.preferred_nmea_position_record()
+        if not navrec:
             utctme, lat, lon = get_saildrone_navigation(self.infilename)
             if utctme is None:
                 print(f'raw: unable to find any position information either in this file or in nearby .gps.csv files: {self.infilename}')
                 return None
+
         recs_to_read = copy.deepcopy(recs_categories_result)
         recs_count = dict([(k, 0) for k in recs_to_read])
 
@@ -637,6 +697,32 @@ class Con0:
             serialnumbers.append(serialnumber)
         return serialnumbers
 
+    @property
+    def installation_parameters(self):
+        transsets = {}
+        for i in range(len(self.transducers)):
+            for nme in self.transducers.dtype.names:
+                if nme[:5].lower() != 'spare':
+                    transsets[f'ektransducer{i}_{nme}'] = self.transducers[i][nme]
+        # isets represents the minimum information Kluster needs for processing
+        isets = {'sonar_model_number': 'EK60', 'transducer_1_vertical_location': '0.000',
+                 'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
+                 'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
+                 'transducer_1_pitch_angle': '0.000', 'transducer_2_vertical_location': '0.000',
+                 'transducer_2_along_location': '0.000', 'transducer_2_athwart_location': '0.000',
+                 'transducer_2_heading_angle': '0.000', 'transducer_2_roll_angle': '0.000',
+                 'transducer_2_pitch_angle': '0.000', 'position_1_time_delay': '0.000',  # seconds
+                 'position_1_vertical_location': '0.000', 'position_1_along_location': '0.000',
+                 'position_1_athwart_location': '0.000', 'motion_sensor_1_time_delay': '0.000',
+                 'motion_sensor_1_vertical_location': '0.000', 'motion_sensor_1_along_location': '0.000',
+                 'motion_sensor_1_athwart_location': '0.000', 'motion_sensor_1_roll_angle': '0.000',
+                 'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
+                 'waterline_vertical_location': '0.000', 'system_main_head_serial_number': '0',
+                 'tx_serial_number': self.serial_numbers[0], 'tx_2_serial_number': '0', 'active_position_system_number': '1',
+                 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84'}
+        transsets.update(isets)
+        return transsets
+
 
 class Con1:
     """
@@ -705,6 +791,22 @@ class Raw0:
             # convert to electrical angle
             self.angle *= 180. / 128
         self.time = utctime
+
+    @property
+    def heave(self):
+        return self.header['Heave']
+
+    @property
+    def roll(self):
+        return self.header['Roll']
+
+    @property
+    def pitch(self):
+        return self.header['Pitch']
+
+    @property
+    def heading(self):
+        return self.header['Heading']
 
     def bottom_detect(self, start=0, stop=0, dir=0):
         """
@@ -1086,7 +1188,31 @@ class Xml0:
             self.unknown = root
         self._get_xml_data(root)
         if root.tag == 'Configuration':
-            self.installation_parameters = self.xmldata.copy()
+            self._iparams = self.xmldata.copy()
+
+    @property
+    def installation_parameters(self):
+        if self.type == 'Configuration':
+            isets = {'sonar_model_number': 'EK80', 'transducer_1_vertical_location': '0.000',
+                     'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
+                     'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
+                     'transducer_1_pitch_angle': '0.000', 'transducer_2_vertical_location': '0.000',
+                     'transducer_2_along_location': '0.000', 'transducer_2_athwart_location': '0.000',
+                     'transducer_2_heading_angle': '0.000', 'transducer_2_roll_angle': '0.000',
+                     'transducer_2_pitch_angle': '0.000', 'position_1_time_delay': '0.000',  # seconds
+                     'position_1_vertical_location': '0.000', 'position_1_along_location': '0.000',
+                     'position_1_athwart_location': '0.000', 'motion_sensor_1_time_delay': '0.000',
+                     'motion_sensor_1_vertical_location': '0.000', 'motion_sensor_1_along_location': '0.000',
+                     'motion_sensor_1_athwart_location': '0.000', 'motion_sensor_1_roll_angle': '0.000',
+                     'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
+                     'waterline_vertical_location': '0.000', 'system_main_head_serial_number': '0',
+                     'tx_serial_number': self._iparams['TransducerSerialNumber0'], 'tx_2_serial_number': '0', 'firmware_version': '',
+                     'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
+                     'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
+            isets.update(self._iparams)
+            return isets
+        else:
+            return None
 
     def _search_xml_recs(self, root):
         if root.attrib:
