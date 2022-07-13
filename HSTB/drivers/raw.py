@@ -33,6 +33,7 @@ import sys
 import pickle
 import xml.etree.ElementTree as et
 import numpy as np
+import copy
 import matplotlib.pyplot as plt
 from datetime import datetime, timezone
 
@@ -41,7 +42,7 @@ import warnings
 plt.ion()
 
 
-recs_categories_ek60 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
+recs_categories_ek60 = {'NME0': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                         '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
                         '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                                'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
@@ -297,6 +298,15 @@ class readraw:
         if 'packet' in self.__dict__:
             del self.packet
 
+    def _save_state(self):
+        return [self.at_right_byte, self.infile.tell(), self.start_ptr, self.eof]
+
+    def _load_state(self, stateblock: list):
+        self.at_right_byte = stateblock[0]
+        self.infile.seek(stateblock[1])
+        self.start_ptr = stateblock[2]
+        self.eof = stateblock[3]
+
     def fast_read_start_end_time(self):
         """
         Get the start and end time for the dataset without mapping the file first
@@ -309,10 +319,7 @@ class readraw:
 
         starttime = None
         endtime = None
-        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
-        curptr = self.infile.tell()
-        startptr = self.start_ptr
-        cureof = self.eof
+        stateblock = self._save_state()
 
         # Read the first records till you get one that has time in the packet (most recs at this point i believe)
         while starttime is None:
@@ -346,10 +353,7 @@ class readraw:
         if endtime is None:
             raise ValueError(f'raw: {self.infilename}: Unable to find a suitable packet to read the end time of the file')
 
-        self.infile.seek(curptr)
-        self.at_right_byte = cur_startstatus
-        self.eof = cureof
-        self.start_ptr = startptr
+        self._load_state(stateblock)
         return [starttime, endtime]
 
     def fast_read_serial_number(self):
@@ -362,10 +366,7 @@ class readraw:
 
         """
 
-        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
-        curptr = self.infile.tell()
-        startptr = self.start_ptr
-        cureof = self.eof
+        stateblock = self._save_state()
 
         self.infile.seek(0)
         self.eof = False
@@ -397,16 +398,14 @@ class readraw:
         else:
             raise ValueError(f'raw: Unable to find first configuration record, looked for CON0 and XML0, got {datagram_type}')
 
-        self.infile.seek(curptr)
-        self.at_right_byte = cur_startstatus
-        self.eof = cureof
-        self.start_ptr = startptr
+        self._load_state(stateblock)
         return [serialnumber, 0, sonarmodel]
 
     def has_position(self):
-        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
-        curptr = self.infile.tell()
-        cureof = self.eof
+        """
+        Return True if we find any position data in the NMEA records within the first 200 records of the file
+        """
+        stateblock = self._save_state()
 
         self.infile.seek(0)
         self.eof = False
@@ -421,16 +420,14 @@ class readraw:
                     if 'lat' in self.packet.subpack.header:
                         found = True
                         break
-
-        self.infile.seek(curptr)
-        self.at_right_byte = cur_startstatus
-        self.eof = cureof
+        self._load_state(stateblock)
         return found
 
     def has_attitude(self):
-        cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
-        curptr = self.infile.tell()
-        cureof = self.eof
+        """
+        Return True if we find any attitude data in the NMEA records within the first 200 records of the file
+        """
+        stateblock = self._save_state()
 
         self.infile.seek(0)
         self.eof = False
@@ -445,11 +442,37 @@ class readraw:
                     if 'roll' in self.packet.subpack.header:
                         found = True
                         break
-
-        self.infile.seek(curptr)
-        self.at_right_byte = cur_startstatus
-        self.eof = cureof
+        self._load_state(stateblock)
         return found
+
+    def sequential_read_records(self, first_installation_rec=False):
+        """
+        Using global recs_categories, parse out only the given datagram types by reading headers and decoding only
+        the necessary datagrams.
+
+        """
+        serialnumber, serialnumbertwo, sonarmodelnumber = self.fast_read_serial_number()
+        if sonarmodelnumber == 'EK60':
+            desired_record = 'RAW0'
+        else:
+            desired_record = 'RAW3'
+        haspos = self.has_position()
+        if not haspos:
+            utctme, lat, lon = get_saildrone_navigation(self.infilename)
+            if utctme is None:
+                print(f'raw: unable to find any position information either in this file or in nearby .gps.csv files: {self.infilename}')
+                return None
+        recs_to_read = copy.deepcopy(recs_categories_result)
+        recs_count = dict([(k, 0) for k in recs_to_read])
+
+        if self.start_ptr:
+            self.at_right_byte = False  # for now assume that if a custom start pointer is provided, we need to seek the start byte
+        self.infile.seek(self.start_ptr)
+        self.eof = False
+
+        while not self.eof:
+            self.read()  # find the start of the record and read the header
+            datagram_type = str(self.packet.dtype)
 
 
 class Datagram:
@@ -495,21 +518,21 @@ class Datagram:
         """
         self.decoded = True
         if self.dtype == 'CON0':
-            self.subpack = Con0(self.datablock)
+            self.subpack = Con0(self.datablock, self.time)
         elif self.dtype == 'CON1':
-            self.subpack = Con1(self.datablock)
+            self.subpack = Con1(self.datablock, self.time)
         elif self.dtype == 'RAW0':
-            self.subpack = Raw0(self.datablock)
+            self.subpack = Raw0(self.datablock, self.time)
         elif self.dtype == 'RAW1':
-            self.subpack = Raw1(self.datablock)
+            self.subpack = Raw1(self.datablock, self.time)
         elif self.dtype == 'RAW3':
-            self.subpack = Raw3(self.datablock)
+            self.subpack = Raw3(self.datablock, self.time)
         elif self.dtype == 'NME0':
-            self.subpack = Nme0(self.datablock)
+            self.subpack = Nme0(self.datablock, self.time)
         elif self.dtype == 'TAG0':
-            self.subpack = Tag0(self.datablock)
+            self.subpack = Tag0(self.datablock, self.time)
         elif self.dtype == 'XML0':
-            self.subpack = Xml0(self.datablock)
+            self.subpack = Xml0(self.datablock, self.time)
         else:
             print(f'Data record {self.dtype} decoding is not yet supported.')
             self.decoded = False
@@ -556,7 +579,7 @@ class Con0:
                                  ('GainTable', '5f'), ('Spare2', 'S8'), ('SaCorrectionTable', '5f'),
                                  ('Spare3', 'S8'), ('GPTSoftwareVersion', 'U16'), ('Spare4', 'S28')])
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         """
         Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record.
@@ -581,6 +604,7 @@ class Con0:
         tmp_transducers = np.frombuffer(datablock[hdr_sz:],
                                         dtype=transducer_dtype)
         self.transducers = tmp_transducers.astype(Con0.transducer_dtype)
+        self.time = utctime
 
     def display(self, num_ducer=-1):
         """
@@ -619,12 +643,13 @@ class Con1:
     The ME70 configuration datagram.
     """
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         """
         Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record.
         """
         self.data = datablock
+        self.time = utctime
 
     def display(self):
         """
@@ -659,7 +684,7 @@ class Raw0:
         ('Offset', 'I'),
         ('Count', 'I')])
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         """
         Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record.
@@ -679,6 +704,7 @@ class Raw0:
             pointer += self.numsamples * 2
             # convert to electrical angle
             self.angle *= 180. / 128
+        self.time = utctime
 
     def bottom_detect(self, start=0, stop=0, dir=0):
         """
@@ -896,14 +922,15 @@ class Raw1:
         ('offset', 'i'),
         ('count', 'i')])
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         """
         Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record.
         """
         hdr_sz = Raw1.hdr_dtype.itemsize
-        self.header = np.frombuffer(datablock[:hdr_sz],
-                                    dtype=Raw1.hdr_dtype)[0]
+        self.header = np.frombuffer(datablock[:hdr_sz], dtype=Raw1.hdr_dtype)[0]
+        self.time = utctime
+
         if self.header['datatype'] >> 3 == 1:
             '''
             From Lars:
@@ -959,7 +986,7 @@ class Raw3:
         ('Offset', 'I'),
         ('Count', 'I')])
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         """
         Catches the binary datablock and decodes the first section and calls
         the decoder for the rest of the record.
@@ -975,6 +1002,8 @@ class Raw3:
         tmp = np.frombuffer(datablock[:hdr_sz],
                             dtype=hdr_dtype)[0]
         self.header = tmp.astype(Raw3.hdr_dtype)
+        self.time = utctime
+
         self.numsamples = self.header['Count'] - self.header['Offset']
         pointer = hdr_sz
         self.power = None
@@ -1011,10 +1040,11 @@ class Tag0:
     The annotation datagram.
     """
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         textlen = len(datablock)
         tmp = np.frombuffer(datablock, dtype='S' + str(textlen))[0]
         self.string = tmp.astype('str')
+        self.time = utctime
 
     def display(self):
         """print the annotation string."""
@@ -1026,10 +1056,12 @@ class Xml0:
     The XML datagram.
     """
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         self.xmldata = {}
         self.installation_parameters = {}
         self.serial_numbers = []
+        self.time = utctime
+
         lastidx = datablock.find('>'.encode(), -4)
         if lastidx == -1:
             lastidx = None
@@ -1098,11 +1130,12 @@ class Xml0:
 class Nme0:
     """The NMEA datagram."""
 
-    def __init__(self, datablock):
+    def __init__(self, datablock, utctime):
         nmealen = len(datablock)
         tmp = np.frombuffer(datablock, dtype='S' + str(nmealen))[0]
         self.string = tmp.astype('str')
         self.string = self.string.split(',')
+        self.time = utctime
 
         try:
             self.rectype = self.string[0][-3:].lstrip('$')
