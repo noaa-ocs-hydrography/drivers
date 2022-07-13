@@ -381,7 +381,7 @@ class readraw:
             serialnumber = 0
             # if this is a config XML0 (which it always should be I think) it will have the installation parameters
             if self.packet.subpack.installation_parameters:
-                serialnumber = int(self.packet.subpack.installation_parameters['TransducerSerialNumber0'])
+                serialnumber = int(self.packet.subpack.installation_parameters['tx_serial_number'])
             else:
                 # try looking through the first few records
                 for i in range(100):
@@ -389,7 +389,7 @@ class readraw:
                     if self.packet.dtype == 'XML0':
                         self.get()
                         if self.packet.subpack.installation_parameters:
-                            serialnumber = int(self.packet.subpack.installation_parameters['TransducerSerialNumber0'])
+                            serialnumber = int(self.packet.subpack.installation_parameters['tx_serial_number'])
                             break
                 if not serialnumber:
                     print(f'raw: WARNING - unable to find the XML0 Configuration record at the beginning of this file: {self.infilename}')
@@ -703,7 +703,11 @@ class Con0:
         for i in range(len(self.transducers)):
             for nme in self.transducers.dtype.names:
                 if nme[:5].lower() != 'spare':
-                    transsets[f'ektransducer{i}_{nme}'] = self.transducers[i][nme]
+                    if isinstance(self.transducers[i][nme], np.ndarray):
+                        val = self.transducers[i][nme].tolist()
+                    else:
+                        val = self.transducers[i][nme]
+                    transsets[f'ektransducer{i}_{nme}'] = val
         # isets represents the minimum information Kluster needs for processing
         isets = {'sonar_model_number': 'EK60', 'transducer_1_vertical_location': '0.000',
                  'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
@@ -1160,7 +1164,6 @@ class Xml0:
 
     def __init__(self, datablock, utctime):
         self.xmldata = {}
-        self.installation_parameters = {}
         self.serial_numbers = []
         self.time = utctime
 
@@ -1193,6 +1196,7 @@ class Xml0:
     @property
     def installation_parameters(self):
         if self.type == 'Configuration':
+            tsets = self.return_transducer_metadata()
             isets = {'sonar_model_number': 'EK80', 'transducer_1_vertical_location': '0.000',
                      'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
                      'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
@@ -1209,7 +1213,7 @@ class Xml0:
                      'tx_serial_number': self._iparams['TransducerSerialNumber0'], 'tx_2_serial_number': '0', 'firmware_version': '',
                      'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
                      'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
-            isets.update(self._iparams)
+            isets.update(tsets)
             return isets
         else:
             return None
@@ -1247,6 +1251,19 @@ class Xml0:
             else:
                 raise ValueError('raw: XML0 configuration record, unable to find "Transceivers" xml tagged element')
         return tnames
+
+    def return_transducer_metadata(self):
+        transsets = {}
+        if self.configuration:
+            transceivers_element = [x for x in self.configuration if x.tag == 'Transceivers']
+            if transceivers_element:
+                transceivers_element = transceivers_element[0]
+                for cnt, tceiver in enumerate(transceivers_element):
+                    for ky, val in tceiver.attrib.items():
+                        if isinstance(val, np.ndarray):
+                            val = val.tolist()
+                        transsets[f'ektransducer{cnt}_{ky}'] = val
+        return transsets
 
     def display(self):
         """print the XML data."""
