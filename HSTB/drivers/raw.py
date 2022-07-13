@@ -39,6 +39,53 @@ import warnings
 plt.ion()
 
 
+recs_categories_ek60 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
+                        '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
+                        '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
+                               'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
+                               'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
+                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
+                        '85': ['time', 'data.Depth', 'data.SoundSpeed'],
+                        '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude'],
+                        '89': ['time', 'Reflectivity']}
+
+recs_categories_translator_ek60 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
+                                        'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
+                                        'Heading': [['attitude', 'heading']]},
+                                 '73': {'time': [['installation_params', 'time']],
+                                        'Serial#': [['installation_params', 'serial_one']],
+                                        'Serial#2': [['installation_params', 'serial_two']],
+                                        'settings': [['installation_params', 'installation_settings']]},
+                                 '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
+                                        'SoundSpeed': [['ping', 'soundspeed']],
+                                        'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
+                                        'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
+                                        'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
+                                        'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                 '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
+                                        'ReceiverFixedGain': [['runtime_params', 'modetwo']],
+                                        'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
+                                        'settings': [['runtime_params', 'runtime_settings']]},
+                                 '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
+                                        'SoundSpeed': [['profile', 'soundspeed']]},
+                                 '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
+                                        'Longitude': [['navigation', 'longitude']],
+                                        'Altitude': [['navigation', 'altitude']]},
+                                 '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]}}
+
+recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
+                          'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
+                                                  'installation_settings': None},
+                          'ping': {'time': None, 'rtime': None, 'counter': None, 'soundspeed': None, 'serial_num': None,
+                                   'tiltangle': None, 'delay': None, 'frequency': None, 'reflectivity': None,
+                                   'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
+                                   'qualityfactor': None, 'traveltime': None},
+                          'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
+                                             'runtime_settings': None},
+                          'profile': {'time': None, 'depth': None, 'soundspeed': None},
+                          'navigation': {'time': None, 'latitude': None, 'longitude': None, 'altitude': None}}
+
+
 class readraw:
     """
     This class handles the file I/O for a Simrad RAW file using the datagram
@@ -953,6 +1000,7 @@ class Xml0:
             else:
                 self.parameter = root
         else:
+            self.type = root.tag
             self.unknown = root
         self._get_xml_data(root)
         if root.tag == 'Configuration':
@@ -977,6 +1025,21 @@ class Xml0:
     def _get_xml_data(self, root):
         self.xmldata = self._search_xml_recs(root)
 
+    def return_transceiver_names(self):
+        tnames = []
+        if self.configuration:
+            transceivers_element = [x for x in self.configuration if x.tag == 'Transceivers']
+            if transceivers_element:
+                transceivers_element = transceivers_element[0]
+                for tceiver in transceivers_element:
+                    channels_element = tceiver[0]
+                    for n, t in enumerate(channels_element):  # , resp: <Element 'Tranceivers'><Element 'Transceiver'><Element 'Channels'>
+                        name = t.attrib['ChannelID']
+                        tnames.append(name)
+            else:
+                raise ValueError('raw: XML0 configuration record, unable to find "Transceivers" xml tagged element')
+        return tnames
+
     def display(self):
         """print the XML data."""
         print(f'{self.header}')
@@ -999,6 +1062,8 @@ class Nme0:
                 self.header = self._PASHR()
             elif self.string[0][-3:] == 'ZDA':
                 self.header = self._ZDA()
+            else:
+                print(self.string[0][-3:])
         except:
             msg = f'Malformed {self.string[0]} found.'
             warnings.warn(msg)
@@ -1124,11 +1189,8 @@ class useraw(readraw):
         if 'XML0' in self.map.packdir:
             c = self.getrecord('XML0', 0)
             self.transducer_names = []
-            for n, t in enumerate(c.configuration[1][0][0]):  # , resp: <Element 'Tranceivers'><Element 'Transceiver'><Element 'Channels'>
-                name = t.attrib['ChannelID']
-                self.transducer_names.append(name)
-                # newname = n
-                # self.map.packdir[newname] = self.map.packdir.pop(name)
+            if c.configuration:
+                self.transducer_names = c.return_transceiver_names()
             self.build_xml_info()
         self.reset()
 
