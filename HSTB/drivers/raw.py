@@ -1053,20 +1053,26 @@ class Nme0:
         tmp = np.frombuffer(datablock, dtype='S' + str(nmealen))[0]
         self.string = tmp.astype('str')
         self.string = self.string.split(',')
+
         try:
-            if self.string[0][-3:] == 'GGA':
-                self.header = self._GGA()
-            elif self.string[0][-3:] == 'HDT':
-                self.header = self._HDT()
-            elif self.string[0] == '$PASHR':
-                self.header = self._PASHR()
-            elif self.string[0][-3:] == 'ZDA':
-                self.header = self._ZDA()
-            else:
-                print(self.string[0][-3:])
+            self.rectype = self.string[0][-3:].lstrip('$')
         except:
-            msg = f'Malformed {self.string[0]} found.'
-            warnings.warn(msg)
+            self.rectype = 'Unknown'
+
+        if self.rectype != 'Unknown':
+            try:
+                readmethod = getattr(self, '_' + self.rectype)
+            except:  # we don't bother supporting all the NMEA messages, just decode the ones that we care about
+                readmethod = None
+            if readmethod:
+                try:
+                    self.header = readmethod()
+                except:
+                    print(f'raw: Malformed {self.string[0]} found: {self.string}')
+                    self.header = None
+            else:
+                self.header = None
+        else:
             self.header = None
 
     def display(self):
@@ -1074,9 +1080,25 @@ class Nme0:
         for entry in self.string:
             print(f'{entry}')
 
-    def _GGA(self):
+    def _ALR(self):  # Alarm state
+        return {'type': 'ALR', 'ack_state': self.string[3], 'condition': self.string[4]}
+
+    def _DTM(self):  # Datum reference
+        dtm = {}
+        dtm['type'] = 'DTM'
+        dtm['code'] = self.string[1]
+        dtm['subcode'] = self.string[2]
+        dtm['latitude_offset'] = self.string[3]
+        dtm['latitude_hemi'] = self.string[4]
+        dtm['longitude_offset'] = self.string[5]
+        dtm['longitude_hemi'] = self.string[6]
+        dtm['altitude_offset'] = self.string[7]
+        dtm['datum_name'] = self.string[8]
+        return dtm
+
+    def _GGA(self):  # Global positioning system fix data
         gga = {}
-        gga['type'] = self.string[0]
+        gga['type'] = 'GGA'
         gga['daysec'] = (int(self.string[1][:2]) * 3600. +
                          int(self.string[1][2:4]) * 60. + float(self.string[1][4:]))
         gga['lat'] = int(self.string[2][:2]) + float(self.string[2][2:]) / 60
@@ -1088,15 +1110,27 @@ class Nme0:
         gga['altitude'] = str(self.string[9])
         return gga
 
-    def _HDT(self):
+    def _GLL(self):  # Geographic Position
+        gll = {}
+        gll['type'] = 'GLL'
+        gll['lat'] = int(self.string[1][:2]) + float(self.string[1][2:]) / 60
+        if self.string[2] == 'S':
+            gll['lat'] *= -1
+        gll['lon'] = int(self.string[3][:3]) + float(self.string[3][3:]) / 60
+        if self.string[4] == 'W':
+            gll['lon'] *= -1
+        gll['utc_time'] = f'{self.string[5][:2]}:{self.string[5][2:4]}:{self.string[5][4:]}'
+        return gll
+
+    def _HDT(self):  # Heading
         hdt = {}
-        hdt['type'] = self.string[0]
+        hdt['type'] = 'HDT'
         hdt['heading'] = float(self.string[1])
         return hdt
 
-    def _PASHR(self):
+    def _PASHR(self):  # Novatel inertial attitude data
         pashr = {}
-        pashr['type'] = self.string[0]
+        pashr['type'] = 'PASHR'
         pashr['daysec'] = (int(self.string[1][:2]) * 3600. +
                            int(self.string[1][2:4]) * 60. + float(self.string[1][4:]))
         pashr['heading'] = float(self.string[2])
@@ -1105,9 +1139,34 @@ class Nme0:
         pashr['heave'] = float(self.string[6])
         return pashr
 
-    def _ZDA(self):
+    def _RMC(self):  # recommended minimum navigation information
+        rmc = {}
+        rmc['type'] = 'RMC'
+        rmc['utc_time'] = f'{self.string[1][:2]}:{self.string[1][2:4]}:{self.string[1][4:]}'
+        rmc['status'] = 'Valid' if self.string[2] == 'A' else 'Warning'
+        rmc['lat'] = int(self.string[3][:2]) + float(self.string[3][2:]) / 60
+        if self.string[4] == 'S':
+            rmc['lat'] *= -1
+        rmc['lon'] = int(self.string[5][:3]) + float(self.string[5][3:]) / 60
+        if self.string[6] == 'W':
+            rmc['lon'] *= -1
+        rmc['speed'] = float(self.string[7])
+        rmc['course_made_good'] = float(self.string[8])
+        rmc['date'] = f'{self.string[9][:2]}_{self.string[9][2:4]}_{self.string[9][4:6]}'
+        return rmc
+
+    def _VLW(self):  # distance travelled through the water
+        vlw = {}
+        vlw['type'] = 'VLW'
+        vlw['total_distance'] = self.string[1]
+        vlw['total_distance_type'] = self.string[2]
+        vlw['distance_since_reset'] = self.string[3]
+        vlw['distance_since_reset_type'] = self.string[4]
+        return vlw
+
+    def _ZDA(self):  # Time and date
         zda = {}
-        zda['type'] = self.string[0]
+        zda['type'] = 'ZDA'
         zda['time'] = self.string[1]
         zda['day'] = self.string[2]
         zda['month'] = self.string[3]
