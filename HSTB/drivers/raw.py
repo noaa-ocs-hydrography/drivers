@@ -36,57 +36,14 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 from datetime import datetime, timezone
-from scipy import ndimage
+from scipy import ndimage, signal
 import cv2
 
 import warnings
 
 plt.ion()
 
-
-recs_categories_ek60 = {'NME0': ['time', 'lat', 'lon', 'altitude'],
-                        'RAW0': ['time', 'roll', 'pitch', 'heave', 'heading'],
-                        '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
-                        '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
-                               'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
-                               'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
-                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings']}
-
-recs_categories_translator_ek60 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
-                                        'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
-                                        'Heading': [['attitude', 'heading']]},
-                                 '73': {'time': [['installation_params', 'time']],
-                                        'Serial#': [['installation_params', 'serial_one']],
-                                        'Serial#2': [['installation_params', 'serial_two']],
-                                        'settings': [['installation_params', 'installation_settings']]},
-                                 '78': {'time': [['ping', 'time']], 'Counter': [['ping', 'counter']],
-                                        'SoundSpeed': [['ping', 'soundspeed']],
-                                        'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
-                                        'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
-                                        'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
-                                        'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
-                                 '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
-                                        'ReceiverFixedGain': [['runtime_params', 'modetwo']],
-                                        'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
-                                        'settings': [['runtime_params', 'runtime_settings']]},
-                                 '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
-                                        'SoundSpeed': [['profile', 'soundspeed']]},
-                                 '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
-                                        'Longitude': [['navigation', 'longitude']],
-                                        'Altitude': [['navigation', 'altitude']]},
-                                 '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]}}
-
-recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': None, 'heave': None, 'heading': None},
-                          'installation_params': {'time': None, 'serial_one': None, 'serial_two': None,
-                                                  'installation_settings': None},
-                          'ping': {'time': None, 'rtime': None, 'counter': None, 'soundspeed': None, 'serial_num': None,
-                                   'tiltangle': None, 'delay': None, 'frequency': None, 'reflectivity': None,
-                                   'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
-                                   'qualityfactor': None, 'traveltime': None},
-                          'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
-                                             'runtime_settings': None},
-                          'profile': {'time': None, 'depth': None, 'soundspeed': None},
-                          'navigation': {'time': None, 'latitude': None, 'longitude': None, 'altitude': None}}
+saildrone_vessel_draft = 1.96
 
 
 class readraw:
@@ -495,33 +452,159 @@ class readraw:
         elif 'GLL' in list_of_pos_records:
             return 'GLL'
 
-    def _process_raw_group_ek60(self, raw_group: list):
-        pulselengths = np.array([rg.header['PulseLength'] for rg in raw_group])
-        sampleintervals = np.array([rg.header['SampleInterval'] for rg in raw_group])
-        offsets = np.array([rg.header['Offset'] for rg in raw_group])
-        drafts = np.array([rg.header['TransducerDepth'] for rg in raw_group])
-        max_samples = max([rg.numsamples for rg in raw_group])
+    def _sort_raw_xml0_pairings(self, raw_group: list, xml_group: list):
+        if xml_group:  # RAW3
+            # first align the raw and xml groups by channel id, so that you ensure you get the right ones
+            raw_channel_ids = [rg.header['ChannelID'] for rg in raw_group]
+            xml_channel_ids = [xmg.header['ChannelID'] for xmg in xml_group]
+            try:
+                sort_idxs = [raw_channel_ids.index(xid) for xid in xml_channel_ids]
+            except ValueError:
+                print(f'raw: ERROR - found mismatched RAW3 {raw_channel_ids} and XML0 {xml_channel_ids} groupings, skipping...')
+                return None, None
+            sortedxml = [xml_group[sid] for sid in sort_idxs]
+            # now sort so that the lowest freq comes first
+            xmlfreq = [float(xmg.header['Frequency']) for xmg in sortedxml]
+            sort_freq_idxs = np.argsort(xmlfreq)
+            return [raw_group[sidx] for sidx in sort_freq_idxs], [xml_group[sidx] for sidx in sort_freq_idxs]
+        else:  # RAW0, no XML0 record that goes with it
+            # sort so that the lowest freq comes first
+            rawfreq = [float(rg.header['Frequency']) for rg in raw_group]
+            sort_freq_idxs = np.argsort(rawfreq)
+            return [raw_group[sidx] for sidx in sort_freq_idxs], xml_group
 
-        max_pulse_len = pulselengths.max()
-        if not np.all([sampleintervals[0] == si for si in sampleintervals]):
-            raise ValueError('raw: All Sampling intervals are assumed to be the same but are not...')
-
-        powers = np.full((max_samples, len(raw_group)), np.nan)
-        for cnt, rg in enumerate(raw_group):
-            offset = rg.header['Offset']
-            powers[offset:rg.numsamples, cnt] = rg.power
-        detect_idx = _image_detection(powers, threshold=30)
-        pulse_samps = pulselengths / sampleintervals
-        tx_corr = offsets + detect_idx - pulse_samps / 2
-        twowaytraveltime = tx_corr * sampleintervals
-        return twowaytraveltime, max_pulse_len, drafts
-
-    def _process_raw_group(self, raw_group: list, xml_group: list = None):
+    def _process_raw_group(self, raw_group: list, xml_group: list, recs_to_read: dict, serialnumber: int):
         if raw_group:
+            raw_group, xml_group = self._sort_raw_xml0_pairings(raw_group, xml_group)
             if isinstance(raw_group[0], Raw0):
-                return self._process_raw_group_ek60(raw_group)
-            elif isinstance(raw_group[0], Raw3):
-                return self._process_raw_group_ek80(raw_group, xml_group)
+                pulselengths = np.array([rg.header['PulseLength'] for rg in raw_group])
+                sampleintervals = np.array([rg.header['SampleInterval'] for rg in raw_group])
+                drafts = np.array([rg.header['TransducerDepth'] for rg in raw_group])
+                soundspeed = np.array([rg.header['SoundVelocity'] for rg in raw_group])
+            else:  # RAW3
+                pulselengths = np.array([float(xg.header['PulseDuration']) for xg in xml_group])
+                sampleintervals = np.array([float(xg.header['SampleInterval']) for xg in xml_group])
+            offsets = np.array([rg.header['Offset'] for rg in raw_group])
+            max_samples = max([rg.numsamples for rg in raw_group])
+
+            max_pulse_len = pulselengths.max()
+            if not np.all([sampleintervals[0] == si for si in sampleintervals]):
+                raise ValueError('raw: All Sampling intervals are assumed to be the same but are not...')
+
+            powers = np.full((max_samples, len(raw_group)), np.nan)
+            for cnt, rg in enumerate(raw_group):
+                offset = rg.header['Offset']
+                if isinstance(raw_group[0], Raw0):
+                    powers[offset:rg.numsamples, cnt] = rg.power
+                else:
+                    powers[offset:rg.numsamples, cnt] = 20 * np.log10(np.mean(np.abs(rg.complexsamples), axis=1))
+
+            detect_idx = _image_detection(powers, threshold=30)
+            pulse_samps = pulselengths / sampleintervals
+            tx_corr = offsets + detect_idx - pulse_samps / 2
+            twowaytraveltime = tx_corr * sampleintervals
+            twowaytraveltime[detect_idx == -1] = np.nan
+            valid = ~np.isnan(twowaytraveltime)
+            if valid.all():
+                # best return is the highest freq return that is within 'close_enough' of the lowest freq return.  Lets
+                #  us get the best representation of the actual seafloor but avoid noise
+                best_idx = np.where(valid)[0][0]
+                close_enough = 2 * max_pulse_len
+                final_best_idx = np.where((twowaytraveltime[best_idx] - twowaytraveltime) < close_enough)[0][-1]
+                recs_to_read['ping']['time'].append([raw_group[final_best_idx].time])
+                recs_to_read['ping']['counter'].append([0])
+                recs_to_read['ping']['serial_num'].append([serialnumber])
+                recs_to_read['ping']['tiltangle'].append([0.0])
+                recs_to_read['ping']['delay'].append([0.0])
+                recs_to_read['ping']['beampointingangle'].append([0.0])
+                recs_to_read['ping']['txsector_beam'].append([0])
+                recs_to_read['ping']['detectioninfo'].append([0])
+                recs_to_read['ping']['qualityfactor'].append([0])
+                recs_to_read['ping']['traveltime'].append([twowaytraveltime[final_best_idx]])
+                recs_to_read['attitude']['time'].append(raw_group[final_best_idx].time)
+                recs_to_read['attitude']['heave'].append(0.0)
+                if isinstance(raw_group[0], Raw0):
+                    recs_to_read['ping']['soundspeed'].append([soundspeed[final_best_idx]])
+                    recs_to_read['ping']['frequency'].append([int(raw_group[final_best_idx].header['Frequency'])])
+                    recs_to_read['attitude']['roll'].append(raw_group[final_best_idx].roll)
+                    recs_to_read['attitude']['pitch'].append(raw_group[final_best_idx].pitch)
+                    recs_to_read['attitude']['heading'].append(raw_group[final_best_idx].heading)
+                    return drafts[final_best_idx]
+                else:
+                    recs_to_read['ping']['soundspeed'].append([0.0])
+                    recs_to_read['ping']['frequency'].append([int(xml_group[final_best_idx].header['Frequency'])])
+                    recs_to_read['attitude']['roll'].append(0.0)
+                    recs_to_read['attitude']['pitch'].append(0.0)
+                    recs_to_read['attitude']['heading'].append(0.0)
+                    return 0.0
+            return None
+        else:
+            return None
+
+    def _initialize_sequential_read_datastore(self):
+        return {'attitude': {'time': [], 'roll': [], 'pitch': [], 'heave': [], 'heading': []},
+                'installation_params': {'time': [], 'serial_one': [], 'serial_two': [],
+                                        'installation_settings': []},
+                'ping': {'time': [], 'counter': [], 'soundspeed': [], 'serial_num': [],
+                         'tiltangle': [], 'delay': [], 'frequency': [],
+                         'beampointingangle': [], 'txsector_beam': [], 'detectioninfo': [],
+                         'qualityfactor': [], 'traveltime': []},
+                'runtime_params': {'time': [], 'mode': [], 'modetwo': [], 'yawpitchstab': [],
+                                   'runtime_settings': []},
+                'profile': {'time': None, 'depth': None, 'soundspeed': None},
+                'navigation': {'time': [], 'latitude': [], 'longitude': [], 'altitude': []}}
+
+    def _finalize_records(self, recs_to_read, draft, iparams):
+        if self.start_ptr:
+            # either the first chunk of a series of chunks, or we aren't doing a chunked read, so log the installation params
+            iparams['installation_params']['installation_settings'][0]['waterline_vertical_location'] = str(draft)
+            recs_to_read['installation_params'] = iparams
+        else:
+            recs_to_read['installation_params'] = {'time': np.array([]), 'serial_one': np.array([]), 'serial_two': np.array([]),
+                                                   'installation_settings': np.array([])}
+        # no runtime parameters to log with ek data
+        recs_to_read['runtime_params']['time'] = np.array(recs_to_read['ping']['time'][0], np.float64)
+        recs_to_read['runtime_params']['mode'] = np.array([''], 'U2')
+        recs_to_read['runtime_params']['modetwo'] = np.array([''], 'U2')
+        recs_to_read['runtime_params']['yawpitchstab'] = np.array([''], 'U2')
+        recs_to_read['runtime_params']['runtime_settings'] = np.array([''], 'object')
+
+        recs_to_read['attitude']['time'] = np.array(recs_to_read['attitude']['time'], np.float64)
+        recs_to_read['attitude']['roll'] = np.array(recs_to_read['attitude']['roll'], np.float32)
+        recs_to_read['attitude']['pitch'] = np.array(recs_to_read['attitude']['pitch'], np.float32)
+        recs_to_read['attitude']['heading'] = np.array(recs_to_read['attitude']['heading'], np.float32)
+
+        recs_to_read['navigation']['time'] = np.array(recs_to_read['navigation']['time'], np.float64)
+        recs_to_read['navigation']['latitude'] = np.array(recs_to_read['navigation']['latitude'], np.float64)
+        recs_to_read['navigation']['longitude'] = np.array(recs_to_read['navigation']['longitude'], np.float64)
+        if 'altitude' in recs_to_read['navigation']:
+            recs_to_read['navigation']['altitude'] = np.array(recs_to_read['navigation']['altitude'], np.float32)
+
+        recs_to_read['ping']['time'] = np.array(recs_to_read['ping']['time'], np.float64)
+        recs_to_read['ping']['counter'] = np.array(recs_to_read['ping']['counter'], 'uint32')
+        recs_to_read['ping']['soundspeed'] = np.array(recs_to_read['ping']['soundspeed'], np.float32)
+        recs_to_read['ping']['serial_num'] = np.array(recs_to_read['ping']['serial_num'], 'uint64')
+        recs_to_read['ping']['tiltangle'] = np.array(recs_to_read['ping']['tiltangle'], np.float32)
+        recs_to_read['ping']['delay'] = np.array(recs_to_read['ping']['delay'], np.float32)
+        recs_to_read['ping']['frequency'] = np.array(recs_to_read['ping']['frequency'], 'int32')
+        recs_to_read['ping']['beampointingangle'] = np.array(recs_to_read['ping']['beampointingangle'], np.float32)
+        recs_to_read['ping']['txsector_beam'] = np.array(recs_to_read['ping']['txsector_beam'], np.float64)
+        recs_to_read['ping']['detectioninfo'] = np.array(recs_to_read['ping']['detectioninfo'], 'int32')
+        recs_to_read['ping']['qualityfactor'] = np.array(recs_to_read['ping']['qualityfactor'], 'float32')
+        recs_to_read['ping']['traveltime'] = np.array(recs_to_read['ping']['traveltime'], 'float32')
+
+        # jump to sv correct in Kluster, by putting in processed beam angles (we assume angle = 0)
+        recs_to_read['ping']['rel_azimuth'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
+        recs_to_read['ping']['corr_pointing_angle'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
+        recs_to_read['ping']['processing_status'] = np.full(2, recs_to_read['ping']['beampointingangle'].shape, 'uint8')
+
+        # build heave
+        heavetime, newheave = calculate_heave_correction(recs_to_read['ping']['time'].ravel(), recs_to_read['ping']['traveltime'].ravel(),
+                                                        recs_to_read['ping']['soundspeed'].ravel())
+        if heavetime.shape[0] != recs_to_read['attitude']['time'].shape[0]:
+            newheave = np.interp(recs_to_read['attitude']['time'], heavetime, newheave)
+        recs_to_read['attitude']['heave'] = newheave
+        return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
         """
@@ -535,9 +618,9 @@ class readraw:
         else:
             iparams = self.return_installation_parameters()
             serialnumber = iparams['installation_params']['installation_settings'][0]['tx_serial_number']
-            serialnumbertwo = iparams['installation_params']['installation_settings'][0]['tx_2_serial_number']
             sonarmodelnumber = iparams['installation_params']['installation_settings'][0]['sonar_model_number']
             transducer_names = iparams['installation_params']['installation_settings'][0]['ektransducer_names']
+        recs_to_read = self._initialize_sequential_read_datastore()
 
         if sonarmodelnumber == 'EK60':
             desired_record = 'RAW0'
@@ -549,9 +632,10 @@ class readraw:
             if utctme is None:
                 print(f'raw: unable to find any position information either in this file or in nearby .gps.csv files: {self.infilename}')
                 return None
-
-        recs_to_read = copy.deepcopy(recs_categories_result)
-        recs_count = dict([(k, 0) for k in recs_to_read])
+            recs_to_read['navigation']['time'] = utctme
+            recs_to_read['navigation']['latitude'] = lat
+            recs_to_read['navigation']['longitude'] = lon
+            recs_to_read['navigation'].pop('altitude')
 
         if self.start_ptr:
             self.at_right_byte = False  # for now assume that if a custom start pointer is provided, we need to seek the start byte
@@ -561,6 +645,7 @@ class readraw:
         heads = []
         xml_parameters = []
         rectime = 0
+        draft = 0
         first_rec = True
         while not self.eof:
             self.read()  # find the start of the record and read the header
@@ -593,7 +678,9 @@ class readraw:
                                 rectime = 0
                             else:
                                 print(f'raw: WARNING - found {desired_record} grouping at record time {rectime} that only contained {len(heads)}/{len(xml_parameters)} records/parameters, expected {len(transducer_names)}')
-                        self._process_raw_group(heads, xml_parameters)
+                        read_draft = self._process_raw_group(heads, xml_parameters, recs_to_read, serialnumber)
+                        if read_draft is not None:
+                            draft = read_draft
                         first_rec = False
                         heads = []
                         xml_parameters = []
@@ -602,6 +689,23 @@ class readraw:
                         else:
                             heads.append(rec)
                         rectime = rec.time
+            elif datagram_type == 'NME0' and navrec:
+                self.get()
+                sub_datagram_type = str(self.packet.subpack.rectype)
+                if sub_datagram_type == navrec:
+                    recs_to_read['navigation']['time'].append(self.packet.subpack.time)
+                    recs_to_read['navigation']['latitude'].append(self.packet.subpack.header['lat'])
+                    recs_to_read['navigation']['longitude'].append(self.packet.subpack.header['lon'])
+                    if 'altitude' in self.packet.subpack.header:
+                        recs_to_read['navigation']['altitude'].append(self.packet.subpack.header['altitude'])
+                    elif 'altitude' in recs_to_read['navigation']:
+                        recs_to_read['navigation'].pop('altitude')
+
+        if not navrec:  # override for saildrone draft
+            draft = saildrone_vessel_draft
+        recs_to_read = self._finalize_records(recs_to_read, draft, iparams)
+        recs_to_read['format'] = 'raw'
+        return recs_to_read
 
 
 class Datagram:
@@ -1300,9 +1404,8 @@ class Xml0:
                      'motion_sensor_1_athwart_location': '0.000', 'motion_sensor_1_roll_angle': '0.000',
                      'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
                      'waterline_vertical_location': '0.000', 'system_main_head_serial_number': '0',
-                     'tx_serial_number': self._iparams['TransducerSerialNumber0'], 'tx_2_serial_number': '0', 'firmware_version': '',
-                     'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84',
-                     'software_version': '', 'sevenk_version': '', 'protocol_version': ''}
+                     'tx_serial_number': self._iparams['TransducerSerialNumber0'], 'tx_2_serial_number': '0',
+                     'active_position_system_number': '1', 'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84'}
             isets.update(tsets)
             isets['ektransducer_names'] = self.return_transceiver_names()
             return isets
@@ -1996,3 +2099,31 @@ def _image_detection(powers, threshold: int = 30):
     detects, class_sums = _get_detections_within_classes(expanded_class, powers,grad)
     detect_idx = _select_class_detections(detects, class_sums, threshold)
     return detect_idx
+
+
+def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, soundspeed: np.ndarray,
+                               fsampling: float = 1.0, fcutoff: float = 0.05):
+    """
+    Get the heave correction.
+
+    butterworth low-pass filter to remove vessel heave and high-frequency artifacts from bathymetry fsampling Hz; must
+    also interpolate bathymetry time series to same [fixed] rate fcutoff second periods [Hz]
+    """
+
+    calc_range = traveltime * (soundspeed / 2)
+
+    fbutter = fcutoff / (fsampling / 2.)
+    b, a = signal.butter(5, fbutter)
+
+    clean_idx = ~np.isnan(traveltime)
+    ping_times = ping_times[clean_idx]
+    calc_range = calc_range[clean_idx]  # using the final detection as the reference bathtymetry
+
+    pingTimes1Hz = np.arange(ping_times[0], ping_times[-1] + fsampling, fsampling)
+    bottomDetections1Hz = np.interp(pingTimes1Hz, ping_times, calc_range)
+    bottomDetections1Hz_LowPass = signal.filtfilt(b, a, bottomDetections1Hz)
+    heave1Hz = bottomDetections1Hz - bottomDetections1Hz_LowPass
+    clean_heave = np.interp(ping_times, pingTimes1Hz, heave1Hz)
+    heave = np.full(len(clean_idx), np.nan)
+    heave[clean_idx] = clean_heave[:]
+    return ping_times, heave
