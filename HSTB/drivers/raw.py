@@ -488,8 +488,6 @@ class readraw:
             max_samples = max([rg.numsamples for rg in raw_group])
 
             max_pulse_len = pulselengths.max()
-            if not np.all([sampleintervals[0] == si for si in sampleintervals]):
-                raise ValueError('raw: All Sampling intervals are assumed to be the same but are not...')
 
             powers = np.full((max_samples, len(raw_group)), np.nan)
             for cnt, rg in enumerate(raw_group):
@@ -497,7 +495,10 @@ class readraw:
                 if isinstance(raw_group[0], Raw0):
                     powers[offset:rg.numsamples, cnt] = rg.power
                 else:
-                    powers[offset:rg.numsamples, cnt] = 20 * np.log10(np.mean(np.abs(rg.complexsamples), axis=1))
+                    if rg.power is not None:
+                        powers[offset:rg.numsamples, cnt] = rg.power * 10 * np.log10(2) / 256
+                    elif rg.complexsamples is not None:
+                        powers[offset:rg.numsamples, cnt] = 20 * np.log10(np.mean(np.abs(rg.complexsamples), axis=1))
 
             detect_idx = _image_detection(powers, threshold=30)
             pulse_samps = pulselengths / sampleintervals
@@ -555,15 +556,22 @@ class readraw:
                 'navigation': {'time': [], 'latitude': [], 'longitude': [], 'altitude': []}}
 
     def _finalize_records(self, recs_to_read, draft, iparams):
-        if self.start_ptr:
+        if not recs_to_read['ping']['time']:
+            print(f'raw: WARNING - found chunk without any valid ping records: {self.infilename} ({self.start_ptr} to {self.filelen + self.start_ptr})')
+
+        if not self.start_ptr:
             # either the first chunk of a series of chunks, or we aren't doing a chunked read, so log the installation params
             iparams['installation_params']['installation_settings'][0]['waterline_vertical_location'] = str(draft)
             recs_to_read['installation_params'] = iparams
         else:
             recs_to_read['installation_params'] = {'time': np.array([]), 'serial_one': np.array([]), 'serial_two': np.array([]),
                                                    'installation_settings': np.array([])}
+
         # no runtime parameters to log with ek data
-        recs_to_read['runtime_params']['time'] = np.array(recs_to_read['ping']['time'][0], np.float64)
+        try:
+            recs_to_read['runtime_params']['time'] = np.array(recs_to_read['ping']['time'][0], np.float64)
+        except:  # no ping records here
+            recs_to_read['runtime_params']['time'] = np.array(recs_to_read['navigation']['time'][0], np.float64)
         recs_to_read['runtime_params']['mode'] = np.array([''], 'U2')
         recs_to_read['runtime_params']['modetwo'] = np.array([''], 'U2')
         recs_to_read['runtime_params']['yawpitchstab'] = np.array([''], 'U2')
@@ -596,14 +604,17 @@ class readraw:
         # jump to sv correct in Kluster, by putting in processed beam angles (we assume angle = 0)
         recs_to_read['ping']['rel_azimuth'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
         recs_to_read['ping']['corr_pointing_angle'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
-        recs_to_read['ping']['processing_status'] = np.full(2, recs_to_read['ping']['beampointingangle'].shape, 'uint8')
+        recs_to_read['ping']['processing_status'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 2, 'uint8')
 
         # build heave
-        heavetime, newheave = calculate_heave_correction(recs_to_read['ping']['time'].ravel(), recs_to_read['ping']['traveltime'].ravel(),
-                                                        recs_to_read['ping']['soundspeed'].ravel())
-        if heavetime.shape[0] != recs_to_read['attitude']['time'].shape[0]:
-            newheave = np.interp(recs_to_read['attitude']['time'], heavetime, newheave)
-        recs_to_read['attitude']['heave'] = newheave
+        if recs_to_read['ping']['time'].size > 0:
+            heavetime, newheave = calculate_heave_correction(recs_to_read['ping']['time'].ravel(), recs_to_read['ping']['traveltime'].ravel(),
+                                                             recs_to_read['ping']['soundspeed'].ravel())
+            if heavetime.shape[0] != recs_to_read['attitude']['time'].shape[0]:
+                newheave = np.interp(recs_to_read['attitude']['time'], heavetime, newheave)
+            recs_to_read['attitude']['heave'] = np.array(newheave, np.float32)
+        else:
+            recs_to_read['attitude']['heave'] = np.array([], np.float32)
         return recs_to_read
 
     def sequential_read_records(self, first_installation_rec=False):
@@ -704,7 +715,8 @@ class readraw:
         if not navrec:  # override for saildrone draft
             draft = saildrone_vessel_draft
         recs_to_read = self._finalize_records(recs_to_read, draft, iparams)
-        recs_to_read['format'] = 'raw'
+        if recs_to_read is not None:
+            recs_to_read['format'] = 'raw'
         return recs_to_read
 
 
@@ -2002,7 +2014,7 @@ def _get_detections_within_classes(classified, powers, grad):
     for n in range(numpings):
         class_ping = classified[:,n]
         power_ping = powers[:,n]
-        classification= np.unique(class_ping)
+        classification = np.unique(class_ping)
         post_tx_idx = np.argwhere(grad[:,n] > 0)[0][0]
         for m,c in enumerate(classification):
             if c == 0:
@@ -2087,7 +2099,7 @@ def _image_detection(powers, threshold: int = 30):
     # use image edge detection to find the approximate seafloor
     im = ndimage.gaussian_filter(powers, 8)
     grad = ndimage.sobel(im, axis = 0, mode = 'constant')
-    grad_threshold = grad[1:-1,:].std()
+    grad_threshold = np.nanstd(grad[1:-1,:])
     # turn the positive gradient image into binary
     bgrad = np.full(grad.shape, False)
     bgrad[grad > grad_threshold] = True
@@ -2108,6 +2120,8 @@ def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, s
 
     butterworth low-pass filter to remove vessel heave and high-frequency artifacts from bathymetry fsampling Hz; must
     also interpolate bathymetry time series to same [fixed] rate fcutoff second periods [Hz]
+
+    Result has the sign flipped, so that to correct depths (+ Down) with this heave, you add the heave
     """
 
     calc_range = traveltime * (soundspeed / 2)
@@ -2126,4 +2140,4 @@ def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, s
     clean_heave = np.interp(ping_times, pingTimes1Hz, heave1Hz)
     heave = np.full(len(clean_idx), np.nan)
     heave[clean_idx] = clean_heave[:]
-    return ping_times, heave
+    return ping_times, -heave
