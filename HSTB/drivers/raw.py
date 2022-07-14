@@ -643,10 +643,6 @@ class readraw:
             if utctme is None:
                 print(f'raw: unable to find any position information either in this file or in nearby .gps.csv files: {self.infilename}')
                 return None
-            recs_to_read['navigation']['time'] = utctme
-            recs_to_read['navigation']['latitude'] = lat
-            recs_to_read['navigation']['longitude'] = lon
-            recs_to_read['navigation'].pop('altitude')
 
         if self.start_ptr:
             self.at_right_byte = False  # for now assume that if a custom start pointer is provided, we need to seek the start byte
@@ -723,6 +719,16 @@ class readraw:
 
         if not navrec:  # override for saildrone draft
             draft = saildrone_vessel_draft
+        if not navrec:
+            if recs_to_read['ping']['time']:  # if there are pings, we interpolate the 60sec nav to ping time
+                recs_to_read['navigation']['time'] = recs_to_read['ping']['time']
+                recs_to_read['navigation']['latitude'] = np.interp(np.array(recs_to_read['ping']['time']), utctme, lat)
+                recs_to_read['navigation']['longitude'] = np.interp(np.array(recs_to_read['ping']['time']), utctme, lon)
+            else:  # leave the full nav here
+                recs_to_read['navigation']['time'] = utctme
+                recs_to_read['navigation']['latitude'] = lat
+                recs_to_read['navigation']['longitude'] = lon
+            recs_to_read['navigation'].pop('altitude')
         recs_to_read = self._finalize_records(recs_to_read, draft, iparams)
         if recs_to_read is not None:
             recs_to_read['format'] = 'raw'
@@ -1955,7 +1961,18 @@ def read_saildrone_csv(csvpath: str):
         rawdat = datetime.strptime(f'{dtdat[0]}-{dtdat[1]}', '%Y-%m-%d-%H:%M:%S')
         rawdat = rawdat.replace(tzinfo=timezone.utc)
         utctime.append(float(rawdat.timestamp()))
-    return np.array(utctime), data['latitude'], data['longitude']
+    tme, lat, lon = np.array(utctime), data['latitude'], data['longitude']
+    gaps = np.where(lat == 0)[0]
+    if gaps.size > 0:
+        gaps = np.split(gaps, np.where(np.diff(gaps) > 1)[0])
+        for gp in gaps:
+            try:
+                print(f'raw: WARNING - Found gap in csv navigation from {date_time_data[gp[0] - 1]} to {date_time_data[gp[-1] + 1]}, interpolating...')
+                lat[gp] = np.interp(gp, [gp[0] - 1, gp[-1] + 1], lat[[gp[0] - 1, gp[-1] + 1]])
+                lon[gp] = np.interp(gp, [gp[0] - 1, gp[-1] + 1], lon[[gp[0] - 1, gp[-1] + 1]])
+            except:
+                print(f'raw: WARNING - Found gap in csv navigation from {date_time_data[gp[0] - 1]} to {date_time_data[gp[-1] + 1]}, unable to interpolate!')
+    return tme, lat, lon
 
 
 def _expand_class_to_zero_gradient(classified, grad):
