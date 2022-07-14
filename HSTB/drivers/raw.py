@@ -70,7 +70,6 @@ class readraw:
         #  with start_ptr/end_ptr.  If you do, seek_next_startbyte will find the starting place for decoding.
         if start_ptr != 0:
             self.at_right_byte = False
-            self.seek_next_startbyte()
         else:
             self.at_right_byte = True
 
@@ -441,6 +440,8 @@ class readraw:
                 if rec_nme0.header:
                     if rec_nme0.header['type'] not in list_of_pos_records:
                         list_of_pos_records.append(rec_nme0.header['type'])
+                    if rec_nme0.header['type'] == 'GGA':  # got the preferred one, so we can stop
+                        break
 
         self._load_state(stateblock)
         if not list_of_pos_records:
@@ -658,12 +659,18 @@ class readraw:
         rectime = 0
         draft = 0
         first_rec = True
+        end_of_chunk = False
+        cached_filelen = self.filelen
         while not self.eof:
             self.read()  # find the start of the record and read the header
+            if self.eof and self.end_ptr and not end_of_chunk and heads:
+                # we are reading in chunks, and we want to ensure we get the full block of returns for this ping before we quit
+                self.filelen = self.max_filelen
+                end_of_chunk = True
             datagram_type = str(self.packet.dtype)
-            if datagram_type in [desired_record, 'XML0']:
+            if datagram_type in [desired_record, 'XML0']:  # RAW0 for EK60 and RAW3/XML0 for EK80, EK60 will not have XML0
                 self.get()
-                if datagram_type == 'XML0' and self.packet.subpack.type != 'Channel':
+                if datagram_type == 'XML0' and self.packet.subpack.type != 'Channel':  # only the Channel type records are needed for EK80 processing
                     continue
                 rec = self.packet.subpack
                 # first head in the transducer group, or the first xml message (ideally we could assume xml is first, but Im not sure about that)
@@ -693,6 +700,9 @@ class readraw:
                         if read_draft is not None:
                             draft = read_draft
                         first_rec = False
+                        if end_of_chunk:  # we have finished our last incomplete chunk
+                            self.eof = True
+                            self.filelen = cached_filelen
                         heads = []
                         xml_parameters = []
                         if datagram_type == 'XML0':
@@ -2135,9 +2145,47 @@ def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, s
 
     pingTimes1Hz = np.arange(ping_times[0], ping_times[-1] + fsampling, fsampling)
     bottomDetections1Hz = np.interp(pingTimes1Hz, ping_times, calc_range)
-    bottomDetections1Hz_LowPass = signal.filtfilt(b, a, bottomDetections1Hz)
+    try:
+        bottomDetections1Hz_LowPass = signal.filtfilt(b, a, bottomDetections1Hz)
+    except ValueError:  # not enough pings to exceed the padlen requirement
+        print('raw: WARNING - Not enough pings in this chunk to support heave calculation')
+        return ping_times, np.zeros_like(traveltime)
+
     heave1Hz = bottomDetections1Hz - bottomDetections1Hz_LowPass
     clean_heave = np.interp(ping_times, pingTimes1Hz, heave1Hz)
     heave = np.full(len(clean_idx), np.nan)
     heave[clean_idx] = clean_heave[:]
     return ping_times, -heave
+
+
+def print_some_records(file_object: readraw, recordnum: int = 50):
+    """
+    Used in Kluster file analyzer, print out the first x records in the file for the user to examine
+    """
+    cur_counter = 0
+    if isinstance(file_object, str):
+        file_object = readraw(file_object)
+    if isinstance(file_object, readraw):
+        file_object.infile.seek(0)
+        file_object.eof = False
+        while not file_object.eof and cur_counter < recordnum + 1:
+            cur_counter += 1
+            print('*****************************************************')
+            file_object.read()
+            try:
+                print(file_object.packet.display())
+            except:
+                print('unable to display packet')
+                continue
+            try:
+                file_object.get()
+            except:
+                print('unable to decode record')
+                continue
+            try:
+                print(file_object.packet.subpack.display())
+            except:
+                print('no decoded data found to display')
+                continue
+    else:
+        print(f'PAR3: Found file object that is not an instance of AllRead: {file_object}')
