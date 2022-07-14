@@ -513,9 +513,9 @@ class readraw:
                 best_idx = np.where(valid)[0][0]
                 close_enough = 2 * max_pulse_len
                 final_best_idx = np.where((twowaytraveltime[best_idx] - twowaytraveltime) < close_enough)[0][-1]
-                recs_to_read['ping']['time'].append([raw_group[final_best_idx].time])
-                recs_to_read['ping']['counter'].append([0])
-                recs_to_read['ping']['serial_num'].append([serialnumber])
+                recs_to_read['ping']['time'].append(raw_group[final_best_idx].time)
+                recs_to_read['ping']['counter'].append(0)
+                recs_to_read['ping']['serial_num'].append(serialnumber)
                 recs_to_read['ping']['tiltangle'].append([0.0])
                 recs_to_read['ping']['delay'].append([0.0])
                 recs_to_read['ping']['beampointingangle'].append([0.0])
@@ -526,14 +526,14 @@ class readraw:
                 recs_to_read['attitude']['time'].append(raw_group[final_best_idx].time)
                 recs_to_read['attitude']['heave'].append(0.0)
                 if isinstance(raw_group[0], Raw0):
-                    recs_to_read['ping']['soundspeed'].append([soundspeed[final_best_idx]])
+                    recs_to_read['ping']['soundspeed'].append(soundspeed[final_best_idx])
                     recs_to_read['ping']['frequency'].append([int(raw_group[final_best_idx].header['Frequency'])])
                     recs_to_read['attitude']['roll'].append(raw_group[final_best_idx].roll)
                     recs_to_read['attitude']['pitch'].append(raw_group[final_best_idx].pitch)
                     recs_to_read['attitude']['heading'].append(raw_group[final_best_idx].heading)
                     return drafts[final_best_idx]
                 else:
-                    recs_to_read['ping']['soundspeed'].append([0.0])
+                    recs_to_read['ping']['soundspeed'].append(0.0)
                     recs_to_read['ping']['frequency'].append([int(xml_group[final_best_idx].header['Frequency'])])
                     recs_to_read['attitude']['roll'].append(0.0)
                     recs_to_read['attitude']['pitch'].append(0.0)
@@ -553,7 +553,6 @@ class readraw:
                          'qualityfactor': [], 'traveltime': []},
                 'runtime_params': {'time': [], 'mode': [], 'modetwo': [], 'yawpitchstab': [],
                                    'runtime_settings': []},
-                'profile': {'time': None, 'depth': None, 'soundspeed': None},
                 'navigation': {'time': [], 'latitude': [], 'longitude': [], 'altitude': []}}
 
     def _finalize_records(self, recs_to_read, draft, iparams):
@@ -562,17 +561,17 @@ class readraw:
 
         if not self.start_ptr:
             # either the first chunk of a series of chunks, or we aren't doing a chunked read, so log the installation params
-            iparams['installation_params']['installation_settings'][0]['waterline_vertical_location'] = str(draft)
-            recs_to_read['installation_params'] = iparams
+            iparams['installation_params']['installation_settings'][0]['waterline_vertical_location'] = str(-float(draft))
+            recs_to_read['installation_params'] = iparams['installation_params']
         else:
             recs_to_read['installation_params'] = {'time': np.array([]), 'serial_one': np.array([]), 'serial_two': np.array([]),
                                                    'installation_settings': np.array([])}
 
         # no runtime parameters to log with ek data
         try:
-            recs_to_read['runtime_params']['time'] = np.array(recs_to_read['ping']['time'][0], np.float64)
+            recs_to_read['runtime_params']['time'] = np.array([recs_to_read['ping']['time'][0]], np.float64)
         except:  # no ping records here
-            recs_to_read['runtime_params']['time'] = np.array(recs_to_read['navigation']['time'][0], np.float64)
+            recs_to_read['runtime_params']['time'] = np.array([recs_to_read['navigation']['time'][0]], np.float64)
         recs_to_read['runtime_params']['mode'] = np.array([''], 'U2')
         recs_to_read['runtime_params']['modetwo'] = np.array([''], 'U2')
         recs_to_read['runtime_params']['yawpitchstab'] = np.array([''], 'U2')
@@ -597,7 +596,7 @@ class readraw:
         recs_to_read['ping']['delay'] = np.array(recs_to_read['ping']['delay'], np.float32)
         recs_to_read['ping']['frequency'] = np.array(recs_to_read['ping']['frequency'], 'int32')
         recs_to_read['ping']['beampointingangle'] = np.array(recs_to_read['ping']['beampointingangle'], np.float32)
-        recs_to_read['ping']['txsector_beam'] = np.array(recs_to_read['ping']['txsector_beam'], np.float64)
+        recs_to_read['ping']['txsector_beam'] = np.array(recs_to_read['ping']['txsector_beam'], 'uint8')
         recs_to_read['ping']['detectioninfo'] = np.array(recs_to_read['ping']['detectioninfo'], 'int32')
         recs_to_read['ping']['qualityfactor'] = np.array(recs_to_read['ping']['qualityfactor'], 'float32')
         recs_to_read['ping']['traveltime'] = np.array(recs_to_read['ping']['traveltime'], 'float32')
@@ -900,9 +899,9 @@ class Con0:
             for nme in self.transducers.dtype.names:
                 if nme[:5].lower() != 'spare':
                     if isinstance(self.transducers[i][nme], np.ndarray):
-                        val = self.transducers[i][nme].tolist()
+                        val = str(self.transducers[i][nme].tolist())
                     else:
-                        val = self.transducers[i][nme]
+                        val = str(self.transducers[i][nme])
                     transsets[f'ektransducer{i}_{nme}'] = val
                     if nme.lower() == 'channelid':
                         transducer_names.append(val)
@@ -920,7 +919,7 @@ class Con0:
                  'motion_sensor_1_athwart_location': '0.000', 'motion_sensor_1_roll_angle': '0.000',
                  'motion_sensor_1_pitch_angle': '0.000', 'motion_sensor_1_heading_angle': '0.000',
                  'waterline_vertical_location': '0.000', 'system_main_head_serial_number': '0',
-                 'tx_serial_number': self.serial_numbers[0], 'tx_2_serial_number': '0', 'active_position_system_number': '1',
+                 'tx_serial_number': str(self.serial_numbers[0]), 'tx_2_serial_number': '0', 'active_position_system_number': '1',
                  'active_heading_sensor': 'motion_1', 'position_1_datum': 'WGS84'}
         transsets.update(isets)
         transsets['ektransducer_names'] = transducer_names
@@ -1478,7 +1477,7 @@ class Xml0:
                     for ky, val in tceiver.attrib.items():
                         if isinstance(val, np.ndarray):
                             val = val.tolist()
-                        transsets[f'ektransducer{cnt}_{ky}'] = val
+                        transsets[f'ektransducer{cnt}_{ky}'] = str(val)
         return transsets
 
     def display(self):
