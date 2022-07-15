@@ -988,6 +988,8 @@ class Raw0:
         self.numsamples = self.header['Count'] - self.header['Offset']
         mode = self.header['Mode']
         pointer = hdr_sz
+        self.power = None
+        self.angle = None
         if mode & 1:
             self.power = np.frombuffer(datablock[pointer:pointer + self.numsamples * 2], dtype='h')
             pointer += self.numsamples * 2
@@ -1185,6 +1187,17 @@ class Raw0:
         """
         for n, name in enumerate(self.header.dtype.names):
             print(f'{name} : {self.header[n]}')
+        print(f'Number of samples: {self.numsamples}')
+        print(f'Mode: {self.header["Mode"]}')
+        print(f'UTCTime: {self.time}')
+        if self.power is not None:
+            print(f'Power: {self.power.min()} to {self.power.max()}')
+        else:
+            print(f'Power: {self.power}')
+        if self.angle is not None:
+            print(f'Angle: {self.angle.min()} to {self.angle.max()}')
+        else:
+            print(f'Angle: {self.angle}')
 
 
 class Raw1:
@@ -1343,6 +1356,21 @@ class Raw3:
         """
         for n, name in enumerate(self.header.dtype.names):
             print(f'{name} : {self.header[n]}')
+        print(f'Number of samples: {self.numsamples}')
+        print(f'UTCTime: {self.time}')
+        if self.power is not None:
+            print(f'Power: {self.power.min()} to {self.power.max()}')
+        else:
+            print(f'Power: {self.power}')
+        if self.angle is not None:
+            print(f'Angle - Alongship: {self.angle["Alongship"].min()} to {self.angle["Alongship"].max()}')
+            print(f'Angle - Athwartship: {self.angle["Athwartship"].min()} to {self.angle["Athwartship"].max()}')
+        else:
+            print(f'Angle: {self.angle}')
+        if self.complexsamples is not None:
+            print(f'ComplexSamples: {self.complexsamples.min()} to {self.complexsamples.max()}')
+        else:
+            print(f'ComplexSamples: {self.complexsamples}')
 
 
 class Tag0:
