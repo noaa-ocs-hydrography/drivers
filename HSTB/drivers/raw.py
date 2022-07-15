@@ -87,7 +87,7 @@ class readraw:
 
     def seek_next_startbyte(self):
         """
-        Determines if current pointer is at the start of a record.  If not, finds the next valid one.
+        Determines if current pointer is at the start of a record.  If not, finds the next valid one and sets at_right_byte to True.
         """
         record_ids = [b'XML0', b'CON0', b'CON1', b'NME0', b'RAW0', b'RAW3', b'TAG0']
         # check is to continue on until you find one of the record ids
@@ -255,9 +255,21 @@ class readraw:
             del self.packet
 
     def _save_state(self):
+        """
+        All of the fast read methods will move the file pointer around as you move around in the file to get the records
+        of interest.  This method saves the initial state, see _load_state to recover from the saved state.
+        """
         return [self.at_right_byte, self.infile.tell(), self.start_ptr, self.eof]
 
     def _load_state(self, stateblock: list):
+        """
+        load the cached state, see _save_state
+
+        Parameters
+        ----------
+        stateblock
+            return from _save_state
+        """
         self.at_right_byte = stateblock[0]
         self.infile.seek(stateblock[1])
         self.start_ptr = stateblock[2]
@@ -265,12 +277,12 @@ class readraw:
 
     def fast_read_start_end_time(self):
         """
-        Get the start and end time for the dataset without mapping the file first
+        Get the start and end time for the file without mapping the file first
 
         Returns
         -------
-        list, [starttime: float, first time stamp in data, endtime: float, last time stamp in data]
-
+        list
+            [starttime: float, first time stamp in data, endtime: float, last time stamp in data]
         """
 
         starttime = None
@@ -299,7 +311,7 @@ class readraw:
         self.filelen = chunksize
         self.infile.seek(self.start_ptr)
         self.eof = False
-
+        # grab the last time of the file
         while not self.eof:
             self.read()
             try:
@@ -314,7 +326,8 @@ class readraw:
 
     def fast_read_serial_number(self):
         """
-        Get the serial numbers and model number of the provided file without mapping the file first.
+        Get the serial numbers and model number of the provided file without mapping the file first.  The secondaryserialnumber
+        is only applicable in dual head systems, its included here in the return to match the other drivers.
 
         Returns
         -------
@@ -358,6 +371,11 @@ class readraw:
         return [serialnumber, 0, sonarmodel]
 
     def return_installation_parameters(self):
+        """
+        Build and return the installation parameters in the Kluster format from either the CON0 or XML0/Configuration record.
+        These parameters include placeholders for lever arms and angles, as well as decoded metadata from these records.
+        """
+
         stateblock = self._save_state()
 
         self.infile.seek(0)
@@ -454,6 +472,25 @@ class readraw:
             return 'GLL'
 
     def _sort_raw_xml0_pairings(self, raw_group: list, xml_group: list):
+        """
+        Take a list of RAW0/RAW3 records and optional XML records.  Sort these by channel id to ensure that the RAW/XML
+        match, and then sort both by frequency, lowest first.  If you are using RAW0, there is no XML, so the xmlgroup is None
+        and not used.
+
+        Parameters
+        ----------
+        raw_group
+            list of either RAW0 or RAW3 classes
+        xml_group
+            either None (RAW0) or a list of XML0 classes (RAW3)
+
+        Returns
+        -------
+        list
+            list of sorted RAW classes
+        list
+            list of sorted XML classes or None
+        """
         if xml_group:  # RAW3
             # first align the raw and xml groups by channel id, so that you ensure you get the right ones
             raw_channel_ids = [rg.header['ChannelID'] for rg in raw_group]
@@ -475,6 +512,29 @@ class readraw:
             return [raw_group[sidx] for sidx in sort_freq_idxs], xml_group
 
     def _process_raw_group(self, raw_group: list, xml_group: list, recs_to_read: dict, serialnumber: int):
+        """
+        Run the processing on the RAW/XML groupings.  Will take in the raw data (powers, metadata) and return a two
+        way travel time from our bottom detection code as well as any supporting data.  For the group of transducers,
+        you get one result, the 'best' detection, which is preferring the lower frequency detection.  If there is no
+        valid detection, this method returns None.
+
+        Parameters
+        ----------
+        raw_group
+            list of either RAW0 or RAW3 classes
+        xml_group
+            either None (RAW0) or a list of XML0 classes (RAW3)
+        recs_to_read
+            dictionary datastore
+        serialnumber
+            integer serial number that we include here to populate each record in the recs_to_read data store
+
+        Returns
+        -------
+        float
+            draft from the records or 0.0 if no draft exists.  If there was no valid detection, this returns None.
+        """
+
         if raw_group:
             raw_group, xml_group = self._sort_raw_xml0_pairings(raw_group, xml_group)
             if isinstance(raw_group[0], Raw0):
@@ -544,6 +604,15 @@ class readraw:
             return None
 
     def _initialize_sequential_read_datastore(self):
+        """
+        Initialize the Kluster datastore.  The return from sequential_read_records() will be this structure populated
+        with data.
+
+        Returns
+        -------
+        dict
+            empty kluster datastore
+        """
         return {'attitude': {'time': [], 'roll': [], 'pitch': [], 'heave': [], 'heading': []},
                 'installation_params': {'time': [], 'serial_one': [], 'serial_two': [],
                                         'installation_settings': []},
@@ -556,6 +625,26 @@ class readraw:
                 'navigation': {'time': [], 'latitude': [], 'longitude': [], 'altitude': []}}
 
     def _finalize_records(self, recs_to_read, draft, iparams):
+        """
+        Take the return of sequential_read_records and convert to numpy arrays with the correct datatypes as required
+        by kluster.
+
+        Parameters
+        ----------
+        recs_to_read
+            kluster dict datastore
+        draft
+            draft value from the raw records
+        iparams
+            dict matching the recs_to_read 'installation_params' structure that we populate from this file's configuration
+            file
+
+        Returns
+        -------
+        dict
+            formatted recs_to_read
+        """
+
         if not recs_to_read['ping']['time']:
             print(f'raw: WARNING - found chunk without any valid ping records: {self.infilename} ({self.start_ptr} to {self.filelen + self.start_ptr})')
 
@@ -619,9 +708,22 @@ class readraw:
 
     def sequential_read_records(self, first_installation_rec=False):
         """
-        Using global recs_categories, parse out only the given datagram types by reading headers and decoding only
-        the necessary datagrams.
+        Step through this file and convert all relevant data.  Each RAW/XML ping group will be processed to get a
+        bottom detection that we use to populate the kluster dict datastore, which is the return of this function.
 
+        We use a sequential approach, as it is generally faster than the mapfile approach, and allows Kluster to read
+        these files in chunks, starting/ending at a set byte offset.  With the .raw file, we generally have to decode
+        each RAW/XML/NME0 record anyway, so the speed improvement is actually pretty slight.
+
+        Parameters
+        ----------
+        first_installation_rec
+            if True, will just return the translated installation parameters
+
+        Returns
+        -------
+        dict
+            read data from the raw file
         """
 
         if first_installation_rec:  # only return the needed installation parameters
@@ -878,6 +980,9 @@ class Con0:
 
     @property
     def serial_numbers(self):
+        """
+        Return a list of serial numbers from this record for each transducer
+        """
         serialnumbers = []
         for trns in self.transducers:
             trns_channelid = trns[0].split(' ')
@@ -899,6 +1004,9 @@ class Con0:
 
     @property
     def installation_parameters(self):
+        """
+        Return a dict of installation parameters from the datagram
+        """
         transsets = {}
         transducer_names = []
         for i in range(len(self.transducers)):
@@ -1484,9 +1592,16 @@ class Xml0:
         return data
 
     def _get_xml_data(self, root):
+        """
+        This classes data is stored in XML, we recursively search through the XML data and store in the xmldata attribute
+        the attrib for each element merged into a single dictionary
+        """
         self.xmldata = self._search_xml_recs(root)
 
     def return_transceiver_names(self):
+        """
+        Return a list of transceiver names across all transceivers.
+        """
         tnames = []
         if self.configuration:
             transceivers_element = [x for x in self.configuration if x.tag == 'Transceivers']
@@ -1502,6 +1617,11 @@ class Xml0:
         return tnames
 
     def return_transducer_metadata(self):
+        """
+        Return the metadata associated with each transducer.  This will add some formatting to make the data from
+        each transceiver element distinctive in the dict.  Kind of replaces the xmldata, which does less of this
+        formatting.
+        """
         transsets = {}
         if self.configuration:
             transceivers_element = [x for x in self.configuration if x.tag == 'Transceivers']
@@ -1953,7 +2073,7 @@ def get_saildrone_navigation(raw_file: str):
     return utctime, latitude, longitude
 
 
-def read_saildrone_csv(csvpath: str):
+def read_saildrone_csv(csvpath: str, will_interp: bool = True):
     """
     Read one of the saildrone gps.csv files, to get navigation
 
@@ -1961,6 +2081,8 @@ def read_saildrone_csv(csvpath: str):
     ----------
     csvpath
         path to a .gps.csv navigation file
+    will_interp
+        if True, will interpolate through data gaps in the csv file
 
     Returns
     -------
@@ -1990,16 +2112,17 @@ def read_saildrone_csv(csvpath: str):
         rawdat = rawdat.replace(tzinfo=timezone.utc)
         utctime.append(float(rawdat.timestamp()))
     tme, lat, lon = np.array(utctime), data['latitude'], data['longitude']
-    gaps = np.where(lat == 0)[0]
-    if gaps.size > 0:
-        gaps = np.split(gaps, np.where(np.diff(gaps) > 1)[0])
-        for gp in gaps:
-            try:
-                print(f'raw: WARNING - Found gap in csv navigation from {date_time_data[gp[0] - 1]} to {date_time_data[gp[-1] + 1]}, interpolating...')
-                lat[gp] = np.interp(gp, [gp[0] - 1, gp[-1] + 1], lat[[gp[0] - 1, gp[-1] + 1]])
-                lon[gp] = np.interp(gp, [gp[0] - 1, gp[-1] + 1], lon[[gp[0] - 1, gp[-1] + 1]])
-            except:
-                print(f'raw: WARNING - Found gap in csv navigation from {date_time_data[gp[0] - 1]} to {date_time_data[gp[-1] + 1]}, unable to interpolate!')
+    if will_interp:
+        gaps = np.where(lat == 0)[0]
+        if gaps.size > 0:
+            gaps = np.split(gaps, np.where(np.diff(gaps) > 1)[0])
+            for gp in gaps:
+                try:
+                    print(f'raw: WARNING - Found gap in csv navigation from {date_time_data[gp[0] - 1]} to {date_time_data[gp[-1] + 1]}, interpolating...')
+                    lat[gp] = np.interp(gp, [gp[0] - 1, gp[-1] + 1], lat[[gp[0] - 1, gp[-1] + 1]])
+                    lon[gp] = np.interp(gp, [gp[0] - 1, gp[-1] + 1], lon[[gp[0] - 1, gp[-1] + 1]])
+                except:
+                    print(f'raw: WARNING - Found gap in csv navigation from {date_time_data[gp[0] - 1]} to {date_time_data[gp[-1] + 1]}, unable to interpolate!')
     return tme, lat, lon
 
 
