@@ -2315,6 +2315,9 @@ def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, s
     Result has the sign flipped, so that to correct depths (+ Down) with this heave, you add the heave
     """
 
+    if soundspeed[0] == 0:
+        soundspeed = 1500.0
+
     calc_range = traveltime * (soundspeed / 2)
 
     fbutter = fcutoff / (fsampling / 2.)
