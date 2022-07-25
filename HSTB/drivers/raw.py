@@ -1011,22 +1011,30 @@ class Con0:
         transducer_names = []
         for i in range(len(self.transducers)):
             for nme in self.transducers.dtype.names:
-                if nme[:5].lower() != 'spare':
+                lnme = nme.lower()
+                if lnme[:5] != 'spare':
                     if isinstance(self.transducers[i][nme], np.ndarray):
                         val = str(self.transducers[i][nme].tolist())
                     else:
                         val = str(self.transducers[i][nme])
                     transsets[f'ektransducer{i}_{nme}'] = val
-                    if nme.lower() == 'channelid':
+                    if lnme == 'channelid':
                         transducer_names.append(val)
+        try:
+            txopeningangle = transsets['ektransducer0_BeamWidthAlongship']
+            rxopeningangle = transsets['ektransducer0_BeamWidthAthwartship']
+        except:
+            txopeningangle = '0.000'
+            rxopeningangle = '0.000'
+
         # isets represents the minimum information Kluster needs for processing
         isets = {'sonar_model_number': 'EK60', 'transducer_1_vertical_location': '0.000',
                  'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
                  'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
-                 'transducer_1_pitch_angle': '0.000', 'transducer_2_vertical_location': '0.000',
+                 'transducer_1_pitch_angle': '0.000', 'transducer_1_sounding_size_deg': txopeningangle, 'transducer_2_vertical_location': '0.000',
                  'transducer_2_along_location': '0.000', 'transducer_2_athwart_location': '0.000',
                  'transducer_2_heading_angle': '0.000', 'transducer_2_roll_angle': '0.000',
-                 'transducer_2_pitch_angle': '0.000', 'position_1_time_delay': '0.000',  # seconds
+                 'transducer_2_pitch_angle': '0.000', 'transducer_2_sounding_size_deg': rxopeningangle, 'position_1_time_delay': '0.000',  # seconds
                  'position_1_vertical_location': '0.000', 'position_1_along_location': '0.000',
                  'position_1_athwart_location': '0.000', 'motion_sensor_1_time_delay': '0.000',
                  'motion_sensor_1_vertical_location': '0.000', 'motion_sensor_1_along_location': '0.000',
@@ -1554,13 +1562,19 @@ class Xml0:
     def installation_parameters(self):
         if self.type == 'Configuration':
             tsets = self.return_transducer_metadata()
+            try:
+                txopeningangle = tsets['ektransducer0_BeamWidthAlongship']
+                rxopeningangle = tsets['ektransducer0_BeamWidthAthwartship']
+            except:
+                txopeningangle = '0.000'
+                rxopeningangle = '0.000'
             isets = {'sonar_model_number': 'EK80', 'transducer_1_vertical_location': '0.000',
                      'transducer_1_along_location': '0.000', 'transducer_1_athwart_location': '0.000',
                      'transducer_1_heading_angle': '0.000', 'transducer_1_roll_angle': '0.000',
-                     'transducer_1_pitch_angle': '0.000', 'transducer_2_vertical_location': '0.000',
+                     'transducer_1_pitch_angle': '0.000', 'transducer_1_sounding_size_deg': txopeningangle, 'transducer_2_vertical_location': '0.000',
                      'transducer_2_along_location': '0.000', 'transducer_2_athwart_location': '0.000',
                      'transducer_2_heading_angle': '0.000', 'transducer_2_roll_angle': '0.000',
-                     'transducer_2_pitch_angle': '0.000', 'position_1_time_delay': '0.000',  # seconds
+                     'transducer_2_pitch_angle': '0.000', 'transducer_2_sounding_size_deg': rxopeningangle, 'position_1_time_delay': '0.000',  # seconds
                      'position_1_vertical_location': '0.000', 'position_1_along_location': '0.000',
                      'position_1_athwart_location': '0.000', 'motion_sensor_1_time_delay': '0.000',
                      'motion_sensor_1_vertical_location': '0.000', 'motion_sensor_1_along_location': '0.000',
