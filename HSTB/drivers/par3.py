@@ -74,11 +74,12 @@ recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave
                       '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
                       '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                              'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
-                             'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
+                             'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime',
+                             'rx.SignalLength'],
                       '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                       '85': ['time', 'data.Depth', 'data.SoundSpeed'],
                       '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude'],
-                      '89': ['time', 'Reflectivity']}
+                      '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover']}
 
 recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
                                         'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
@@ -92,7 +93,8 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
                                         'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                         'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                         'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
-                                        'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                        'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
+                                        'SignalLength': [['ping', 'pulselength']]},
                                  '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
                                         'ReceiverFixedGain': [['runtime_params', 'modetwo']],
                                         'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
@@ -102,16 +104,18 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
                                  '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                         'Longitude': [['navigation', 'longitude']],
                                         'Altitude': [['navigation', 'altitude']]},
-                                 '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]}}
+                                 '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']],
+                                        'MinTravelTime': [['ping', 'mintraveltime']], 'NormalBackscatter': [['ping', 'normalbackscatter']],
+                                        'ObliqueBackscatter': [['ping', 'obliquebackscatter']], 'TVGCrossover': [['ping', 'tvgcrossover']]}}
 
 recs_categories_110 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                        '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
                        '78': ['time', 'header.Counter', 'header.SoundSpeed', 'header.Serial#',
                               'rx.TiltAngle', 'rx.Delay', 'rx.Frequency', 'rx.BeamPointingAngle',
-                              'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime'],
+                              'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime', 'rx.SignalLength'],
                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                        '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                       '89': ['time', 'Reflectivity'],
+                       '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover'],
                        '110': ['data.Time', 'source_data.Latitude', 'source_data.Longitude',
                                'source_data.Altitude']}
 
@@ -127,14 +131,17 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
                                          'Serial#': [['ping', 'serial_num']], 'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                          'Frequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                          'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionInfo': [['ping', 'detectioninfo']],
-                                         'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                         'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
+                                         'SignalLength': [['ping', 'pulselength']]},
                                   '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
                                          'ReceiverFixedGain': [['runtime_params', 'modetwo']],
                                          'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
                                          'settings': [['runtime_params', 'runtime_settings']]},
                                   '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                          'SoundSpeed': [['profile', 'soundspeed']]},
-                                  '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]},
+                                  '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']],
+                                         'MinTravelTime': [['ping', 'mintraveltime']], 'NormalBackscatter': [['ping', 'normalbackscatter']],
+                                         'ObliqueBackscatter': [['ping', 'obliquebackscatter']], 'TVGCrossover': [['ping', 'tvgcrossover']]},
                                   '110': {'Time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                           'Longitude': [['navigation', 'longitude']],
                                           'Altitude': [['navigation', 'altitude']]}}
@@ -144,10 +151,10 @@ oldstyle_recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data
                             '102': ['time', 'PingCounter', 'SoundSpeed', 'SystemSerialNum',
                                     'rx.TiltAngle', 'rx.Delay', 'rx.CenterFrequency',
                                     'rx.BeamPointingAngle', 'rx.TransmitSectorID', 'rx.DetectionWindowLength',
-                                    'rx.QualityFactor', 'rx.TravelTime'],
+                                    'rx.QualityFactor', 'rx.TravelTime', 'rx.SignalLength'],
                             '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                             '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                            '89': ['time', 'Reflectivity'],
+                            '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover'],
                             '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
 
 oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
@@ -163,14 +170,17 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
                                                'TiltAngle': [['ping', 'tiltangle']], 'Delay': [['ping', 'delay']],
                                                'CenterFrequency': [['ping', 'frequency']], 'BeamPointingAngle': [['ping', 'beampointingangle']],
                                                'TransmitSectorID': [['ping', 'txsector_beam']], 'DetectionWindowLength': [['ping', 'detectioninfo']],
-                                               'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']]},
+                                               'QualityFactor': [['ping', 'qualityfactor']], 'TravelTime': [['ping', 'traveltime']],
+                                               'SignalLength': [['ping', 'pulselength']]},
                                        '82': {'time': [['runtime_params', 'time']], 'Mode': [['runtime_params', 'mode']],
                                               'ReceiverFixedGain': [['runtime_params', 'modetwo']],
                                               'YawAndPitchStabilization': [['runtime_params', 'yawpitchstab']],
                                               'settings': [['runtime_params', 'runtime_settings']]},
                                        '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                               'SoundSpeed': [['profile', 'soundspeed']]},
-                                       '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]},
+                                       '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']],
+                                              'MinTravelTime': [['ping', 'mintraveltime']], 'NormalBackscatter': [['ping', 'normalbackscatter']],
+                                              'ObliqueBackscatter': [['ping', 'obliquebackscatter']], 'TVGCrossover': [['ping', 'tvgcrossover']]},
                                        '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                               'Longitude': [['navigation', 'longitude']],
                                               'Altitude': [['navigation', 'altitude']]}}
@@ -180,8 +190,9 @@ recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': Non
                                                   'installation_settings': None},
                           'ping': {'time': None, 'rtime': None, 'counter': None, 'soundspeed': None, 'serial_num': None,
                                    'tiltangle': None, 'delay': None, 'frequency': None, 'reflectivity': None,
-                                   'beampointingangle': None, 'txsector_beam': None, 'detectioninfo': None,
-                                   'qualityfactor': None, 'traveltime': None},
+                                   'mintraveltime': None, 'normalbackscatter': None, 'obliquebackscatter': None,
+                                   'tvgcrossover': None, 'beampointingangle': None, 'txsector_beam': None,
+                                   'detectioninfo': None, 'qualityfactor': None, 'traveltime': None, 'pulselength': None},
                           'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
                                              'runtime_settings': None},
                           'profile': {'time': None, 'depth': None, 'soundspeed': None},
@@ -411,8 +422,8 @@ class AllRead:
                 print(err)
             self.packet_read = False
     
-    def _better_merge_arrays(self, base_arr, arrone, arrtwo, arrthree):
-        newdtype = np.dtype(base_arr.dtype.descr + arrone.dtype.descr + arrtwo.dtype.descr + arrthree.dtype.descr)
+    def _better_merge_arrays(self, base_arr, arrone, arrtwo, arrthree, arrfour):
+        newdtype = np.dtype(base_arr.dtype.descr + arrone.dtype.descr + arrtwo.dtype.descr + arrthree.dtype.descr + arrfour.dtype.descr)
         newarray = np.empty(shape=base_arr.shape, dtype=newdtype)
         for field in base_arr.dtype.names:
             newarray[field] = base_arr[field]
@@ -422,6 +433,8 @@ class AllRead:
             newarray[field] = arrtwo[field]
         for field in arrthree.dtype.names:
             newarray[field] = arrthree[field]
+        for field in arrfour.dtype.names:
+            newarray[field] = arrfour[field]
         return newarray
     
     def _populate_rec(self):
@@ -462,32 +475,37 @@ class AllRead:
                 delay_array = rec.tx['Delay']
                 freq_array = rec.tx['Frequency']
                 tiltangle_array = rec.tx['TiltAngle']
+                pulselength_array = rec.tx['SignalLength']
                 freqname = 'Frequency'
             except:  # the data102 approach
                 if isinstance(rec.tx['Delay'], np.ndarray):
                     delay_array = rec.tx['Delay']
                     freq_array = rec.tx['CenterFrequency']
                     tiltangle_array = rec.tx['TiltAngle']
+                    pulselength_array = rec.tx['SignalLength']
                     freqname = 'CenterFrequency'
                 else:
                     delay_array = [rec.tx['Delay']]
                     freq_array = [rec.tx['CenterFrequency']]
                     tiltangle_array = [rec.tx['TiltAngle']]
+                    pulselength_array = [rec.tx['SignalLength']]
                     freqname = 'CenterFrequency'
 
             # expand out the sector wise arrays to be beam wise
             populated_delay = np.empty(rec.rx['TransmitSectorID'].shape, dtype=[('Delay', np.float32)])
             populated_freq = np.empty(rec.rx['TransmitSectorID'].shape, dtype=[(freqname, np.int32)])
             populated_tiltangle = np.empty(rec.rx['TransmitSectorID'].shape, dtype=[('TiltAngle', np.float32)])
+            populated_pulselength = np.empty(rec.rx['TransmitSectorID'].shape, dtype=[('SignalLength', np.float32)])
             for id in np.unique(rec.rx['TransmitSectorID']):
                 populated_delay[rec.rx['TransmitSectorID'] == id] = delay_array[id]
                 populated_freq[rec.rx['TransmitSectorID'] == id] = freq_array[id]
                 populated_tiltangle[rec.rx['TransmitSectorID'] == id] = tiltangle_array[id]
+                populated_pulselength[rec.rx['TransmitSectorID'] == id] = pulselength_array[id]
             
             #rec.rx = merge_arrays([rec.rx, populated_delay, populated_freq, populated_tiltangle], flatten=True)
-            rec.rx = self._better_merge_arrays(rec.rx, populated_delay, populated_freq, populated_tiltangle)
+            rec.rx = self._better_merge_arrays(rec.rx, populated_delay, populated_freq, populated_tiltangle, populated_pulselength)
 
-            new_tx_names = [n for n in rec.tx.dtype.names if n not in ['Delay', freqname, 'TiltAngle']]
+            new_tx_names = [n for n in rec.tx.dtype.names if n not in ['Delay', freqname, 'TiltAngle', 'SignalLength']]
             rec.tx = rec.tx[new_tx_names]
 
             return rec
@@ -735,7 +753,7 @@ class AllRead:
                         except:  # data80 approach, cast as numpy array, just one list of values
                             recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
                 elif rec == 'ping':
-                    if dgram in ['reflectivity', 'rtime'] and not recs_to_read[rec][dgram]:
+                    if dgram in ['reflectivity', 'rtime', 'mintraveltime', 'normalbackscatter', 'obliquebackscatter', 'tvgcrossover'] and not recs_to_read[rec][dgram]:
                         pass
                     elif dgram == 'detectioninfo':
                         # same for detection info, but it also needs to be converted to something other than int8
@@ -779,11 +797,21 @@ class AllRead:
         recs_to_read['navigation']['latitude'] = recs_to_read['navigation']['latitude'].astype(float)
 
         # reflectivity comes from a different record, if it exists, we deal with it here
+        mt = recs_to_read['ping'].pop('mintraveltime')
+        bn = recs_to_read['ping'].pop('normalbackscatter')
+        bo = recs_to_read['ping'].pop('obliquebackscatter')
+        crossang = recs_to_read['ping'].pop('tvgcrossover')
         if recs_to_read['ping']['rtime'] is not None:
             if recs_to_read['ping']['time'].size != recs_to_read['ping']['rtime'].size:  # get indices of nearest intensity for each ping
                 rindex = np.searchsorted(recs_to_read['ping']['rtime'], recs_to_read['ping']['time']).clip(0, recs_to_read['ping']['rtime'].size - 1)
                 recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'][rindex]
+                mt = mt[rindex]
+                bn = bn[rindex]
+                bo = bo[rindex]
+                crossang = crossang[rindex]
             recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
+            recs_to_read['ping']['nearnormalcorrect'] = nearnormal_correction(mt, bn, bo, crossang, recs_to_read['ping']['soundspeed'],
+                                                                              recs_to_read['ping']['traveltime'])
         else:
             recs_to_read['ping'].pop('reflectivity')
         recs_to_read['ping'].pop('rtime')
@@ -3481,6 +3509,10 @@ class Data89(BaseData):
     def Reflectivity(self):  # added to support kluster read
         return [self.center().tolist()]
 
+    @property
+    def MinTravelTime(self):
+        return (self.RangeToNormal / 2) * (1 / self.SamplingFreq)
+
     def get_datablock(self, data=None):
         # FIXME: Not sure what happens if reshape is called
         part1 = super(Data89, self).get_datablock()
@@ -5878,6 +5910,55 @@ class useall(AllRead):
             self.tblfile.close()
         else:
             print("pytables module unavailable.")
+
+
+def nearnormal_correction(mintraveltime: np.ndarray, normalbackscatter: np.ndarray, obliquebackscatter: np.ndarray,
+                          crossoverangle: np.ndarray, surfsoundspeed: np.ndarray, twowaytraveltime: np.ndarray):
+    """
+    Generate the near normal backscatter corrector to backout the applied tvg used in .all backscatter.  We follow the
+    Kongsberg Jan2000 Hammerstad paper and guidance from UNH folks.  They provide the following:
+
+    NearNormal_Correction
+    (BSn – BSo) (1-sqrt( (R – R0) / (Rc – R0)))
+    BSn: BSnormal_dB
+    BSo: BSoblique_dB
+    R = twoWayTravelTime_sec * soundSpeedAtTxDepth_mPerSec  / 2
+    R0: minimum range in a swath
+    Rc = R0 / cos ( crossover_angle)
+    crossover_angle: You have to hunt for it in runtime_txt  - 'Normal Incidence Corr.'
+
+    Note that this is provided wrt KMALL processing reflectivity_1, but I believe this applies to the .all backscatter,
+    as reflectivity_1 is I believe supposed to follow the .all backscatter approach.
+
+    Parameters
+    ----------
+    mintraveltime
+        see seabed image data89 property, min travel time for ping, 1d array
+    normalbackscatter
+        see seabed image data89, 1d array
+    obliquebackscatter
+        see seabed image data89, 1d array
+    crossoverangle
+        see seabed image data89, 1d array
+    surfsoundspeed
+        surface soundspeed from data78, 1d array
+    twowaytraveltime
+        two way traveltime from data78, 2d array
+
+    Returns
+    -------
+    np.ndarray
+        2d array of near normal backscatter correction in db
+    """
+
+    minrng = mintraveltime * surfsoundspeed
+    rng = twowaytraveltime * surfsoundspeed[:, None] / 2
+    rngcross = minrng / np.cos(np.deg2rad(crossoverangle))
+
+    # range dependent parameter, clip to zero to avoid sqrt neg number issues
+    nncorrect_rngdep = ((rng - minrng[:, None]) / (rngcross[:, None] - minrng[:, None])).clip(0)
+    nncorrect = (normalbackscatter - obliquebackscatter)[:, None] * (1 - np.sqrt(nncorrect_rngdep))
+    return nncorrect.astype(np.float32)
 
 
 def print_some_records(file_object: AllRead, recordnum: int = 50):
