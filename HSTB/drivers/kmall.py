@@ -3665,7 +3665,7 @@ class kmall():
                                    'txSectorInfo.tiltAngleReTx_deg', 'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
                                    'txSectorInfo.totalSignalLength_sec',
                                    'sounding.beamAngleReRx_deg', 'sounding.reflectivity2_dB', 'sounding.txSectorNumb', 'sounding.detectionType',
-                                   'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
+                                   'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec', 'sounding.meanAbsCoeff_dbPerkm',
                                    'sounding.receiverSensitivityApplied_dB', 'sounding.sourceLevelApplied_dB', 'sounding.TVG_dB',
                                    'pingInfo.modeAndStabilisation', 'pingInfo.pulseForm', 'pingInfo.depthMode',
                                    'pingInfo.latitude_deg', 'pingInfo.longitude_deg', 'pingInfo.ellipsoidHeightReRefPoint_m'],
@@ -3693,6 +3693,7 @@ class kmall():
                                               'sounding.qualityFactor': [['ping', 'qualityfactor']],
                                               'sounding.twoWayTravelTime_sec': [['ping', 'traveltime']],
                                               'sounding.receiverSensitivityApplied_dB': [['ping', 'receiversensitivity']],
+                                              'sounding.meanAbsCoeff_dbPerkm': [['ping', 'absorption']],
                                               'sounding.sourceLevelApplied_dB': [['ping', 'sourceLevel']],
                                               'sounding.TVG_dB': [['ping', 'tvg']],
                                               'pingInfo.modeAndStabilisation': [['ping', 'yawpitchstab']],
@@ -3716,7 +3717,7 @@ class kmall():
             'ping': {'time': None, 'counter': None, 'soundspeed': None, 'serial_num': None, 'tiltangle': None,
                      'delay': None, 'frequency': None, 'beampointingangle': None, 'reflectivity': None, 'txsector_beam': None,
                      'detectioninfo': None, 'detectioninfo_two': None, 'qualityfactor': None, 'traveltime': None,
-                     'receiversensitivity': None, 'pulselength': None, 'tvg': None, 'sourceLevel': None,
+                     'receiversensitivity': None, 'pulselength': None, 'tvg': None, 'sourceLevel': None, 'absorption': None,
                      'mode': None, 'modetwo': None, 'yawpitchstab': None},
             'runtime_params': {'time': None, 'runtime_settings': None},
             'profile': {'time': None, 'depth': None, 'soundspeed': None},
@@ -3887,7 +3888,7 @@ class kmall():
                     elif dgram == 'modetwo':
                         recs_to_read[rec][dgram] = self.translate_mode_two_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor',
-                                   'reflectivity', 'pulselength', 'tvg', 'sourceLevel', 'receiversensitivity']:
+                                   'reflectivity', 'pulselength', 'tvg', 'sourceLevel', 'receiversensitivity', 'absorption']:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
                     elif dgram == 'serial_num':
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint64')
