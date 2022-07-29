@@ -3839,6 +3839,21 @@ class kmall():
             recs_to_read['ping'].pop('detectioninfo_two')
         return recs_to_read
 
+    def _finalize_ping_record(self, arr, dtyp, maxlen):
+        try:
+            if dtyp is not None:
+                return np.array(arr, dtype=dtyp)
+            else:
+                return np.array(arr)
+        except ValueError:
+            if dtyp is not None:
+                newrec = np.zeros((len(arr), maxlen), dtype=dtyp)
+            else:
+                newrec = np.zeros((len(arr), maxlen))
+            for i, j in enumerate(arr):
+                newrec[i][0:len(j)] = j
+            return newrec
+
     def _finalize_records(self, recs_to_read, recs_count, serial_translator=None):
         """
         Take output from sequential_read_records and alter the type/size/translate as needed for Kluster to read and
@@ -3854,6 +3869,8 @@ class kmall():
         idx = np.argsort(recs_to_read['ping']['time'])
         # flatten the serial number array
         recs_to_read['ping']['serial_num'] = np.squeeze(recs_to_read['ping']['serial_num'])
+        # get the max number of beams
+        maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
 
         # need to force in the serial number, its not in the header anymore with these kmall files...
         if recs_to_read['installation_params']['installation_settings'] is not None:
@@ -3880,7 +3897,7 @@ class kmall():
                         recs_to_read[rec][dgram] = recs_to_read[rec][dgram].astype(np.float32)
                 elif rec == 'ping':  # use the argsort indices here to sort by time
                     if dgram in ['detectioninfo', 'detectioninfo_two']:
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype=np.int32)
+                        recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], np.int32, maxlen)
                     elif dgram == 'yawpitchstab':
                         recs_to_read[rec][dgram] = self.translate_yawpitch_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram == 'mode':
@@ -3889,15 +3906,15 @@ class kmall():
                         recs_to_read[rec][dgram] = self.translate_mode_two_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor',
                                    'reflectivity', 'pulselength', 'tvg', 'sourceLevel', 'receiversensitivity', 'absorption']:
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
+                        recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'float32', maxlen)
                     elif dgram == 'serial_num':
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint64')
+                        recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'uint64', maxlen)
                     elif dgram == 'txsector_beam':
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint8')
+                        recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'uint8', maxlen)
                     elif dgram == 'counter':
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint32')
+                        recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'uint32', maxlen)
                     else:
-                        recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram])
+                        recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], None, maxlen)
                     recs_to_read[rec][dgram] = recs_to_read[rec][dgram][idx]
                 else:
                     if dgram == 'altitude':
