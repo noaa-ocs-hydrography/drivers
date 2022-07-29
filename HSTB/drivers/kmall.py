@@ -3842,9 +3842,13 @@ class kmall():
     def _finalize_ping_record(self, arr, dtyp, maxlen):
         try:
             if dtyp is not None:
-                return np.array(arr, dtype=dtyp)
+                newrec = np.array(arr, dtype=dtyp)
             else:
-                return np.array(arr)
+                newrec = np.array(arr)
+            if isinstance(arr[0], np.ndarray) and arr[0].size > 1 and newrec.shape != (len(arr), maxlen):
+                # Saw this with some 2dim records with uneven number of beams, it mangles the array.  If you see this
+                #   raise an Error and go to the slower iterable method that assures the conversion
+                raise ValueError
         except ValueError:
             if dtyp is not None:
                 newrec = np.zeros((len(arr), maxlen), dtype=dtyp)
@@ -3852,7 +3856,7 @@ class kmall():
                 newrec = np.zeros((len(arr), maxlen))
             for i, j in enumerate(arr):
                 newrec[i][0:len(j)] = j
-            return newrec
+        return newrec
 
     def _finalize_records(self, recs_to_read, recs_count, serial_translator=None):
         """
@@ -3913,6 +3917,8 @@ class kmall():
                         recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'uint8', maxlen)
                     elif dgram == 'counter':
                         recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'uint32', maxlen)
+                    elif dgram == 'frequency':
+                        recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'int32', maxlen)
                     else:
                         recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], None, maxlen)
                     recs_to_read[rec][dgram] = recs_to_read[rec][dgram][idx]
