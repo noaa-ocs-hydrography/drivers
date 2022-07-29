@@ -3666,7 +3666,7 @@ class kmall():
                                    'txSectorInfo.totalSignalLength_sec',
                                    'sounding.beamAngleReRx_deg', 'sounding.reflectivity2_dB', 'sounding.txSectorNumb', 'sounding.detectionType',
                                    'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
-                                   'sounding.meanAbsCoeff_dbPerkm', 'sounding.TVG_dB',
+                                   'sounding.receiverSensitivityApplied_dB', 'sounding.sourceLevelApplied_dB', 'sounding.TVG_dB',
                                    'pingInfo.modeAndStabilisation', 'pingInfo.pulseForm', 'pingInfo.depthMode',
                                    'pingInfo.latitude_deg', 'pingInfo.longitude_deg', 'pingInfo.ellipsoidHeightReRefPoint_m'],
                            'IOP': ['header.dgtime', 'runtime_txt'],
@@ -3692,7 +3692,8 @@ class kmall():
                                               'sounding.detectionMethod': [['ping', 'detectioninfo_two']],
                                               'sounding.qualityFactor': [['ping', 'qualityfactor']],
                                               'sounding.twoWayTravelTime_sec': [['ping', 'traveltime']],
-                                              'sounding.meanAbsCoeff_dbPerkm': [['ping', 'absorption']],
+                                              'sounding.receiverSensitivityApplied_dB': [['ping', 'receiversensitivity']],
+                                              'sounding.sourceLevelApplied_dB': [['ping', 'sourceLevel']],
                                               'sounding.TVG_dB': [['ping', 'tvg']],
                                               'pingInfo.modeAndStabilisation': [['ping', 'yawpitchstab']],
                                               'pingInfo.pulseForm': [['ping', 'mode']],
@@ -3715,7 +3716,7 @@ class kmall():
             'ping': {'time': None, 'counter': None, 'soundspeed': None, 'serial_num': None, 'tiltangle': None,
                      'delay': None, 'frequency': None, 'beampointingangle': None, 'reflectivity': None, 'txsector_beam': None,
                      'detectioninfo': None, 'detectioninfo_two': None, 'qualityfactor': None, 'traveltime': None,
-                     'absorption': None, 'pulselength': None, 'tvg': None,
+                     'receiversensitivity': None, 'pulselength': None, 'tvg': None, 'sourceLevel': None,
                      'mode': None, 'modetwo': None, 'yawpitchstab': None},
             'runtime_params': {'time': None, 'runtime_settings': None},
             'profile': {'time': None, 'depth': None, 'soundspeed': None},
@@ -3886,7 +3887,7 @@ class kmall():
                     elif dgram == 'modetwo':
                         recs_to_read[rec][dgram] = self.translate_mode_two_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor',
-                                   'reflectivity', 'pulselength', 'tvg', 'absorption']:
+                                   'reflectivity', 'pulselength', 'tvg', 'sourceLevel', 'receiversensitivity']:
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='float32')
                     elif dgram == 'serial_num':
                         recs_to_read[rec][dgram] = np.array(recs_to_read[rec][dgram], dtype='uint64')
@@ -3909,6 +3910,7 @@ class kmall():
         # recs_to_read = self._interpolate_skm_time_spikes(recs_to_read)
         recs_to_read = self._skm_remove_empty_navigation(recs_to_read)
         recs_to_read = self._merge_detectioninfo_detectionmethod(recs_to_read)
+        recs_to_read['ping']['fixedgain'] = recs_to_read['ping'].pop('sourceLevel') + recs_to_read['ping'].pop('receiversensitivity')
 
         # need to sort/drop uniques, keep finding duplicate times
         for dset_name in ['attitude', 'navigation', 'ping']:
