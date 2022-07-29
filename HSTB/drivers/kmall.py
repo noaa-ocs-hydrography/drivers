@@ -3840,6 +3840,10 @@ class kmall():
         return recs_to_read
 
     def _finalize_ping_record(self, arr, dtyp, maxlen):
+        """
+        Take in the list of numpy arrays, and merge them into a single array by casting as ndarray.  If you get a sonar
+        with a varying number of beams, you have to go the iterate-over-all-pings route instead, which is slower.
+        """
         try:
             if dtyp is not None:
                 newrec = np.array(arr, dtype=dtyp)
