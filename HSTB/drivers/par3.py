@@ -79,7 +79,7 @@ recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave
                       '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                       '85': ['time', 'data.Depth', 'data.SoundSpeed'],
                       '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude'],
-                      '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover']}
+                      '89': ['time', 'Reflectivity']}
 
 recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
                                         'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
@@ -104,9 +104,7 @@ recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': 
                                  '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                         'Longitude': [['navigation', 'longitude']],
                                         'Altitude': [['navigation', 'altitude']]},
-                                 '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']],
-                                        'MinTravelTime': [['ping', 'mintraveltime']], 'NormalBackscatter': [['ping', 'normalbackscatter']],
-                                        'ObliqueBackscatter': [['ping', 'obliquebackscatter']], 'TVGCrossover': [['ping', 'tvgcrossover']]}}
+                                 '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]}}
 
 recs_categories_110 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave', 'data.Heading'],
                        '73': ['time', 'header.Serial#', 'header.Serial#2', 'settings'],
@@ -115,7 +113,7 @@ recs_categories_110 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heav
                               'rx.TransmitSectorID', 'rx.DetectionInfo', 'rx.QualityFactor', 'rx.TravelTime', 'rx.SignalLength'],
                        '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                        '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                       '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover'],
+                       '89': ['time', 'Reflectivity'],
                        '110': ['data.Time', 'source_data.Latitude', 'source_data.Longitude',
                                'source_data.Altitude']}
 
@@ -139,9 +137,7 @@ recs_categories_translator_110 = {'65': {'Time': [['attitude', 'time']], 'Roll':
                                          'settings': [['runtime_params', 'runtime_settings']]},
                                   '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                          'SoundSpeed': [['profile', 'soundspeed']]},
-                                  '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']],
-                                         'MinTravelTime': [['ping', 'mintraveltime']], 'NormalBackscatter': [['ping', 'normalbackscatter']],
-                                         'ObliqueBackscatter': [['ping', 'obliquebackscatter']], 'TVGCrossover': [['ping', 'tvgcrossover']]},
+                                  '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]},
                                   '110': {'Time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                           'Longitude': [['navigation', 'longitude']],
                                           'Altitude': [['navigation', 'altitude']]}}
@@ -154,7 +150,7 @@ oldstyle_recs_categories = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data
                                     'rx.QualityFactor', 'rx.TravelTime', 'rx.SignalLength'],
                             '82': ['time', 'header.Mode', 'header.ReceiverFixedGain', 'header.YawAndPitchStabilization', 'settings'],
                             '85': ['time', 'data.Depth', 'data.SoundSpeed'],
-                            '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover'],
+                            '89': ['time', 'Reflectivity'],
                             '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude']}
 
 oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
@@ -178,9 +174,7 @@ oldstyle_recs_categories_translator = {'65': {'Time': [['attitude', 'time']], 'R
                                               'settings': [['runtime_params', 'runtime_settings']]},
                                        '85': {'time': [['profile', 'time']], 'Depth': [['profile', 'depth']],
                                               'SoundSpeed': [['profile', 'soundspeed']]},
-                                       '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']],
-                                              'MinTravelTime': [['ping', 'mintraveltime']], 'NormalBackscatter': [['ping', 'normalbackscatter']],
-                                              'ObliqueBackscatter': [['ping', 'obliquebackscatter']], 'TVGCrossover': [['ping', 'tvgcrossover']]},
+                                       '89': {'time': [['ping', 'rtime']], 'Reflectivity': [['ping', 'reflectivity']]},
                                        '80': {'time': [['navigation', 'time']], 'Latitude': [['navigation', 'latitude']],
                                               'Longitude': [['navigation', 'longitude']],
                                               'Altitude': [['navigation', 'altitude']]}}
@@ -190,8 +184,7 @@ recs_categories_result = {'attitude':  {'time': None, 'roll': None, 'pitch': Non
                                                   'installation_settings': None},
                           'ping': {'time': None, 'rtime': None, 'counter': None, 'soundspeed': None, 'serial_num': None,
                                    'tiltangle': None, 'delay': None, 'frequency': None, 'reflectivity': None,
-                                   'mintraveltime': None, 'normalbackscatter': None, 'obliquebackscatter': None,
-                                   'tvgcrossover': None, 'beampointingangle': None, 'txsector_beam': None,
+                                   'beampointingangle': None, 'txsector_beam': None,
                                    'detectioninfo': None, 'qualityfactor': None, 'traveltime': None, 'pulselength': None},
                           'runtime_params': {'time': None, 'mode': None, 'modetwo': None, 'yawpitchstab': None,
                                              'runtime_settings': None},
@@ -797,21 +790,11 @@ class AllRead:
         recs_to_read['navigation']['latitude'] = recs_to_read['navigation']['latitude'].astype(float)
 
         # reflectivity comes from a different record, if it exists, we deal with it here
-        mt = recs_to_read['ping'].pop('mintraveltime')
-        bn = recs_to_read['ping'].pop('normalbackscatter')
-        bo = recs_to_read['ping'].pop('obliquebackscatter')
-        crossang = recs_to_read['ping'].pop('tvgcrossover')
         if recs_to_read['ping']['rtime'] is not None:
             if recs_to_read['ping']['time'].size != recs_to_read['ping']['rtime'].size:  # get indices of nearest intensity for each ping
                 rindex = np.searchsorted(recs_to_read['ping']['rtime'], recs_to_read['ping']['time']).clip(0, recs_to_read['ping']['rtime'].size - 1)
                 recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'][rindex]
-                mt = mt[rindex]
-                bn = bn[rindex]
-                bo = bo[rindex]
-                crossang = crossang[rindex]
             recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
-            recs_to_read['ping']['nearnormalcorrect'] = nearnormal_correction(mt, bn, bo, crossang, recs_to_read['ping']['soundspeed'],
-                                                                              recs_to_read['ping']['traveltime'])
         else:
             recs_to_read['ping'].pop('reflectivity')
         recs_to_read['ping'].pop('rtime')
@@ -5919,7 +5902,7 @@ def nearnormal_correction(mintraveltime: np.ndarray, normalbackscatter: np.ndarr
     Kongsberg Jan2000 Hammerstad paper and guidance from UNH folks.  They provide the following:
 
     NearNormal_Correction
-    (BSn – BSo) (1-sqrt( (R – R0) / (Rc – R0)))
+    (BSo – BSn) (1-sqrt( (R – R0) / (Rc – R0)))
     BSn: BSnormal_dB
     BSo: BSoblique_dB
     R = twoWayTravelTime_sec * soundSpeedAtTxDepth_mPerSec  / 2
@@ -5929,6 +5912,8 @@ def nearnormal_correction(mintraveltime: np.ndarray, normalbackscatter: np.ndarr
 
     Note that this is provided wrt KMALL processing reflectivity_1, but I believe this applies to the .all backscatter,
     as reflectivity_1 is I believe supposed to follow the .all backscatter approach.
+
+    Not currently included in Kluster as I can't seem to get anything from it that makes sense.
 
     Parameters
     ----------
@@ -5957,7 +5942,7 @@ def nearnormal_correction(mintraveltime: np.ndarray, normalbackscatter: np.ndarr
 
     # range dependent parameter, clip to zero to avoid sqrt neg number issues
     nncorrect_rngdep = ((rng - minrng[:, None]) / (rngcross[:, None] - minrng[:, None])).clip(0)
-    nncorrect = (normalbackscatter - obliquebackscatter)[:, None] * (1 - np.sqrt(nncorrect_rngdep))
+    nncorrect = (obliquebackscatter - normalbackscatter)[:, None] * (1 - np.sqrt(nncorrect_rngdep))
     return nncorrect.astype(np.float32)
 
 
