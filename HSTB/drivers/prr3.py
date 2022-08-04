@@ -858,7 +858,8 @@ class X7kRead:
         if recs_to_read['ping']['reflectivity'] is None or (recs_to_read['ping']['reflectivity'] == 0).all():
             recs_to_read['ping'].pop('reflectivity')
         else:
-            recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
+            # have to convert to decibels, from raw amplitudes (from conversations with Mike Smith/UNH)
+            recs_to_read['ping']['reflectivity'] = (20 * np.log10(recs_to_read['ping']['reflectivity'])).astype(np.float32)
 
         recs_to_read['runtime_params']['time'] = np.array([recs_to_read['runtime_params']['time'][0]], dtype=float)
         recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
