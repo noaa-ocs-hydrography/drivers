@@ -3632,11 +3632,13 @@ class kmall():
             populated_delay = np.empty(txsector_index.shape, dtype=np.float32)
             populated_freq = np.empty(txsector_index.shape, dtype=np.int32)
             populated_tiltangle = np.empty(txsector_index.shape, dtype=np.float32)
+            populated_pulselength = np.empty(txsector_index.shape, dtype=np.float32)
             try:
                 for id in np.unique(txsector_index):
                     populated_delay[txsector_index == id] = rec['txSectorInfo']['sectorTransmitDelay_sec'][id]
                     populated_freq[txsector_index == id] = rec['txSectorInfo']['centreFreq_Hz'][id]
                     populated_tiltangle[txsector_index == id] = rec['txSectorInfo']['tiltAngleReTx_deg'][id]
+                    populated_pulselength[txsector_index == id] = rec['txSectorInfo']['totalSignalLength_sec'][id]
             except:
                 # this is a duplicate, happens when running sequential read with start_ptr/end_ptr, eof doesnt kick in
                 # shows here because 'Delay', etc.  are already removed from rec.tx
@@ -3645,6 +3647,7 @@ class kmall():
             rec['txSectorInfo']['tiltAngleReTx_deg'] = populated_tiltangle.tolist()
             rec['txSectorInfo']['centreFreq_Hz'] = populated_freq.tolist()
             rec['txSectorInfo']['sectorTransmitDelay_sec'] = populated_delay.tolist()
+            rec['txSectorInfo']['totalSignalLength_sec'] = populated_pulselength.tolist()
 
             return rec
 
@@ -3660,8 +3663,10 @@ class kmall():
                            'MRZ': ['header.dgtime', 'cmnPart.pingCnt',
                                    'pingInfo.soundSpeedAtTxDepth_mPerSec', 'txSectorInfo.txArrNumber',
                                    'txSectorInfo.tiltAngleReTx_deg', 'txSectorInfo.sectorTransmitDelay_sec', 'txSectorInfo.centreFreq_Hz',
+                                   'txSectorInfo.totalSignalLength_sec',
                                    'sounding.beamAngleReRx_deg', 'sounding.reflectivity2_dB', 'sounding.txSectorNumb', 'sounding.detectionType',
-                                   'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec',
+                                   'sounding.detectionMethod', 'sounding.qualityFactor', 'sounding.twoWayTravelTime_sec', 'sounding.meanAbsCoeff_dbPerkm',
+                                   'sounding.receiverSensitivityApplied_dB', 'sounding.sourceLevelApplied_dB', 'sounding.TVG_dB',
                                    'pingInfo.modeAndStabilisation', 'pingInfo.pulseForm', 'pingInfo.depthMode',
                                    'pingInfo.latitude_deg', 'pingInfo.longitude_deg', 'pingInfo.ellipsoidHeightReRefPoint_m'],
                            'IOP': ['header.dgtime', 'runtime_txt'],
@@ -3679,6 +3684,7 @@ class kmall():
                                               'txSectorInfo.tiltAngleReTx_deg': [['ping', 'tiltangle']],
                                               'txSectorInfo.sectorTransmitDelay_sec': [['ping', 'delay']],
                                               'txSectorInfo.centreFreq_Hz': [['ping', 'frequency']],
+                                              'txSectorInfo.totalSignalLength_sec': [['ping', 'pulselength']],
                                               'sounding.beamAngleReRx_deg': [['ping', 'beampointingangle']],
                                               'sounding.reflectivity2_dB': [['ping', 'reflectivity']],
                                               'sounding.txSectorNumb': [['ping', 'txsector_beam']],
@@ -3686,6 +3692,10 @@ class kmall():
                                               'sounding.detectionMethod': [['ping', 'detectioninfo_two']],
                                               'sounding.qualityFactor': [['ping', 'qualityfactor']],
                                               'sounding.twoWayTravelTime_sec': [['ping', 'traveltime']],
+                                              'sounding.receiverSensitivityApplied_dB': [['ping', 'receiversensitivity']],
+                                              'sounding.meanAbsCoeff_dbPerkm': [['ping', 'absorption']],
+                                              'sounding.sourceLevelApplied_dB': [['ping', 'sourceLevel']],
+                                              'sounding.TVG_dB': [['ping', 'tvg']],
                                               'pingInfo.modeAndStabilisation': [['ping', 'yawpitchstab']],
                                               'pingInfo.pulseForm': [['ping', 'mode']],
                                               'pingInfo.depthMode': [['ping', 'modetwo']],
@@ -3707,6 +3717,7 @@ class kmall():
             'ping': {'time': None, 'counter': None, 'soundspeed': None, 'serial_num': None, 'tiltangle': None,
                      'delay': None, 'frequency': None, 'beampointingangle': None, 'reflectivity': None, 'txsector_beam': None,
                      'detectioninfo': None, 'detectioninfo_two': None, 'qualityfactor': None, 'traveltime': None,
+                     'receiversensitivity': None, 'pulselength': None, 'tvg': None, 'sourceLevel': None, 'absorption': None,
                      'mode': None, 'modetwo': None, 'yawpitchstab': None},
             'runtime_params': {'time': None, 'runtime_settings': None},
             'profile': {'time': None, 'depth': None, 'soundspeed': None},
@@ -3829,6 +3840,10 @@ class kmall():
         return recs_to_read
 
     def _finalize_ping_record(self, arr, dtyp, maxlen):
+        """
+        Take in the list of numpy arrays, and merge them into a single array by casting as ndarray.  If you get a sonar
+        with a varying number of beams, you have to go the iterate-over-all-pings route instead, which is slower.
+        """
         try:
             if dtyp is not None:
                 newrec = np.array(arr, dtype=dtyp)
@@ -3897,7 +3912,8 @@ class kmall():
                         recs_to_read[rec][dgram] = self.translate_mode_tostring(np.array(recs_to_read[rec][dgram]))
                     elif dgram == 'modetwo':
                         recs_to_read[rec][dgram] = self.translate_mode_two_tostring(np.array(recs_to_read[rec][dgram]))
-                    elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor', 'reflectivity']:
+                    elif dgram in ['soundspeed', 'tiltangle', 'delay', 'beampointingangle', 'traveltime', 'qualityfactor',
+                                   'reflectivity', 'pulselength', 'tvg', 'sourceLevel', 'receiversensitivity', 'absorption']:
                         recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'float32', maxlen)
                     elif dgram == 'serial_num':
                         recs_to_read[rec][dgram] = self._finalize_ping_record(recs_to_read[rec][dgram], 'uint64', maxlen)
@@ -3922,6 +3938,7 @@ class kmall():
         # recs_to_read = self._interpolate_skm_time_spikes(recs_to_read)
         recs_to_read = self._skm_remove_empty_navigation(recs_to_read)
         recs_to_read = self._merge_detectioninfo_detectionmethod(recs_to_read)
+        recs_to_read['ping']['fixedgain'] = recs_to_read['ping'].pop('sourceLevel') + recs_to_read['ping'].pop('receiversensitivity')
 
         # need to sort/drop uniques, keep finding duplicate times
         for dset_name in ['attitude', 'navigation', 'ping']:

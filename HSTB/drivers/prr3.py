@@ -858,7 +858,8 @@ class X7kRead:
         if recs_to_read['ping']['reflectivity'] is None or (recs_to_read['ping']['reflectivity'] == 0).all():
             recs_to_read['ping'].pop('reflectivity')
         else:
-            recs_to_read['ping']['reflectivity'] = recs_to_read['ping']['reflectivity'].astype(np.float32)
+            # have to convert to decibels, from raw amplitudes (from conversations with Mike Smith/UNH)
+            recs_to_read['ping']['reflectivity'] = (20 * np.log10(recs_to_read['ping']['reflectivity'])).astype(np.float32)
 
         recs_to_read['runtime_params']['time'] = np.array([recs_to_read['runtime_params']['time'][0]], dtype=float)
         recs_to_read['runtime_params']['runtime_settings'] = np.array(recs_to_read['runtime_params']['runtime_settings'], dtype=np.object)
@@ -968,10 +969,27 @@ class X7kRead:
             self.at_right_byte = False  # for now assume that if a custom start pointer is provided, we need to seek the start byte
         self.infile.seek(self.start_ptr)
         self.eof = False
+        last_nav_blob = False
+        reading_last_navblob = False
+        found_last_navblob = False
+        oldfilelen = self.filelen
+        desired_datagrams = list(categories.keys())
+        if self.end_ptr and (self.end_ptr != self.max_filelen) and '1003' in desired_datagrams:
+            # When you use end pointer to read only a segment of a file, you need to continue reading to get the last
+            #  navigation blob after the end pointer.  This is due to how Reson sonars log 1003 in big blobs throughout
+            #  the file, and not sequentially along with the ping records.
+            last_nav_blob = True
         while not self.eof:
             self.read()  # find the start of the record and read the header
+            if self.eof and last_nav_blob:  # you've hit the end pointer, but we want to continue to get the last navigation blob
+                reading_last_navblob = True
+                desired_datagrams = ['1003']
+                self.filelen = self.max_filelen - self.start_ptr
+                self.eof = False
             datagram_type = str(self.packet.dtype)
-            if datagram_type in list(categories.keys()):  # if the header indicates this is a record you want...
+            if datagram_type in desired_datagrams:  # if the header indicates this is a record you want...
+                if reading_last_navblob:
+                    found_last_navblob = True
                 for rec_ident in list(category_translator[datagram_type].values())[0]:
                     recs_count[rec_ident[0]] += 1
                 self.get()  # read the rest of the datagram and decode the data
@@ -1018,6 +1036,10 @@ class X7kRead:
                                 recs_to_read[translated[0]][translated[1]] = copy.copy(val)
                             else:
                                 recs_to_read[translated[0]][translated[1]].extend(val)
+            elif found_last_navblob:
+                last_nav_blob = False
+                self.filelen = oldfilelen
+                self.eof = True
 
             if first_installation_rec:
                 if datagram_type == '7030':
@@ -2257,24 +2279,24 @@ class Data7028(BaseData):
 
     def read(self, datablock):
         if self.header['ErrorFlags'] == 0:
-            self.descriptor = np.zeros((self.numpoints, 4))
+            self.descriptor = np.zeros((self.numdetections, 4))
             strt_counter = 0
             fmt_descriptor = '<H3I'
             descriptor_sz = struct.calcsize(fmt_descriptor)
-            for beam in range(self.numpoints):
+            for beam in range(self.numdetections):
                 self.descriptor[beam, :] = struct.unpack(fmt_descriptor, datablock[strt_counter:strt_counter + descriptor_sz])
                 strt_counter += descriptor_sz
             self.beamwindow = self.descriptor[:, 3] - self.descriptor[:, 1] + 1
             self.maxbeam = int(self.descriptor[:, 0].max()) + 1
-            self.maxwindow = self.beamwindow.max()
+            self.maxwindow = int(self.beamwindow.max())
             self.snippets = np.zeros((self.maxbeam, self.maxwindow))
-            for beam in range(self.numpoints):
+            for beam in range(self.numdetections):
                 fmt_data = '<' + str(int(self.beamwindow[beam])) + 'H'
                 data_sz = struct.calcsize(fmt_data)
                 startoffset = int((self.maxwindow - self.beamwindow[beam]) / 2)
                 beam_data = struct.unpack(fmt_data, datablock[strt_counter:strt_counter + data_sz])
                 strt_counter += data_sz
-                self.snippets[int(self.descriptor[beam, 0]), startoffset: startoffset + self.beamwindow[beam]] = beam_data
+                self.snippets[int(self.descriptor[beam, 0]), startoffset: startoffset + int(self.beamwindow[beam])] = beam_data
 
 
 class Data7030(BaseData):
