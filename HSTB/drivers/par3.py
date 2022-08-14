@@ -920,7 +920,12 @@ class AllRead:
             if datagram_type in list(categories.keys()):  # if the header indicates this is a record you want...
                 for rec_ident in list(category_translator[datagram_type].values())[0]:
                     recs_count[rec_ident[0]] += 1
-                self.get()  # read the rest of the datagram and decode the data
+                try:
+                    self.get()  # read the rest of the datagram and decode the data
+                except:
+                    print(f'par3 - bad datagram of type {datagram_type}, skipping this record (current location = '
+                          f'{self.infile.tell()}, file length = {self.max_filelen})')
+                    continue
                 rec = self._populate_rec()  # Build the rx delay and freq arrays if this is a rangeangle record
                 if rec is not None:
                     for subrec in categories[datagram_type]:
@@ -980,7 +985,11 @@ class AllRead:
                 self.read()
                 dtype = self.packet.header[2]
                 dsize = self.packet.header[0]
-                time = self.packet.gettime()
+                try:
+                    time = self.packet.gettime()
+                except ValueError:
+                    print(f'Unable to generate time for record at {loc}')
+                    continue
                 if dtype == 107:
                     try:
                         self.get()
