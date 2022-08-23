@@ -5,6 +5,7 @@ from pyproj import Transformer
 import datetime
 import tempfile
 import threading
+import traceback
 import xml.etree.ElementTree as ET
 import json
 from math import cos, sin, asin, sqrt, degrees
@@ -175,14 +176,21 @@ def read_stats_from_hdcs_v11(projfolder, convlines=None, xlineident=''):
                 continue
 
             line_read_success = False
+            hasimporthips = False
+            hasbathysummary = False
+            hasnavsummary = False
+            naverrorsummary = None
             for proc in jsondata['processes']:
                 procid = str(proc['definition']['base']['identification']['id'])
                 process_history.append(tuple((hdcsfolder, procid)))
                 if procid[:12] == 'ImportToHIPS':
+                    hasimporthips = True
                     data[count][0] = proc['parameters']['Metadata']['ConversionSummary'].splitlines()
                     if 'BathySummary' in list(proc['parameters']['Metadata'].keys()):
                         data[count][1] = proc['parameters']['Metadata']['BathySummary'].splitlines()
+                        hasbathysummary = True
                     if 'NavigationSummary' in list(proc['parameters']['Metadata'].keys()):
+                        hasnavsummary = True
                         # manual processing log entries have blank navsummary for some reason.  If you find them,
                         #   just skip past and try the next importtohips entry
                         try:
@@ -202,13 +210,17 @@ def read_stats_from_hdcs_v11(projfolder, convlines=None, xlineident=''):
                             lats.extend([degrees(lat1), degrees(lat2)])
                             lons.extend([degrees(lon1), degrees(lon2)])
                             line_read_success = True
+                            raise ValueError('worked...')
                             break
                         except:
-                            pass
+                            line_read_success = False
+                            naverrorsummary = traceback.format_exc()
 
             if not line_read_success:
                 msg = 'Unable to read Caris 11 process log from line {}'.format(processlog)
                 print(msg)
+                print(f'Found bathy summary={hasbathysummary}, Found nav summary={hasnavsummary}, Found import process={hasimporthips}')
+                print(f'Nav build error={naverrorsummary}')
                 continue
     try:
         history_dict = defaultdict(list)
