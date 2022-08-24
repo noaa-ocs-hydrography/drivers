@@ -196,8 +196,14 @@ def read_stats_from_hdcs_v11(projfolder, convlines=None, xlineident=''):
                         try:
                             navtext = proc['parameters']['Metadata']['NavigationSummary'].splitlines()
                             data[count][2] = navtext
-                            mintemp = time.strptime(navtext[5].split('=')[1], '%Y %j %H:%M:%S')
-                            maxtemp = time.strptime(navtext[7].split('=')[1], '%Y %j %H:%M:%S')
+                            try:
+                                mintemp = time.strptime(navtext[5].split('=')[1], '%Y %j %H:%M:%S')
+                                maxtemp = time.strptime(navtext[7].split('=')[1], '%Y %j %H:%M:%S')
+                            except ValueError:
+                                print('WARNING - encountered locale issue on translating timestamps, forcing "en_US.utf8"')
+                                locale.setlocale(locale.LC_ALL, 'en_US.utf8')
+                                mintemp = time.strptime(navtext[5].split('=')[1], '%Y %j %H:%M:%S')
+                                maxtemp = time.strptime(navtext[7].split('=')[1], '%Y %j %H:%M:%S')
                             lat1 = float(navtext[8].split('=')[1])
                             lat2 = float(navtext[9].split('=')[1])
                             lon1 = float(navtext[10].split('=')[1])
