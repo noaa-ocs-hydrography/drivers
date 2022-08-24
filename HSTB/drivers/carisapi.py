@@ -6,6 +6,7 @@ import datetime
 import tempfile
 import threading
 import traceback
+import locale
 import xml.etree.ElementTree as ET
 import json
 from math import cos, sin, asin, sqrt, degrees
