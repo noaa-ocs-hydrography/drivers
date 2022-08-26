@@ -212,12 +212,14 @@ def read_stats_from_hdcs_v11(projfolder, convlines=None, xlineident=''):
 
                             mintime.append(mintemp)
                             maxtime.append(maxtemp)
-                            tottime.append(time.mktime(maxtemp) - time.mktime(mintemp))
+                            tdiff = time.mktime(maxtemp) - time.mktime(mintemp)
+                            tottime.append(tdiff)
+                            if tdiff > 12 * 60 * 60:  # issue a warning, we might have zero crossing issues with lines around midnight
+                                print(f'Warning: Found a line that has a total time greater than 12 hours ({hdcsfolder})')
                             lnm.append(haversine(lon1, lat1, lon2, lat2))
                             lats.extend([degrees(lat1), degrees(lat2)])
                             lons.extend([degrees(lon1), degrees(lon2)])
                             line_read_success = True
-                            raise ValueError('worked...')
                             break
                         except:
                             line_read_success = False
