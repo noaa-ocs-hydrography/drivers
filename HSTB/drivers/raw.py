@@ -85,6 +85,16 @@ class readraw:
     def close(self):
         self.infile.close()
 
+    def bottom_detect_file(self):
+        outfile = os.path.splitext(self.infilename)[0] + '.out'
+        botfile = os.path.splitext(self.infilename)[0] + '.bot'
+        if os.path.exists(outfile):
+            return outfile
+        elif os.path.exists(botfile):
+            return botfile
+        else:
+            return None
+
     def seek_next_startbyte(self):
         """
         Determines if current pointer is at the start of a record.  If not, finds the next valid one and sets at_right_byte to True.
@@ -645,7 +655,7 @@ class readraw:
             formatted recs_to_read
         """
 
-        if not recs_to_read['ping']['time']:
+        if not recs_to_read['ping']['time'] and 'dtime' not in recs_to_read['ping']:
             print(f'raw: WARNING - found chunk without any valid ping records: {self.infilename} ({self.start_ptr} to {self.filelen + self.start_ptr})')
 
         if not self.start_ptr:
@@ -690,6 +700,13 @@ class readraw:
         recs_to_read['ping']['qualityfactor'] = np.array(recs_to_read['ping']['qualityfactor'], 'float32')
         recs_to_read['ping']['traveltime'] = np.array(recs_to_read['ping']['traveltime'], 'float32')
 
+        # if reading a .bot or .out file, will have these records from the DEP0 datagram
+        recs_to_read['ping']['dtime'] = np.array(recs_to_read['ping']['dtime'], np.float64)
+        recs_to_read['ping']['depthoffset'] = np.array(recs_to_read['ping']['depthoffset'], np.float32)
+        recs_to_read['ping']['reflectivity'] = np.array(recs_to_read['ping']['reflectivity'], np.float32)
+        recs_to_read['ping']['alongtrack'] = np.array(recs_to_read['ping']['alongtrack'], np.float32)
+        recs_to_read['ping']['acrosstrack'] = np.array(recs_to_read['ping']['acrosstrack'], np.float32)
+
         # jump to sv correct in Kluster, by putting in processed beam angles (we assume angle = 0)
         recs_to_read['ping']['rel_azimuth'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
         recs_to_read['ping']['corr_pointing_angle'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
@@ -706,7 +723,7 @@ class readraw:
             recs_to_read['attitude']['heave'] = np.array([], np.float32)
         return recs_to_read
 
-    def sequential_read_records(self, first_installation_rec=False):
+    def sequential_read_records(self, first_installation_rec=False, frequency_selection: str = 'lower'):
         """
         Step through this file and convert all relevant data.  Each RAW/XML ping group will be processed to get a
         bottom detection that we use to populate the kluster dict datastore, which is the return of this function.
@@ -818,6 +835,28 @@ class readraw:
                         recs_to_read['navigation']['altitude'].append(self.packet.subpack.header['altitude'])
                     elif 'altitude' in recs_to_read['navigation']:
                         recs_to_read['navigation'].pop('altitude')
+            elif datagram_type == 'DEP0':
+                self.get()
+                if frequency_selection == 'lower':
+                    dpth = self.packet.subpack.transducers[0]['Depth'][0]
+                    intensity = self.packet.subpack.transducers[0]['Intensity'][0]
+                elif frequency_selection == 'higher':
+                    dpth = self.packet.subpack.transducers[-1]['Depth'][0]
+                    intensity = self.packet.subpack.transducers[-1]['Intensity'][0]
+                else:
+                    raise ValueError(f'Frequency selection {frequency_selection} is not supported, must be one of [lower, higher]')
+                if 'dtime' not in recs_to_read['ping']:
+                    recs_to_read['ping']['dtime'] = [self.packet.subpack.time]
+                    recs_to_read['ping']['depthoffset'] = [dpth]
+                    recs_to_read['ping']['reflectivity'] = [intensity]
+                    recs_to_read['ping']['alongtrack'] = [0.0]
+                    recs_to_read['ping']['acrosstrack'] = [0.0]
+                else:
+                    recs_to_read['ping']['dtime'].append(self.packet.subpack.time)
+                    recs_to_read['ping']['depthoffset'].append(dpth)
+                    recs_to_read['ping']['reflectivity'].append(intensity)
+                    recs_to_read['ping']['alongtrack'].append(0.0)
+                    recs_to_read['ping']['acrosstrack'].append(0.0)
 
         if not navrec:  # override for saildrone draft
             draft = saildrone_vessel_draft
@@ -895,6 +934,8 @@ class Datagram:
             self.subpack = Tag0(self.datablock, self.time)
         elif self.dtype == 'XML0':
             self.subpack = Xml0(self.datablock, self.time)
+        elif self.dtype == 'DEP0':
+            self.subpack = Dep0(self.datablock, self.time)
         else:
             print(f'Data record {self.dtype} decoding is not yet supported.')
             self.decoded = False
@@ -1788,6 +1829,44 @@ class Nme0:
         return zda
 
 
+class Dep0:
+    """
+    Depth datagram that exists within the .out and .bot files that are logged alongside the .raw file with the ES/K60 system.
+    Based on information I received from Steve Intelmann/NOAA Fisheries and the Echoview support site
+    ( https://support.echoview.com/WebHelp/Reference/File_formats/Simrad_data_files.htm#_raw )
+    """
+    hdr_dtype = np.dtype([('TransducerCount', 'I')])
+    transducer_dtype = np.dtype([('Depth', 'f'), ('Intensity', 'f'), ('Unused', 'f')])
+
+    def __init__(self, datablock, utctime):
+        hdr_sz = Dep0.hdr_dtype.itemsize
+        tmp_hdr = np.frombuffer(datablock[:hdr_sz], dtype=Dep0.hdr_dtype)[0]
+        self.header = tmp_hdr.astype(Dep0.hdr_dtype)
+        datablock = datablock[hdr_sz:]
+        self.transducers = []
+        trans_sz = Dep0.transducer_dtype.itemsize
+        for i in range(self.header['TransducerCount']):
+            tdset = np.frombuffer(datablock[:trans_sz], dtype=Dep0.transducer_dtype)
+            tdset = tdset.astype(Dep0.transducer_dtype)
+            datablock = datablock[trans_sz:]
+            # if tdset['Depth'] < 1.0e-20:
+            #     tdset['Depth'][:] = np.float32(np.nan)
+            self.transducers.append(tdset)
+        self.time = utctime
+
+    def display(self):
+        """
+        Displays contents of the header to the command window.
+        """
+        for n, name in enumerate(self.header.dtype.names):
+            print(f'{name} : {self.header[n]}')
+        print(f'UTCTime: {self.time}')
+        for cnt, trans in enumerate(self.transducers):
+            print(f'Transducer {cnt + 1}')
+            print(f'Depth: {trans["Depth"]}')
+            print(f'Intensity: {trans["Intensity"]}')
+
+
 class mappack:
     """
     Container for the file packet map.
@@ -2302,6 +2381,35 @@ def _image_detection(powers, threshold: int = 30):
     detects, class_sums = _get_detections_within_classes(expanded_class, powers,grad)
     detect_idx = _select_class_detections(detects, class_sums, threshold)
     return detect_idx
+
+
+def read_bottom_detection_file(botfile: str, freq_selection: str = 'lowest'):
+    """
+    Some raw files logged by Ek/S60 sonar will have associated .out or .bot files of the same name.  These
+    files have the same general structure as the raw file, but will include the DEP0 record that contains a bottom
+    detect and backscatter strength record.
+
+    Parameters
+    ----------
+    botfile
+        a file that matches the .raw file name, but has a .out or .bot extension
+    freq_selection
+        choose either the 'lowest' freq return or the 'highest' freq return.
+
+    Returns
+    -------
+    np.array
+        utctime of detection
+    np.array
+        depth in meters
+    np.array
+        intensity in dB
+    """
+    ad = readraw(botfile)
+    ad.mapfile()
+    for i in range(ad.map.getnum('DEP0')):
+        rec = ad.getrecord('DEP0', i)
+
 
 
 def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, soundspeed: np.ndarray,
