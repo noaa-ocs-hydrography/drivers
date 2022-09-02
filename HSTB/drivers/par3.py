@@ -720,7 +720,7 @@ class AllRead:
                 data_lookup.append(data)
             else:
                 runtime_array[cnt] = {}
-        return runtime_array.astype(np.object)
+        return runtime_array.astype(object)
 
     def _finalize_records(self, recs_to_read, recs_count, sonarmodelnumber):
         """
