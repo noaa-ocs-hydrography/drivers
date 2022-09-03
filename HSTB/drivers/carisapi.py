@@ -5,6 +5,8 @@ from pyproj import Transformer
 import datetime
 import tempfile
 import threading
+import traceback
+import locale
 import xml.etree.ElementTree as ET
 import json
 from math import cos, sin, asin, sqrt, degrees
@@ -175,21 +177,34 @@ def read_stats_from_hdcs_v11(projfolder, convlines=None, xlineident=''):
                 continue
 
             line_read_success = False
+            hasimporthips = False
+            hasbathysummary = False
+            hasnavsummary = False
+            naverrorsummary = None
             for proc in jsondata['processes']:
                 procid = str(proc['definition']['base']['identification']['id'])
                 process_history.append(tuple((hdcsfolder, procid)))
                 if procid[:12] == 'ImportToHIPS':
+                    hasimporthips = True
                     data[count][0] = proc['parameters']['Metadata']['ConversionSummary'].splitlines()
                     if 'BathySummary' in list(proc['parameters']['Metadata'].keys()):
                         data[count][1] = proc['parameters']['Metadata']['BathySummary'].splitlines()
+                        hasbathysummary = True
                     if 'NavigationSummary' in list(proc['parameters']['Metadata'].keys()):
+                        hasnavsummary = True
                         # manual processing log entries have blank navsummary for some reason.  If you find them,
                         #   just skip past and try the next importtohips entry
                         try:
                             navtext = proc['parameters']['Metadata']['NavigationSummary'].splitlines()
                             data[count][2] = navtext
-                            mintemp = time.strptime(navtext[5].split('=')[1], '%Y %j %H:%M:%S')
-                            maxtemp = time.strptime(navtext[7].split('=')[1], '%Y %j %H:%M:%S')
+                            try:
+                                mintemp = time.strptime(navtext[5].split('=')[1], '%Y %j %H:%M:%S')
+                                maxtemp = time.strptime(navtext[7].split('=')[1], '%Y %j %H:%M:%S')
+                            except ValueError:
+                                print('WARNING - encountered locale issue on translating timestamps, forcing "en_US.utf8"')
+                                locale.setlocale(locale.LC_ALL, 'en_US.utf8')
+                                mintemp = time.strptime(navtext[5].split('=')[1], '%Y %j %H:%M:%S')
+                                maxtemp = time.strptime(navtext[7].split('=')[1], '%Y %j %H:%M:%S')
                             lat1 = float(navtext[8].split('=')[1])
                             lat2 = float(navtext[9].split('=')[1])
                             lon1 = float(navtext[10].split('=')[1])
@@ -197,18 +212,24 @@ def read_stats_from_hdcs_v11(projfolder, convlines=None, xlineident=''):
 
                             mintime.append(mintemp)
                             maxtime.append(maxtemp)
-                            tottime.append(time.mktime(maxtemp) - time.mktime(mintemp))
+                            tdiff = time.mktime(maxtemp) - time.mktime(mintemp)
+                            tottime.append(tdiff)
+                            if tdiff > 12 * 60 * 60:  # issue a warning, we might have zero crossing issues with lines around midnight
+                                print(f'Warning: Found a line that has a total time greater than 12 hours ({hdcsfolder})')
                             lnm.append(haversine(lon1, lat1, lon2, lat2))
                             lats.extend([degrees(lat1), degrees(lat2)])
                             lons.extend([degrees(lon1), degrees(lon2)])
                             line_read_success = True
                             break
                         except:
-                            pass
+                            line_read_success = False
+                            naverrorsummary = traceback.format_exc()
 
             if not line_read_success:
                 msg = 'Unable to read Caris 11 process log from line {}'.format(processlog)
                 print(msg)
+                print(f'Found bathy summary={hasbathysummary}, Found nav summary={hasnavsummary}, Found import process={hasimporthips}')
+                print(f'Nav build error={naverrorsummary}')
                 continue
     try:
         history_dict = defaultdict(list)

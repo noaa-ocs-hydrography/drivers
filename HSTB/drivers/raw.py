@@ -85,11 +85,28 @@ class readraw:
     def close(self):
         self.infile.close()
 
+    def bottom_detect_file(self):
+        """
+        Return the associated bottom detection file (*.out, *.bot) that we expect with the Simrad EX60 systems.  These files will have the
+        DEP0 record with associated depth/backscatter strength for each ping in the .raw file
+        """
+        if os.path.splitext(self.infilename)[1] == '.raw':
+            outfile = os.path.splitext(self.infilename)[0] + '.out'
+            botfile = os.path.splitext(self.infilename)[0] + '.bot'
+            if os.path.exists(outfile):
+                return outfile
+            elif os.path.exists(botfile):
+                return botfile
+            else:
+                return None
+        else:  # this is already a bottom detect file, so return None for associated bottom detect file
+            return None
+
     def seek_next_startbyte(self):
         """
         Determines if current pointer is at the start of a record.  If not, finds the next valid one and sets at_right_byte to True.
         """
-        record_ids = [b'XML0', b'CON0', b'CON1', b'NME0', b'RAW0', b'RAW3', b'TAG0']
+        record_ids = [b'XML0', b'CON0', b'CON1', b'NME0', b'RAW0', b'RAW3', b'TAG0', b'DEP0']
         # check is to continue on until you find one of the record ids
         while not self.at_right_byte:
             cur_ptr = self.infile.tell()
@@ -511,11 +528,11 @@ class readraw:
             sort_freq_idxs = np.argsort(rawfreq)
             return [raw_group[sidx] for sidx in sort_freq_idxs], xml_group
 
-    def _process_raw_group(self, raw_group: list, xml_group: list, recs_to_read: dict, serialnumber: int):
+    def _process_raw_group(self, raw_group: list, xml_group: list, recs_to_read: dict, serialnumber: int, frequency_selection: str):
         """
         Run the processing on the RAW/XML groupings.  Will take in the raw data (powers, metadata) and return a two
         way travel time from our bottom detection code as well as any supporting data.  For the group of transducers,
-        you get one result, the 'best' detection, which is preferring the lower frequency detection.  If there is no
+        you get one result, the detection made using the frequency_selection.  If there is no
         valid detection, this method returns None.
 
         Parameters
@@ -528,6 +545,8 @@ class readraw:
             dictionary datastore
         serialnumber
             integer serial number that we include here to populate each record in the recs_to_read data store
+        frequency_selection
+            choose either the 'lowest' freq return or the 'highest' freq return.
 
         Returns
         -------
@@ -548,8 +567,6 @@ class readraw:
             offsets = np.array([rg.header['Offset'] for rg in raw_group])
             max_samples = max([rg.numsamples for rg in raw_group])
 
-            max_pulse_len = pulselengths.max()
-
             powers = np.full((max_samples, len(raw_group)), np.nan)
             for cnt, rg in enumerate(raw_group):
                 offset = rg.header['Offset']
@@ -568,12 +585,11 @@ class readraw:
             twowaytraveltime[detect_idx == -1] = np.nan
             valid = ~np.isnan(twowaytraveltime)
             if valid.all():
-                # best return is the highest freq return that is within 'close_enough' of the lowest freq return.  Lets
-                #  us get the best representation of the actual seafloor but avoid noise
-                best_idx = np.where(valid)[0][0]
-                close_enough = 2 * max_pulse_len
-                final_best_idx = np.where((twowaytraveltime[best_idx] - twowaytraveltime) < close_enough)[0][-1]
-                recs_to_read['ping']['time'].append(raw_group[final_best_idx].time)
+                if frequency_selection == 'lowest':
+                    final_idx = 0
+                elif frequency_selection == 'highest':
+                    final_idx = -1
+                recs_to_read['ping']['time'].append(raw_group[final_idx].time)
                 recs_to_read['ping']['counter'].append(0)
                 recs_to_read['ping']['serial_num'].append(serialnumber)
                 recs_to_read['ping']['tiltangle'].append([0.0])
@@ -582,19 +598,19 @@ class readraw:
                 recs_to_read['ping']['txsector_beam'].append([0])
                 recs_to_read['ping']['detectioninfo'].append([0])
                 recs_to_read['ping']['qualityfactor'].append([0])
-                recs_to_read['ping']['traveltime'].append([twowaytraveltime[final_best_idx]])
-                recs_to_read['attitude']['time'].append(raw_group[final_best_idx].time)
+                recs_to_read['ping']['traveltime'].append([twowaytraveltime[final_idx]])
+                recs_to_read['attitude']['time'].append(raw_group[final_idx].time)
                 recs_to_read['attitude']['heave'].append(0.0)
                 if isinstance(raw_group[0], Raw0):
-                    recs_to_read['ping']['soundspeed'].append(soundspeed[final_best_idx])
-                    recs_to_read['ping']['frequency'].append([int(raw_group[final_best_idx].header['Frequency'])])
-                    recs_to_read['attitude']['roll'].append(raw_group[final_best_idx].roll)
-                    recs_to_read['attitude']['pitch'].append(raw_group[final_best_idx].pitch)
-                    recs_to_read['attitude']['heading'].append(raw_group[final_best_idx].heading)
-                    return drafts[final_best_idx]
+                    recs_to_read['ping']['soundspeed'].append(soundspeed[final_idx])
+                    recs_to_read['ping']['frequency'].append([int(raw_group[final_idx].header['Frequency'])])
+                    recs_to_read['attitude']['roll'].append(raw_group[final_idx].roll)
+                    recs_to_read['attitude']['pitch'].append(raw_group[final_idx].pitch)
+                    recs_to_read['attitude']['heading'].append(raw_group[final_idx].heading)
+                    return drafts[final_idx]
                 else:
                     recs_to_read['ping']['soundspeed'].append(0.0)
-                    recs_to_read['ping']['frequency'].append([int(xml_group[final_best_idx].header['Frequency'])])
+                    recs_to_read['ping']['frequency'].append([int(xml_group[final_idx].header['Frequency'])])
                     recs_to_read['attitude']['roll'].append(0.0)
                     recs_to_read['attitude']['pitch'].append(0.0)
                     recs_to_read['attitude']['heading'].append(0.0)
@@ -624,7 +640,7 @@ class readraw:
                                    'runtime_settings': []},
                 'navigation': {'time': [], 'latitude': [], 'longitude': [], 'altitude': []}}
 
-    def _finalize_records(self, recs_to_read, draft, iparams):
+    def _finalize_records(self, recs_to_read, draft, iparams, build_heave):
         """
         Take the return of sequential_read_records and convert to numpy arrays with the correct datatypes as required
         by kluster.
@@ -638,6 +654,9 @@ class readraw:
         iparams
             dict matching the recs_to_read 'installation_params' structure that we populate from this file's configuration
             file
+        build_heave
+            if True, it will use a low pass filter approach to determine the heave from the range/traveltime.  If False, heave
+            will be zero.
 
         Returns
         -------
@@ -645,7 +664,7 @@ class readraw:
             formatted recs_to_read
         """
 
-        if not recs_to_read['ping']['time']:
+        if not recs_to_read['ping']['time'] and 'dtime' not in recs_to_read['ping']:
             print(f'raw: WARNING - found chunk without any valid ping records: {self.infilename} ({self.start_ptr} to {self.filelen + self.start_ptr})')
 
         if not self.start_ptr:
@@ -690,23 +709,41 @@ class readraw:
         recs_to_read['ping']['qualityfactor'] = np.array(recs_to_read['ping']['qualityfactor'], 'float32')
         recs_to_read['ping']['traveltime'] = np.array(recs_to_read['ping']['traveltime'], 'float32')
 
+        # if reading a .bot or .out file, will have these records from the DEP0 datagram
+        if 'depthoffset' in recs_to_read['ping']:
+            if 'dtime' in recs_to_read['ping']:  # you'll have a dtime here if you are reading a bot/out file, otherwise you already have the interpolated records
+                recs_to_read['ping']['dtime'] = np.array(recs_to_read['ping']['dtime'], np.float64)
+            recs_to_read['ping']['depthoffset'] = np.array(recs_to_read['ping']['depthoffset'], np.float32)
+            recs_to_read['ping']['reflectivity'] = np.array(recs_to_read['ping']['reflectivity'], np.float32)
+            recs_to_read['ping']['alongtrack'] = np.array(recs_to_read['ping']['alongtrack'], np.float32)
+            recs_to_read['ping']['acrosstrack'] = np.array(recs_to_read['ping']['acrosstrack'], np.float32)
+
         # jump to sv correct in Kluster, by putting in processed beam angles (we assume angle = 0)
         recs_to_read['ping']['rel_azimuth'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
         recs_to_read['ping']['corr_pointing_angle'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 0.0, np.float32)
-        recs_to_read['ping']['processing_status'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 2, 'uint8')
+        if 'depthoffset' in recs_to_read['ping']:  # if a bottom detect record was found, we can skip right to georeferencing
+            recs_to_read['ping']['processing_status'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 3, 'uint8')
+        else:
+            recs_to_read['ping']['processing_status'] = np.full(recs_to_read['ping']['beampointingangle'].shape, 2, 'uint8')
 
         # build heave
-        if recs_to_read['ping']['time'].size > 0:
-            heavetime, newheave = calculate_heave_correction(recs_to_read['ping']['time'].ravel(), recs_to_read['ping']['traveltime'].ravel(),
-                                                             recs_to_read['ping']['soundspeed'].ravel())
+        if recs_to_read['ping']['time'].size > 0 and build_heave:
+            if 'depthoffset' in recs_to_read['ping']:  # will be true if we have the external bottom detection file
+                overridedepth = recs_to_read['ping']['depthoffset'].ravel()
+            else:
+                overridedepth = None
+            heavetime, newheave = calculate_heave_correction(recs_to_read['ping']['time'].ravel(),
+                                                             recs_to_read['ping']['traveltime'].ravel(),
+                                                             recs_to_read['ping']['soundspeed'].ravel(),
+                                                             overridedepth=overridedepth)
             if heavetime.shape[0] != recs_to_read['attitude']['time'].shape[0]:
                 newheave = np.interp(recs_to_read['attitude']['time'], heavetime, newheave)
             recs_to_read['attitude']['heave'] = np.array(newheave, np.float32)
         else:
-            recs_to_read['attitude']['heave'] = np.array([], np.float32)
+            recs_to_read['attitude']['heave'] = np.zeros_like(recs_to_read['attitude']['roll'])
         return recs_to_read
 
-    def sequential_read_records(self, first_installation_rec=False):
+    def sequential_read_records(self, first_installation_rec=False, frequency_selection: str = 'lowest', build_heave: bool = False):
         """
         Step through this file and convert all relevant data.  Each RAW/XML ping group will be processed to get a
         bottom detection that we use to populate the kluster dict datastore, which is the return of this function.
@@ -719,6 +756,11 @@ class readraw:
         ----------
         first_installation_rec
             if True, will just return the translated installation parameters
+        frequency_selection
+            choose either the 'lowest' frequency return or the 'highest' frequency return.
+        build_heave
+            if True, it will use a low pass filter approach to determine the heave from the range/traveltime.  If False, heave
+            will be zero.
 
         Returns
         -------
@@ -793,7 +835,7 @@ class readraw:
                                 rectime = 0
                             else:
                                 print(f'raw: WARNING - found {desired_record} grouping at record time {rectime} that only contained {len(heads)}/{len(xml_parameters)} records/parameters, expected {len(transducer_names)}')
-                        read_draft = self._process_raw_group(heads, xml_parameters, recs_to_read, serialnumber)
+                        read_draft = self._process_raw_group(heads, xml_parameters, recs_to_read, serialnumber, frequency_selection)
                         if read_draft is not None:
                             draft = read_draft
                         first_rec = False
@@ -818,10 +860,31 @@ class readraw:
                         recs_to_read['navigation']['altitude'].append(self.packet.subpack.header['altitude'])
                     elif 'altitude' in recs_to_read['navigation']:
                         recs_to_read['navigation'].pop('altitude')
+            elif datagram_type == 'DEP0':
+                self.get()
+                if frequency_selection == 'lowest':
+                    dpth = self.packet.subpack.transducers[0]['Depth'][0]
+                    intensity = self.packet.subpack.transducers[0]['Intensity'][0]
+                elif frequency_selection == 'highest':
+                    dpth = self.packet.subpack.transducers[-1]['Depth'][0]
+                    intensity = self.packet.subpack.transducers[-1]['Intensity'][0]
+                else:
+                    raise ValueError(f'Frequency selection {frequency_selection} is not supported, must be one of [lower, higher]')
+                if 'dtime' not in recs_to_read['ping']:
+                    recs_to_read['ping']['dtime'] = [self.packet.subpack.time]
+                    recs_to_read['ping']['depthoffset'] = [dpth]
+                    recs_to_read['ping']['reflectivity'] = [intensity]
+                    recs_to_read['ping']['alongtrack'] = [0.0]
+                    recs_to_read['ping']['acrosstrack'] = [0.0]
+                else:
+                    recs_to_read['ping']['dtime'].append(self.packet.subpack.time)
+                    recs_to_read['ping']['depthoffset'].append(dpth)
+                    recs_to_read['ping']['reflectivity'].append(intensity)
+                    recs_to_read['ping']['alongtrack'].append(0.0)
+                    recs_to_read['ping']['acrosstrack'].append(0.0)
 
         if not navrec:  # override for saildrone draft
             draft = saildrone_vessel_draft
-        if not navrec:
             if recs_to_read['ping']['time']:  # if there are pings, we interpolate the 60sec nav to ping time
                 recs_to_read['navigation']['time'] = recs_to_read['ping']['time']
                 recs_to_read['navigation']['latitude'] = np.interp(np.array(recs_to_read['ping']['time']), utctme, lat)
@@ -831,7 +894,16 @@ class readraw:
                 recs_to_read['navigation']['latitude'] = lat
                 recs_to_read['navigation']['longitude'] = lon
             recs_to_read['navigation'].pop('altitude')
-        recs_to_read = self._finalize_records(recs_to_read, draft, iparams)
+        bfile = self.bottom_detect_file()
+        if bfile:
+            dtime, depth, refl, along, across = read_bottom_detection_file(bfile, frequency_selection)
+            pingtime = np.array(recs_to_read['ping']['time'])
+            recs_to_read['ping']['depthoffset'] = np.interp(pingtime, dtime, depth).reshape(pingtime.size, 1)
+            recs_to_read['ping']['reflectivity'] = np.interp(pingtime, dtime, refl).reshape(pingtime.size, 1)
+            recs_to_read['ping']['alongtrack'] = np.interp(pingtime, dtime, along).reshape(pingtime.size, 1)
+            recs_to_read['ping']['acrosstrack'] = np.interp(pingtime, dtime, across).reshape(pingtime.size, 1)
+
+        recs_to_read = self._finalize_records(recs_to_read, draft, iparams, build_heave)
         if recs_to_read is not None:
             recs_to_read['format'] = 'raw'
         return recs_to_read
@@ -895,6 +967,8 @@ class Datagram:
             self.subpack = Tag0(self.datablock, self.time)
         elif self.dtype == 'XML0':
             self.subpack = Xml0(self.datablock, self.time)
+        elif self.dtype == 'DEP0':
+            self.subpack = Dep0(self.datablock, self.time)
         else:
             print(f'Data record {self.dtype} decoding is not yet supported.')
             self.decoded = False
@@ -1788,6 +1862,44 @@ class Nme0:
         return zda
 
 
+class Dep0:
+    """
+    Depth datagram that exists within the .out and .bot files that are logged alongside the .raw file with the ES/K60 system.
+    Based on information I received from Steve Intelmann/NOAA Fisheries and the Echoview support site
+    ( https://support.echoview.com/WebHelp/Reference/File_formats/Simrad_data_files.htm#_raw )
+    """
+    hdr_dtype = np.dtype([('TransducerCount', 'I')])
+    transducer_dtype = np.dtype([('Depth', 'f'), ('Intensity', 'f'), ('Unused', 'f')])
+
+    def __init__(self, datablock, utctime):
+        hdr_sz = Dep0.hdr_dtype.itemsize
+        tmp_hdr = np.frombuffer(datablock[:hdr_sz], dtype=Dep0.hdr_dtype)[0]
+        self.header = tmp_hdr.astype(Dep0.hdr_dtype)
+        datablock = datablock[hdr_sz:]
+        self.transducers = []
+        trans_sz = Dep0.transducer_dtype.itemsize
+        for i in range(self.header['TransducerCount']):
+            tdset = np.frombuffer(datablock[:trans_sz], dtype=Dep0.transducer_dtype)
+            tdset = tdset.astype(Dep0.transducer_dtype)
+            datablock = datablock[trans_sz:]
+            # if tdset['Depth'] < 1.0e-20:
+            #     tdset['Depth'][:] = np.float32(np.nan)
+            self.transducers.append(tdset)
+        self.time = utctime
+
+    def display(self):
+        """
+        Displays contents of the header to the command window.
+        """
+        for n, name in enumerate(self.header.dtype.names):
+            print(f'{name} : {self.header[n]}')
+        print(f'UTCTime: {self.time}')
+        for cnt, trans in enumerate(self.transducers):
+            print(f'Transducer {cnt + 1}')
+            print(f'Depth: {trans["Depth"]}')
+            print(f'Intensity: {trans["Intensity"]}')
+
+
 class mappack:
     """
     Container for the file packet map.
@@ -2252,20 +2364,20 @@ def _select_class_detections(detects, class_sums, threshold):
     numsamples, numpings = detects.shape
     detect_idx = np.full(numpings, -1)
     # look for the strongest signal classes first
-    sorted_class_idx = np.argsort(class_sums[:,1])[::-1]
+    sorted_class_idx = np.argsort(class_sums[:, 1])[::-1]
     dcols = set()
     for idx in sorted_class_idx:
         if idx == 0:
             continue
-        if class_sums[idx,2] < threshold:
+        if class_sums[idx, 2] < threshold:
             continue
         class_detect_idx = np.argwhere(detects == idx)
-        scols = set(class_detect_idx[:,1])
+        scols = set(class_detect_idx[:, 1])
         overlap = scols.intersection(dcols)
         # test for no overlap between classes
         if len(overlap) == 0:
             dcols = dcols.union(scols)
-            detect_idx[class_detect_idx[:,1]] = class_detect_idx[:,0]
+            detect_idx[class_detect_idx[:, 1]] = class_detect_idx[:, 0]
     return detect_idx
 
 
@@ -2278,8 +2390,6 @@ def _image_detection(powers, threshold: int = 30):
     ----------
     powers : TYPE
         DESCRIPTION.
-    blankidx : TYPE
-        DESCRIPTION.
 
     Returns
     -------
@@ -2289,23 +2399,54 @@ def _image_detection(powers, threshold: int = 30):
     numsamples, numpings = powers.shape
     # use image edge detection to find the approximate seafloor
     im = ndimage.gaussian_filter(powers, 8)
-    grad = ndimage.sobel(im, axis = 0, mode = 'constant')
-    grad_threshold = np.nanstd(grad[1:-1,:])
+    grad = ndimage.sobel(im, axis=0, mode='constant')
+    grad_threshold = np.nanstd(grad[1:-1, :])
     # turn the positive gradient image into binary
     bgrad = np.full(grad.shape, False)
     bgrad[grad > grad_threshold] = True
-    bgrad[[0,-1], :] = False # remove edge artifacts from the sobel filter
+    bgrad[[0, -1], :] = False  # remove edge artifacts from the sobel filter
     # classify the gradient results
-    numclass, classified = cv2.connectedComponents(bgrad.astype(np.uint8), connectivity = 8)
+    numclass, classified = cv2.connectedComponents(bgrad.astype(np.uint8), connectivity=8)
     expanded_class = _expand_class_to_zero_gradient(classified, grad)
     # get the max value within each ping for each class
-    detects, class_sums = _get_detections_within_classes(expanded_class, powers,grad)
+    detects, class_sums = _get_detections_within_classes(expanded_class, powers, grad)
     detect_idx = _select_class_detections(detects, class_sums, threshold)
     return detect_idx
 
 
+def read_bottom_detection_file(botfile: str, frequency_selection: str = 'lowest'):
+    """
+    Some raw files logged by Ek/S60 sonar will have associated .out or .bot files of the same name.  These
+    files have the same general structure as the raw file, but will include the DEP0 record that contains a bottom
+    detect and backscatter strength record.
+
+    Parameters
+    ----------
+    botfile
+        a file that matches the .raw file name, but has a .out or .bot extension
+    frequency_selection
+        choose either the 'lowest' freq return or the 'highest' freq return.
+
+    Returns
+    -------
+    np.array
+        utctime of detection
+    np.array
+        depth in meters
+    np.array
+        intensity in dB
+    np.array
+        alongtrack offset of detection (used in Kluster)
+    np.array
+        acrosstrack offset of detection (used in Kluster)
+    """
+    ad = readraw(botfile)
+    rec = ad.sequential_read_records(frequency_selection=frequency_selection)
+    return rec['ping']['dtime'], rec['ping']['depthoffset'], rec['ping']['reflectivity'], rec['ping']['alongtrack'], rec['ping']['acrosstrack']
+
+
 def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, soundspeed: np.ndarray,
-                               fsampling: float = 1.0, fcutoff: float = 0.05):
+                               fsampling: float = 1.0, fcutoff: float = 0.05, overridedepth=None):
     """
     Get the heave correction.
 
@@ -2315,15 +2456,18 @@ def calculate_heave_correction(ping_times: np.ndarray, traveltime: np.ndarray, s
     Result has the sign flipped, so that to correct depths (+ Down) with this heave, you add the heave
     """
 
-    if soundspeed[0] == 0:
-        soundspeed = 1500.0
-
-    calc_range = traveltime * (soundspeed / 2)
+    if overridedepth is not None:
+        calc_range = overridedepth
+        clean_idx = ~np.isnan(calc_range)
+    else:
+        if soundspeed[0] == 0:
+            soundspeed = 1500.0
+        calc_range = traveltime * (soundspeed / 2)
+        clean_idx = ~np.isnan(traveltime)
 
     fbutter = fcutoff / (fsampling / 2.)
     b, a = signal.butter(5, fbutter)
 
-    clean_idx = ~np.isnan(traveltime)
     ping_times = ping_times[clean_idx]
     calc_range = calc_range[clean_idx]  # using the final detection as the reference bathtymetry
 
