@@ -674,6 +674,8 @@ class AllRead:
                 recs_skipped += 1
                 if recs_skipped == 10:
                     print('Warning: not finding the installation parameters record at the beginning of {}'.format(self.infilename))
+                elif recs_skipped == 100:
+                    raise ValueError('Error: unable to find the installation parameters record that is required to be at the start of every .all file.')
                 continue
             self.get()
             try:
@@ -820,7 +822,6 @@ class AllRead:
                                                                               recs_to_read['ping']['traveltime'])
         else:
             recs_to_read['ping'].pop('reflectivity')
-            recs_to_read['ping'].pop('nearnormalcorrect')
         recs_to_read['ping'].pop('rtime')
 
         recs_to_read['runtime_params']['runtime_settings'] = self._only_keep_important_runtime(recs_to_read['runtime_params']['runtime_settings'])
