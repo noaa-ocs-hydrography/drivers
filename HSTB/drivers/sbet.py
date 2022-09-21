@@ -605,7 +605,7 @@ def smrmsg_to_xarray(smrmsgfile, logfile=None, weekstart_year=None, weekstart_we
         final_attrs = {}
         if 'sbet_mission_date' not in attrs:
             attrs = {'sbet_mission_date': datetime.fromisocalendar(weekstart_year, weekstart_week, 1).strftime('%Y-%m-%d %H:%M:%S')}
-        final_attrs['sbet_mission_date'] = attrs['mission_date']
+        final_attrs['sbet_mission_date'] = attrs['sbet_mission_date']
         final_attrs['sbet_logging rate (hz)'] = smrmsg_rate
         final_attrs['sbet_source_file'] = smrmsgfile
         smrmsgdat.attrs = final_attrs
