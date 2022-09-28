@@ -562,10 +562,15 @@ def sbets_to_xarray(sbetfiles: list, smrmsgfiles: list = None, logfiles: list = 
         newdata.append(converted_data)
         totalsbetfiles.update(converted_data.nav_files)
         totalerrorfiles.update(converted_data.nav_error_files)
+    newdata.sort(key=lambda ds: ds.time.values[0])
     navdata = xr.concat(newdata, dim='time')
     del newdata
     # sbet files might be in any time order
     navdata = navdata.sortby('time', ascending=True)
+    # drop duplicates
+    _, index = np.unique(navdata.time, return_index=True)
+    if navdata.time.size != index.size:
+        navdata = navdata.isel(time=index)
     # shovel in the total file attributes
     navdata.attrs['nav_files'] = totalsbetfiles
     navdata.attrs['nav_error_files'] = totalerrorfiles
