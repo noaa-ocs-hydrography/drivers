@@ -606,25 +606,27 @@ class AllRead:
         list, [starttime: float, first time stamp in data, endtime: float, last time stamp in data]
 
         """
-        starttime = None
-        endtime = None
+
         cur_startstatus = self.at_right_byte  # after running, we reset the pointer and start byte status
         curptr = self.infile.tell()
         startptr = self.start_ptr
 
-        # Read the first records till you get one that has time in the packet (most recs at this point i believe)
-        while starttime is None:
+        # Read the first five records till you get one that has time in the packet (most recs at this point i believe)
+        # I have found that sometimes the first few records can have bad times, which means we need to get the first
+        #   'reasonable' value
+        rectimes = []
+        attempts = 100
+        while len(rectimes) < 5:
             self.read()
             try:
-                starttime = self.packet.time
+                rectimes.append(self.packet.time)
             except AttributeError:  # no time for this packet
-                self.read()
-                try:
-                    starttime = self.packet.time
-                except AttributeError:
-                    raise ValueError('Par3: Unable to read the time of the first record.  This is generally because the sonar model is one that is not currently enabled in this module')
-        if starttime is None:
-            raise ValueError('Unable to find a suitable packet to read the start time of the file')
+                attempts -= 1
+            if attempts <= 0:
+                raise ValueError('Par3: Unable to read the time of the first records.  This is generally because the sonar model is one that is not currently enabled in this module')
+        rectimes = np.array(rectimes)
+        rectimes = rectimes[np.abs(rectimes - np.median(rectimes)) < 60]
+        starttime = float(np.min(rectimes))
 
         # Move the start/end file pointers towards the end of the file and get the last available time
         self.infile.seek(0, 2)
@@ -637,14 +639,20 @@ class AllRead:
 
         self.infile.seek(self.start_ptr)
         self.eof = False
+        rectimes = []
+        attempts = 100
         while not self.eof:
             self.read()
             try:
-                endtime = self.packet.time
+                rectimes.append(self.packet.time)
             except:
-                pass
-        if endtime is None:
-            raise ValueError('Unable to find a suitable packet to read the end time of the file')
+                attempts -= 1
+            if attempts <= 0:
+                raise ValueError('Par3: Unable to read the time of the last few records.  This is generally because the sonar model is one that is not currently enabled in this module')
+        rectimes = np.array(rectimes)
+        rectimes = rectimes[np.abs(rectimes - np.median(rectimes)) < 60]
+        endtime = float(np.max(rectimes))
+
         self.infile.seek(curptr)
         self.at_right_byte = cur_startstatus
         self.eof = False
