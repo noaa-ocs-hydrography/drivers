@@ -612,8 +612,8 @@ class AllRead:
         startptr = self.start_ptr
 
         # Read the first five records till you get one that has time in the packet (most recs at this point i believe)
-        # I have found that sometimes the first few records can have bad times, which means we need to get the first
-        #   'reasonable' value
+        # I have found that sometimes the first few records can have misleading times, which means we need to get the first
+        #   'reasonable' value.  Seen in NAVO data where some packets are removed during turns.
         rectimes = []
         attempts = 100
         while len(rectimes) < 5:
@@ -625,12 +625,15 @@ class AllRead:
             if attempts <= 0:
                 raise ValueError('Par3: Unable to read the time of the first records.  This is generally because the sonar model is one that is not currently enabled in this module')
         rectimes = np.array(rectimes)
-        rectimes = rectimes[np.abs(rectimes - np.median(rectimes)) < 60]
-        starttime = float(np.min(rectimes))
+        try:  # Try and get the min time that is nearest the median time, eliminating outliers
+            close_rectimes = rectimes[np.abs(rectimes - np.median(rectimes)) < 60]
+            starttime = float(np.min(close_rectimes))
+        except ValueError:  # just get the max time in this sample as the start of the line, if there is too much of a spread
+            starttime = float(np.max(rectimes))
 
         # Move the start/end file pointers towards the end of the file and get the last available time
         self.infile.seek(0, 2)
-        chunksize = min(10 * 1024, self.infile.tell())  # pick 10k of reading just to make sure you get some valid records, or the filelength if it is less than that
+        chunksize = min(20 * 1024, self.infile.tell())  # pick 20k of reading just to make sure you get some valid records, or the filelength if it is less than that
         self.at_right_byte = False
         eof = self.infile.tell()
         self.start_ptr = eof - chunksize
@@ -650,9 +653,8 @@ class AllRead:
             if attempts <= 0:
                 raise ValueError('Par3: Unable to read the time of the last few records.  This is generally because the sonar model is one that is not currently enabled in this module')
         rectimes = np.array(rectimes)
-        rectimes = rectimes[np.abs(rectimes - np.median(rectimes)) < 60]
+        # just get the max time in this sample as the end of the line, if there is too much of a spread
         endtime = float(np.max(rectimes))
-
         self.infile.seek(curptr)
         self.at_right_byte = cur_startstatus
         self.eof = False
