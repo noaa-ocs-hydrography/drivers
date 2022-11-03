@@ -1783,3 +1783,14 @@ if __name__ == "__main__":
 
         del sssfile
     sys.exit()
+
+if 0:  # sample of changing coordinate referenec system in a bag
+    from HSTB.drivers import bag
+    sr = bag.SRBag(r"C:\Pydro22_Dev\NOAA\site-packages\Python38\git_repos\s100py\tests\s102\F00788_SR_8m_32610.bag", mode="r+")
+    sr.horizontal_crs_wkt
+    Out[4]: 'PROJCS["NAD83 / UTM zone 10N",GEOGCS["NAD83",DATUM["North American Datum 1983",SPHEROID["GRS 1980",6378137,298.2572221010041,AUTHORITY["EPSG","7019"]],TOWGS84[0,0,0,0,0,0,0],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree (supplier to define representation)",0.0174532925199433,AUTHORITY["EPSG","9122"]],EXTENSION["tx_authority","NA83"],AUTHORITY["EPSG","4269"]],PROJECTION["Transverse_Mercator",AUTHORITY["EPSG","16010"]],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-123],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AUTHORITY["EPSG","26910"]]'
+    from osgeo import osr
+    crs = osr.SpatialReference()
+    crs.ImportFromEPSG(32610)
+    sr.horizontal_crs_wkt = crs.ExportToWkt()
+    sr.close()
