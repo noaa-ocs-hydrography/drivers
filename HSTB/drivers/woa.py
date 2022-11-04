@@ -2,10 +2,20 @@ import datetime
 import os
 
 import numpy
+from osgeo import gdal, osr, ogr
+
+# SoundSpeedManager is changing the UseException state of osgeo,
+# So we will cache it and put it back since we are pretty sure we should not need it for getting WOA casts
+# also need to do them in reverse order of whatever SSM did since GDAL keeps an ordered stack and requires it to be undone in reverse
+modules = (gdal, ogr, osr)
+exc_state = {}
+for mod in modules:
+    exc_state[mod] = mod.UseExceptions()
 
 from hyo2.soundspeed.atlas import woa13, woa18
 from hyo2.abc.lib.progress.cli_progress import CliProgress
 from hyo2.soundspeed.formats.writers.caris import Caris
+
 
 # from hyo2.soundspeed.soundspeed import SoundSpeedLibrary
 
@@ -60,6 +70,21 @@ if not loaded:
     else:
         raise FileNotFoundError("Model was not found AND failed to download from UNH")
         # print("failed to load WOA")
+
+gdal.PopErrorHandler()  # SSM is loading a custom error handler and changing the UseException() state - restore them
+for tries in range(len(exc_state)):  # at least one must get removed per pass - or else we are broken
+    if exc_state:
+        for mod in modules:
+            try:
+                if exc_state[mod]:
+                    mod.UseExceptions()
+                else:
+                    mod.DontUseExceptions()
+            except (RuntimeError, KeyError):
+                continue  # don't pop the state value on runtimeError and it's already done on KeyError
+            exc_state.pop(mod)
+if exc_state:
+    raise ImportError("Problem resetting the exception usage after SSM changed it")
 
 
 def get_profile(lat, lon, dt=None, screen_dump=False):
