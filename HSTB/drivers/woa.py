@@ -51,25 +51,15 @@ class fake_project:
 active_model = woa18.Woa18(woa18_folder, fake_project())
 loaded = active_model.is_present()
 if not loaded:
+    gdal.PopErrorHandler()  # SSM is loading a custom error handler, remove it before trying the next model
     active_model = woa13.Woa13(woa13_folder, fake_project())
     loaded = active_model.is_present()
 
 # Neither exist so download 2018
 if not loaded:
+    gdal.PopErrorHandler()  # SSM is loading a custom error handler, remove it before trying the next model
     active_model = woa18.Woa18(woa18_folder, fake_project())
-    print("Downloading Model '{}' to {}".format(active_model.desc, active_model.data_folder))
-    # note: don't call prj.download_woa13() since it will not use the directory
-    # set in active_woa unless you initialize prj properly too.
-    downloaded = active_model.download_db()
-    if downloaded:
-        print("Finished downloading WOA to ", active_model.data_folder)
-        loaded = active_model.load_grids()
-        if not loaded:
-            raise FileNotFoundError("Model data did not load properly.  Is it corrupt?")
-            # print("failed to load WOA")
-    else:
-        raise FileNotFoundError("Model was not found AND failed to download from UNH")
-        # print("failed to load WOA")
+
 
 gdal.PopErrorHandler()  # SSM is loading a custom error handler and changing the UseException() state - restore them
 for tries in range(len(exc_state)):  # at least one must get removed per pass - or else we are broken
@@ -85,6 +75,23 @@ for tries in range(len(exc_state)):  # at least one must get removed per pass - 
             exc_state.pop(mod)
 if exc_state:
     raise ImportError("Problem resetting the exception usage after SSM changed it")
+
+
+def download_woa():
+    global loaded
+    print("Downloading Model '{}' to {}".format(active_model.desc, active_model.data_folder))
+    # note: don't call prj.download_woa13() since it will not use the directory
+    # set in active_woa unless you initialize prj properly too.
+    downloaded = active_model.download_db()
+    if downloaded:
+        print("Finished downloading WOA to ", active_model.data_folder)
+        loaded = active_model.load_grids()
+        if not loaded:
+            raise FileNotFoundError("Model data did not load properly.  Is it corrupt?")
+            # print("failed to load WOA")
+    else:
+        raise FileNotFoundError("Model was not found AND failed to download from UNH")
+        # print("failed to load WOA")
 
 
 def get_profile(lat, lon, dt=None, screen_dump=False):
