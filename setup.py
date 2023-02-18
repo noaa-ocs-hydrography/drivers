@@ -25,7 +25,7 @@ REQUIRED = [
             'numpy>=1.18.4',
             'opencv-python>=4.5.3.56',
             'pyproj>=2.6.1.post1',
-            'reportlab>=3.5.42'
+            'reportlab>=3.5.42',
             'scipy>=1.7.3',
             ]
 
