@@ -106,7 +106,10 @@ class TemporaryCsarExport(object):
             additional_opts = ""
         else:
             raise Exception("Unrecognized export type")
-        data = convert_csar(csar_file, self.export_filename, output_type=export, bandname=self.bandname, additional_opts=additional_opts,
+        use_bandname = self.bandname
+        if " " in use_bandname:
+            use_bandname = '"' + use_bandname + '"'  # if the bandname has a space in it, we need to wrap it in quotes
+        data = convert_csar(csar_file, self.export_filename, output_type=export, bandname=use_bandname, additional_opts=additional_opts,
                                 verbose=False)
         if data[1]:
             raise CSAR_Exception
@@ -137,16 +140,21 @@ class TemporaryCsarExport(object):
 
         """
         bands = get_bands_from_csar(csar_file)
+        bands_lower = [b.lower() for b in bands]
         # print(bands)
         bandname = prefer_bandname
         # if no band name given then use one of the most common ones if found.
         if not bandname or fallback:
             for b in (bandname, "Depth", "Elevation", "Intensity"):
-                if b in bands:
-                    bandname = b
+                if b.lower() in bands_lower:
+                    index = bands_lower.index(b.lower())
+                    bandname = bands[index]
                     break
         if bandname not in bands:
-            raise Exception("Did not find requested band '{}' layer in {}".format(bandname, str(bands)))
+            if fallback and len(bands) == 1:
+                bandname = bands[0]
+            else:
+                raise Exception("Did not find requested band '{}' layer in {}".format(bandname, str(bands)))
         return bandname
 
     def get_band_used(self):
