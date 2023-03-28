@@ -652,12 +652,15 @@ def support_files_finder(command, suppress_exception=True):
     xmlfiles = glob.glob(os.path.join(sys_dir, '*.xml'))
     txtfiles = glob.glob(os.path.join(sys_dir, '*.txt'))
 
-    valid_cubeparams = ['CUBEParams_NOAA_2022.xml', 'CUBEParams_NOAA_2021.xml', 'CUBEParams_NOAA_2020.xml',
+    valid_cubeparams = ['CUBEParams_NOAA_2024.xml', 'CUBEParams_NOAA_2023.xml',
+                        'CUBEParams_NOAA_2022.xml', 'CUBEParams_NOAA_2021.xml', 'CUBEParams_NOAA_2020.xml',
                         'CUBEParams_NOAA_2019.xml', 'CUBEParams_NOAA_2018.xml', 'CUBEParams_NOAA_2017.xml']
-    valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2022.txt', 'NOAA_DepthRanges_CompleteCoverage_2021.txt',
+    valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2024.txt', 'NOAA_DepthRanges_CompleteCoverage_2023.txt',
+                      'NOAA_DepthRanges_CompleteCoverage_2022.txt', 'NOAA_DepthRanges_CompleteCoverage_2021.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2020.txt', 'NOAA_DepthRanges_CompleteCoverage_2019.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2018.txt', 'NOAA_DepthRanges_CompleteCoverage_2017.txt']
-    valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2022.txt', 'NOAA_DepthRanges_ObjectDetection_2021.txt',
+    valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2024.txt', 'NOAA_DepthRanges_ObjectDetection_2023.txt',
+                       'NOAA_DepthRanges_ObjectDetection_2022.txt', 'NOAA_DepthRanges_ObjectDetection_2021.txt',
                        'NOAA_DepthRanges_ObjectDetection_2020.txt', 'NOAA_DepthRanges_ObjectDetection_2019.txt',
                        'NOAA_DepthRanges_ObjectDetection_2018.txt', 'NOAA_DepthRanges_ObjectDetection_2017.txt']
 
