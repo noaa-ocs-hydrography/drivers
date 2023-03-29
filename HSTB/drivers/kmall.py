@@ -28,6 +28,9 @@ sonar_translator = {'em2040': [None, 'tx', 'rx', None],
                     'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
                     'em3020': [None, 'tx', 'rx', None], 'em3020_dual': [None, 'txrx_port', 'txrx_stbd', None]}
 
+class CorruptPacketError(Exception):
+    pass
+
 
 class kmall():
     """ A class for reading a Kongsberg KMALL data file. """
@@ -127,14 +130,14 @@ class kmall():
 
         num_bytes = self.FID.read(4)
         dgram = self.FID.read(4)
-        if not self.FID.tell() == self.file_size:  # end of file
+        if not self.FID.tell() == self.file_size:  # end of file  @TODO shoudl be >=
             self.FID.seek(-8, 1)
             is_valid_identifier = self.datagram_ident_search.search(dgram, 0)
             # dgram passes first check, starts with # and is 3 capital letters after
             if is_valid_identifier:
                 # now compare dgram identifier with the last three letters of each read method to find the right one
                 self.datagram_ident = dgram[-3:].decode()
-                read_method = [rm for rm in self.read_methods if rm[-3:] == self.datagram_ident]
+                read_method = [rm for rm in self.read_methods if rm[-3:] == self.datagram_ident]  # @TODO just make a dictionary of the 3 character codes to the read functions
                 if len(read_method) == 0:
                     self.read_method = None
                 elif len(read_method) == 1:
@@ -144,8 +147,11 @@ class kmall():
             else:
                 if warn_no_definition:
                     print('Did not find valid datagram identifier: {}'.format(dgram))
-                self.read_method = 'error'  # set it to something other than None just to satisfy skip datagram
-                self.skip_datagram()
+                if dgram[0] == b'#':
+                    self.read_method = 'error'  # set it to something other than None just to satisfy skip datagram
+                    self.skip_datagram()
+                else:
+                    raise CorruptPacketError(f"Found invalid datagram identifier: {dgram}")
         else:
             self.eof = True
     
@@ -760,7 +766,7 @@ class kmall():
         return dg
 
     def read_EMdgmMRZ_sounding(self):
-        """
+        """ http://www3.mbari.org/products/mbsystem/formatdoc/KongsbergKmall/EMdgmFormat_RevH/html/structEMdgmMRZ__sounding__def.html
         Read #MRZ - data for each sounding, e.g. XYZ, reflectivity, two way travel time etc. Also contains
         information necessary to read seabed image following this datablock (number of samples in SI etc.).
         To be entered in loop (numSoundingsMaxMain + numExtraDetections) times.
@@ -893,7 +899,7 @@ class kmall():
         return dg
 
     def read_EMdgmMRZ(self):
-        """
+        """ http://www3.mbari.org/products/mbsystem/formatdoc/KongsbergKmall/EMdgmFormat_RevH/html/structEMdgmMRZ__def.html
         A method to read a full #MRZ datagram.
         Kongsberg documentation: "The datagram also contains seabed image data. Depths points (x,y,z) are calculated
         in meters, georeferred to the position of the vessel reference point at the time of the first transmitted pulse
@@ -937,7 +943,10 @@ class kmall():
         for record in range(dg['rxInfo']['numExtraDetections'] +
                             dg['rxInfo']['numSoundingsMaxMain']):
             soundings.append(self.read_EMdgmMRZ_sounding())
-            Nseabedimage_samples += soundings[record]['SInumSamples']
+            num_samples = soundings[record]['SInumSamples']
+            Nseabedimage_samples += num_samples
+            if num_samples > 32768:  # in a corrupted file, this can be a large positive - just guessing that there is a limit
+                raise CorruptPacketError(f"Corrupt packet: #MRZ at {start}")
         dg['sounding'] = self.listofdicts2dictoflists(soundings)
 
         # Read the seabed imagery.
@@ -3981,16 +3990,23 @@ class kmall():
         filelen = self._initialize_sequential_read(start_ptr, end_ptr)
         if start_ptr:
             self.seek_next_startbyte(filelen, start_ptr=start_ptr)
-
+        # locs = []
         while not self.eof:
             if self.FID.tell() >= start_ptr + filelen:
                 self.eof = True
                 break
-            self.decode_datagram()
-            if self.datagram_ident not in wanted_records:
-                self.skip_datagram()
+            last_loc = self.FID.tell()
+            # locs.append(last_loc)  # put this code in to help find corrupt packets where we may have already passed the bad packet
+            try:
+                self.decode_datagram()
+                if self.datagram_ident not in wanted_records:
+                    self.skip_datagram()
+                    continue
+                self.read_datagram()
+            except CorruptPacketError as e:
+                self.seek_next_startbyte(filelen, start_ptr=last_loc + 8)  # look for the next packet at a place 8 bytes ahead of the bad packet
+                print(e)
                 continue
-            self.read_datagram()
             for rec_ident in list(recs_categories_translator[self.datagram_ident].values())[0]:
                 recs_count[rec_ident[0]] += 1
 
