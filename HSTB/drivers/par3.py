@@ -81,6 +81,8 @@ recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave
                       '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude'],
                       '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover']}
 
+ping_dtypes = [78, 89, 102]  # packet numbers that translate to having time entries for the ping records
+
 recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
                                         'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
                                         'Heading': [['attitude', 'heading']]},
@@ -597,10 +599,16 @@ class AllRead:
         self.at_right_byte = cur_startstatus
         return has_data
 
-    def fast_read_start_end_time(self):
+    def fast_read_start_end_time(self, start_packet_types=None, check_packets=5):
         """
         Get the start and end time for the dataset without mapping the file
 
+        Parameters
+        ----------
+        start_packet_types : list, optional
+            List of packet type integers to look for to start from, otherwise will start from the first packet regardless of type.
+        check_packets : int, optional
+            Number of packets to check for time stamps in case they are spread out due to line break or something.
         Returns
         -------
         list, [starttime: float, first time stamp in data, endtime: float, last time stamp in data]
@@ -616,8 +624,10 @@ class AllRead:
         #   'reasonable' value.  Seen in NAVO data where some packets are removed during turns.
         rectimes = []
         attempts = 100
-        while len(rectimes) < 5:
+        while len(rectimes) < check_packets:
             self.read()
+            if start_packet_types and self.packet.dtype not in start_packet_types:
+                continue
             try:
                 rectimes.append(self.packet.time)
             except AttributeError:  # no time for this packet
