@@ -850,10 +850,14 @@ def proj_to_epsg(coord, proj):
     zone = proj[9:len(proj) - 1]
     hemi = proj[-1]
     if coord == 'NAD83':
-        if hemi != 'N':
+        if zone == '4' and hemi == 'S':
+            return 'UTM-04S-Nad83'
+        elif hemi != 'N':
             raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
         zone = int(zone)
-        if zone <= 19:
+        if zone <= 3:
+            return str(26900 + zone)
+        elif zone <= 19:
             return str(6329 + zone)
         elif zone == 59:
             return '6328'
@@ -898,6 +902,15 @@ def proj_to_epsg(coord, proj):
             raise IOError('NAD83(MA11): Invalid projection: {}, {}'.format(coord, proj))
     else:
         raise IOError('Invalid coordinate system: {}'.format(coord))
+
+
+def epsg_to_crs(epsg):
+    str_epsg = str(epsg)
+    if str_epsg.startswith('UTM') or str_epsg.startswith('EPSG'):
+        crs = str_epsg
+    else:
+        crs = 'EPSG:' + str_epsg
+    return crs
 
 
 def wgs84_epsg_utmzone_finder(maxlon, minlon):
@@ -1259,8 +1272,9 @@ class CarisAPI():
     def create_new_hips_project(self):
         hipsfile = os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
         epsg = proj_to_epsg(self.coord, self.proj)
+        output_crs = epsg_to_crs(epsg)
         if not os.path.exists(hipsfile):
-            fullcommand = self.hipscommand + ' --run CreateHIPSFile --output-crs EPSG:' + epsg + ' "' + hipsfile + '"'
+            fullcommand = self.hipscommand + ' --run CreateHIPSFile --output-crs ' + output_crs + ' "' + hipsfile + '"'
             if self.bench:
                 self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
             else:
@@ -1273,6 +1287,7 @@ class CarisAPI():
         local_raw_file = list(raw_file)
         rawfiles = ''
         epsg = proj_to_epsg(self.coord, self.proj)
+        input_crs = epsg_to_crs(epsg)
         major = ''
         sp = ''
         minor = ''
@@ -1357,7 +1372,7 @@ class CarisAPI():
 
         for rawfil in new_rawfiles:
             fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format ' + self.input_format
-            fullcommand += ' --input-crs EPSG:' + epsg
+            fullcommand += ' --input-crs ' + input_crs
 
             if float(self.hipsversion) >= 11:
                 fullcommand += ' --vessel-file "' + self.hvf + '"'
@@ -1457,8 +1472,7 @@ class CarisAPI():
             with open(self.logger, 'a+') as log:
                 log.write(msg)
                 print msg'''
-
-        mytransf = Transformer.from_crs('epsg:4326', 'epsg:' + str(epsg), always_xy=True)
+        mytransf = Transformer.from_crs('epsg:4326', epsg_to_crs(epsg), always_xy=True)
         lowxextent, lowyextent = lon.min(), lat.min()
         highxextent, highyextent = lon.max(), lat.max()
 
@@ -1574,6 +1588,7 @@ class CarisAPI():
         --convert-side-scan HIGH --pressure-sensor-psi 300 --pressure-sensor-range 05 C:\HIPSData\PreProcess\000_1111.HSX
         file:///C:/HIPSData/HDCS_Data/Test/Test.hips?Vessel=HypackVessel2017;Day=2017-006'''
         epsg = proj_to_epsg(self.coord, self.proj)
+        input_crs = epsg_to_crs(epsg)
         rawfiles = ''
         local_raw_file = list(raw_file)
         major = ''
@@ -1656,7 +1671,7 @@ class CarisAPI():
 
         for rawfil in new_rawfiles:
             fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format ' + self.input_format
-            fullcommand += ' --input-crs EPSG:' + epsg
+            fullcommand += ' --input-crs ' + input_crs
             if float(self.hipsversion) >= 11:
                 fullcommand += ' --vessel-file "' + self.hvf + '"'
             if overwrite:
@@ -1669,7 +1684,7 @@ class CarisAPI():
 
             elif self.input_format == 'EDGETECH_HIGH':
                 fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format EDGETECH_JSF'
-                fullcommand += ' --input-crs EPSG:' + epsg
+                fullcommand += ' --input-crs ' + input_crs
                 if float(self.hipsversion) >= 11:
                     fullcommand += ' --vessel-file "' + self.hvf + '"'
                 if overwrite:
@@ -1681,7 +1696,7 @@ class CarisAPI():
                     fullcommand += '--sensor-heading-location NMEA '
             elif self.input_format == 'EDGETECH_LOW':
                 fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format EDGETECH_JSF'
-                fullcommand += ' --input-crs EPSG:' + epsg
+                fullcommand += ' --input-crs ' + input_crs
                 if float(self.hipsversion) >= 11:
                     fullcommand += ' --vessel-file "' + self.hvf + '"'
                 if overwrite:
@@ -1693,7 +1708,7 @@ class CarisAPI():
                     fullcommand += '--sensor-heading-location NMEA '
             elif self.input_format == 'HYPACK_HIGH':
                 fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format HYPACK'
-                fullcommand += ' --input-crs EPSG:' + epsg
+                fullcommand += ' --input-crs ' + input_crs
                 if float(self.hipsversion) >= 11:
                     fullcommand += ' --vessel-file "' + self.hvf + '"'
                 if overwrite:
@@ -1702,7 +1717,7 @@ class CarisAPI():
                 # fullcommand += ' --navigation-device 0 --heading-device 0 --port-device 1 --ss-position-device 2 '
             elif self.input_format == 'HYPACK_LOW':
                 fullcommand = self.hipscommand + ' --run ImportToHIPS --input-format HYPACK'
-                fullcommand += ' --input-crs EPSG:' + epsg
+                fullcommand += ' --input-crs ' + input_crs
                 if float(self.hipsversion) >= 11:
                     fullcommand += ' --vessel-file "' + self.hvf + '"'
                 if overwrite:
@@ -1772,7 +1787,8 @@ class CarisAPI():
         --resolution 1.0m --beam-pattern-file c:\HIPSData\SIPS\beampattern.bbp
         file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\mosaic1m.csar'''
 
-        fullcommand = self.hipscommand + ' --run CreateSIPSMosaic --mosaic-engine ' + type + ' --output-crs EPSG:' + epsg
+        output_crs = epsg_to_crs(epsg)
+        fullcommand = self.hipscommand + ' --run CreateSIPSMosaic --mosaic-engine ' + type + ' --output-crs ' + output_crs
         if not update:
             fullcommand += ' --beam-pattern-file-operation USE_EXISTING'
         if type == 'SIPS_SIDESCAN':
@@ -1783,7 +1799,7 @@ class CarisAPI():
                 major, sp, minor = self.exact_hipsversion.split('.')
                 # this next part applies for 11.1.5 and greater (thats when the overwrite flag started requiring existing data)
                 if (int(major) == 11 and int(sp) >= 4 and int(minor) >= 6) or (int(major) >= 11 and int(sp) >= 5) or (int(major) >= 12):
-                    fullcommand = self.hipscommand + ' --run CreateSIPSMosaic --mosaic-engine SIPS_BACKSCATTER_WMA_AREA_AVG --output-crs EPSG:' + epsg
+                    fullcommand = self.hipscommand + ' --run CreateSIPSMosaic --mosaic-engine SIPS_BACKSCATTER_WMA_AREA_AVG --output-crs ' + output_crs
         fullcommand += ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
         fullcommand += ' --resolution ' + resolution + ' --beam-pattern-file "' + beampattern + '" '
         fullcommand += '"file:///' + os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
@@ -1880,7 +1896,7 @@ class CarisAPI():
         fullcommand += '--allow-partial "' + source + '" '
 
         if epsg and float(self.hipsversion) >= 11:
-            fullcommand += '--input-crs EPSG:{} '.format(epsg)
+            fullcommand += '--input-crs {} '.format(epsg_to_crs(epsg))
         if height:
             fullcommand += '--gps-height 0sec '
         if height_rms:
@@ -2216,7 +2232,8 @@ class CarisAPI():
         else:
             raise AttributeError('{} Resolution is not supported'.format(resolution))
 
-        fullcommand = self.hipscommand + ' --run CreateHIPSGridWithCube --output-crs EPSG:' + epsg + ' --extent '
+        output_crs = epsg_to_crs(epsg)
+        fullcommand = self.hipscommand + ' --run CreateHIPSGridWithCube --output-crs ' + output_crs + ' --extent '
         fullcommand += extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
         fullcommand += ' --keep-up-to-date'
         if self.noaa_support_files:
@@ -2281,6 +2298,7 @@ class CarisAPI():
          C:\HIPSData\Products\VR.csar'''
         depthrange = ''
         fullcommand = ''
+        output_crs = epsg_to_crs(epsg)
 
         if self.noaa_support_files:
             if comprange:
@@ -2293,8 +2311,8 @@ class CarisAPI():
                 return
 
         if mode == 'RANGE':
-            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method ' + mode + ' --output-crs EPSG:'
-            fullcommand += epsg + ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
+            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method ' + mode + ' --output-crs '
+            fullcommand += output_crs + ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
             if self.noaa_support_files:
                 fullcommand += ' --range-file "' + depthrange
             fullcommand += '" --keep-partial-bins --input-band DEPTH --max-grid-size ' + maxgrid
@@ -2323,8 +2341,8 @@ class CarisAPI():
             fullcommand += ' "' + outputname + '"'
 
         if mode == 'CALDER_RICE':
-            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method ' + mode + ' --output-crs EPSG:'
-            fullcommand += epsg + ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
+            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method ' + mode + ' --output-crs '
+            fullcommand += output_crs + ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
             fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 16.0m --points-per-cell 15'
             fullcommand += ' --area SWATH --keep-partial-bins'
             fullcommand += ' --max-grid-size ' + maxgrid + ' --min-grid-size ' + mingrid + ' --include-flag ACCEPTED "file:///'
@@ -2577,8 +2595,8 @@ class CarisAPI():
         fullcommand = self.basecommand + ' --run ImportPoints --input-format ' + str(inputformat)
 
         if input_epsg:
-            fullcommand += ' --input-crs EPSG:' + str(input_epsg)
-        fullcommand += ' --output-crs EPSG:' + str(output_epsg)
+            fullcommand += ' --input-crs ' + epsg_to_crs(input_epsg)
+        fullcommand += ' --output-crs ' + epsg_to_crs(output_epsg)
 
         if infofile:
             fullcommand += ' --info-file "' + str(infofile) + '"'
@@ -2592,7 +2610,7 @@ class CarisAPI():
         else:
             self.run_this(fullcommand)
 
-    def export_csar_to_ascii(self, inputcsar, output_crs, outputascii, inputband='Depth', inputprecision='9',
+    def export_csar_to_ascii(self, inputcsar, output_epsg, outputascii, inputband='Depth', inputprecision='9',
                              coordformat='LLDG_DD'):
         '''Runs ExportCoverageToASCII with all the options.  Example:  carisbatch.exe -r exportcoveragetoascii
         --include-band Depth 9 --output-crs EPSG:6319 --coordinate-format LLDG_DD --coordinate-precision 9
@@ -2607,7 +2625,8 @@ class CarisAPI():
             inputband = [inputband]
         for band_name in inputband:
             fullcommand += ' --include-band "' + str(band_name) + '" ' + str(inputprecision)
-        fullcommand += ' --output-crs EPSG:' + output_crs + ' --coordinate-format "' + coordformat + '" --coordinate-precision '
+        output_crs = epsg_to_crs(output_epsg)
+        fullcommand += ' --output-crs ' + output_crs + ' --coordinate-format "' + coordformat + '" --coordinate-precision '
         fullcommand += inputprecision + ' --coordinate-unit m "' + inputcsar + '" "' + outputascii + '"'
 
         if self.bench:
