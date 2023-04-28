@@ -2152,6 +2152,13 @@ class CarisAPI():
 
     def georef_bathymetry(self, tideopts, svcopts, gpstideopts, mergeopts, tpuopts, querybyline=False):
         # Only available in Caris 11 and beyond
+        new_caris = False
+        try:
+            major, sp, minor = self.exact_hipsversion.split('.')
+            if int(major) * 1000000 + int(sp) * 1000 + int(minor) >= 11004008: # caris version 10.4.8 or newer
+                new_caris = True
+        except:
+            print('WARNING - unable to detect new_caris using the exact_hipsversion')
 
         fullcommand = self.hipscommand + ' --run GeoreferenceHIPSBathymetry'
         if tideopts:
@@ -2174,7 +2181,10 @@ class CarisAPI():
         fullcommand += ' --vertical-datum-reference ' + mergeopts['vertref']
         fullcommand += ' --heave-source ' + mergeopts['heavesrc']
         fullcommand += ' --compute-tpu'
-        fullcommand += ' --tide-measured ' + tpuopts['options'][0] + ' --tide-zoning ' + tpuopts['options'][1]
+        if new_caris:
+            fullcommand += ' --source-gps-height REALTIME --gps-sounding-datum ' + tpuopts['options'][1]
+        else:
+            fullcommand += ' --tide-measured ' + tpuopts['options'][0] + ' --tide-zoning ' + tpuopts['options'][1]
         fullcommand += ' --sv-measured ' + tpuopts['options'][2] + ' --sv-surface ' + tpuopts['options'][3]
         fullcommand += ' --source-navigation ' + tpuopts['source']['source_nav']
         fullcommand += ' --source-sonar ' + tpuopts['source']['source_sonar']
