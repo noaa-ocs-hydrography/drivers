@@ -719,6 +719,30 @@ class SRBag(h5py.File):
         self._horizontal_crs_element.text = val
 
     @property
+    def _vertical_crs_element(self):
+        md_reference_system = self.xml_root.findall(
+            gmd + 'referenceSystemInfo/' + gmd + 'MD_ReferenceSystem/' + gmd + 'referenceSystemIdentifier/' + gmd + 'RS_Identifier')
+        for elem in md_reference_system:
+            for sub_elem in elem:
+                if sub_elem.tag == gmd + 'code':
+                    for sub_sub_elem in sub_elem:
+                        if "VERT_CS" in sub_sub_elem.text.upper():
+                            return sub_sub_elem
+
+    @property
+    def vertical_crs_wkt(self):
+        """
+        Read meta_horizontal_proj info
+
+        """
+        meta_vertical_proj = self._vertical_crs_element.text.replace('\n', '')
+        return meta_vertical_proj
+
+    @vertical_crs_wkt.setter
+    def vertical_crs_wkt(self, val):
+        self._vertical_crs_element.text = val
+
+    @property
     def srs(self):
         srs = osr.SpatialReference()
         srs.ImportFromWkt(self.horizontal_crs_wkt)
