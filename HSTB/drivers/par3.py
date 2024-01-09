@@ -81,6 +81,8 @@ recs_categories_80 = {'65': ['data.Time', 'data.Roll', 'data.Pitch', 'data.Heave
                       '80': ['time', 'Latitude', 'Longitude', 'gg_data.Altitude'],
                       '89': ['time', 'Reflectivity', 'MinTravelTime', 'NormalBackscatter', 'ObliqueBackscatter', 'TVGCrossover']}
 
+ping_dtypes = [78, 89, 102]  # packet numbers that translate to having time entries for the ping records
+
 recs_categories_translator_80 = {'65': {'Time': [['attitude', 'time']], 'Roll': [['attitude', 'roll']],
                                         'Pitch': [['attitude', 'pitch']], 'Heave': [['attitude', 'heave']],
                                         'Heading': [['attitude', 'heading']]},
@@ -597,10 +599,16 @@ class AllRead:
         self.at_right_byte = cur_startstatus
         return has_data
 
-    def fast_read_start_end_time(self):
+    def fast_read_start_end_time(self, start_packet_types=None, check_packets=5):
         """
         Get the start and end time for the dataset without mapping the file
 
+        Parameters
+        ----------
+        start_packet_types : list, optional
+            List of packet type integers to look for to start from, otherwise will start from the first packet regardless of type.
+        check_packets : int, optional
+            Number of packets to check for time stamps in case they are spread out due to line break or something.
         Returns
         -------
         list, [starttime: float, first time stamp in data, endtime: float, last time stamp in data]
@@ -616,8 +624,10 @@ class AllRead:
         #   'reasonable' value.  Seen in NAVO data where some packets are removed during turns.
         rectimes = []
         attempts = 100
-        while len(rectimes) < 5:
+        while len(rectimes) < check_packets:
             self.read()
+            if start_packet_types and self.packet.dtype not in start_packet_types:
+                continue
             try:
                 rectimes.append(self.packet.time)
             except AttributeError:  # no time for this packet
@@ -868,6 +878,7 @@ class AllRead:
                 
         recs_to_read['ping']['processing_status'] = np.zeros_like(recs_to_read['ping']['beampointingangle'], dtype=np.uint8)
 
+        # FIXME - We shouldn't be modifying time here but Eric decided to add 10 microseconds to avoid duplicates
         # hack here to ensure that we don't have duplicate times across chunks, modify the last time slightly.
         #   next chunk might include a duplicate time
         if recs_to_read['ping']['time'].any() and recs_to_read['ping']['time'].size > 1:
@@ -884,7 +895,7 @@ class AllRead:
 
         # need to sort/drop uniques, keep finding duplicate times
         for dset_name in ['attitude', 'navigation', 'ping']:
-            # first handle these cases where variables are of a different size vs time, I believe this is some issue with older datasets
+            # FIXME first handle these cases where variables are of a different size vs time, I believe this is some issue with older datasets
             #  and the data65 record, need to determine the actual cause as the 'fix' used here is not great
             if dset_name in ['attitude', 'navigation']:
                 for dgram in recs_to_read[dset_name]:
@@ -2309,7 +2320,7 @@ class Data65_att(BasePlottableData):
         super(Data65_att, self).__init__(datablock, byteswap=byteswap,
                                          read_limit=read_limit)  # read as many records as passed in
         self.time = POSIXtime
-        self.header['Time'] = self.header['Time'] * 0.001 + self.time
+        self.header['Time'] = np.around(self.header['Time'] * 0.001 + self.time, 3)
 
     def get_datablock(self, data=None):
         tmp_header = self.header.copy()
@@ -4103,7 +4114,17 @@ class Data110_att(BaseData):
         # datap += att_sz + temp['NumBytesInput'][0]
         # self.data[i] = temp[['Time', 'Roll', 'Pitch', 'Heave', 'Heading']].astype(Data110.att_dtype)
         self._convert()
-        self.header['Time'] += self.time
+        # FIXME -- this addition has a roundoff issue - it may be off by 0.1 or 0.2 micro seconds
+        #   1609959937.1829998 vs 1609959937.183  I think it is coming from the base posix time and header offset time not being represented exactly
+        #   and the sum being slightly off even thought the expected answer could be represented exactly.
+        #   This could lead to some insidious mismatches of the time index.
+        #   Both of these look like they should end in .419 but the first one is off by 0.0000001
+        #   np.float64(0.005) + np.float64(1609959937.414)
+        #   Out[26]: 1609959937.4190001
+        #   np.float64(1609959937.418) + np.float64(.001)
+        #   Out[27]: 1609959937.419
+        # round to 0.001 seconds which is what the conversion for time is since adding was giving a slightly different result than desired
+        self.header['Time'] = np.around(self.header['Time'] + self.time, 3)
 
     def _parse_raw(self, raw_arrays, raw_data_size, read_limit):
         """
