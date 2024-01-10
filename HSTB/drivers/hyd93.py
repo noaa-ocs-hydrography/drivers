@@ -1,3 +1,13 @@
+"""
+https://www.ngdc.noaa.gov/mgg/dat/geodas/docs/hyd93.htm
+
+Things to do:
+read the header lines
+support binary files
+read an entire file as numpy arrays
+add basic exports to csv, json, xyz, etc
+"""
+
 class hyd93:
     VALUE_CODES = {0: "Known depth (or elevation)",
                    1: "Submerged (below water level)",
