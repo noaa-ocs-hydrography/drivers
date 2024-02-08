@@ -847,6 +847,7 @@ def find_csar_band_name(csar, log=None, wldatum='MLLW'):
 
 def proj_to_epsg(coord, proj):
     # 12/2021 updated in favor of the nad83 2011 epsg codes, from 269XX to 63XX
+    # 08/2023 added NAD83(2011)
     zone = proj[9:len(proj) - 1]
     hemi = proj[-1]
     if coord == 'NAD83':
@@ -855,16 +856,28 @@ def proj_to_epsg(coord, proj):
         elif hemi != 'N':
             raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
         zone = int(zone)
-        if zone <= 3:
+        if zone <= 23:
             return str(26900 + zone)
-        elif zone <= 19:
+        elif zone == 59:
+            return '3372'
+        elif zone == 60:
+            return '3373'
+        else:
+            raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
+    elif coord == 'NAD83(2011)':
+        if hemi != 'N':
+            raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
+        zone = int(zone)
+        if zone <= 19:
             return str(6329 + zone)
+        elif zone <=23:
+            return str(26900 + zone)
         elif zone == 59:
             return '6328'
         elif zone == 60:
             return '6329'
         else:
-            raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
+            raise IOError('NAD83(2011): Invalid projection: {}, {}'.format(coord, proj))
     elif coord == 'WGS84':
         if len(zone) == 2:
             if hemi == 'N':
@@ -885,10 +898,14 @@ def proj_to_epsg(coord, proj):
     elif coord == 'NAD83(PA11)':
         if len(zone) == 2:
             raise IOError('NAD83(PA11): Invalid projection: {}, {}'.format(coord, proj))
+        elif zone in ['1', '2', '3'] and hemi == 'N':
+            return '2690' + zone
         elif zone in ['4', '5'] and hemi == 'N':
             return '663' + zone
         elif zone == '2' and hemi == 'S':
             return '6636'
+        elif zone == '4' and hemi == 'S':
+            return 'UTM-04S-Nad83'
         else:
             raise IOError('NAD83(PA11): Invalid projection: {}, {}'.format(coord, proj))
     elif coord == 'NAD83(MA11)':
@@ -1640,8 +1657,9 @@ class CarisAPI():
                 local_raw_file = [lne for lne in local_raw_file if lne not in need_conversion]
                 if need_conversion:
                     self.convert_sss(need_conversion, overwrite=False)
+                return # will not overwrite existing lines, stop process sss
                 if not local_raw_file:
-                    return
+                    return # will overwrite existing lines
 
         for line in local_raw_file:
             rawfiles += '"' + line + '" '
