@@ -866,7 +866,7 @@ def proj_to_epsg(coord, proj):
             raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
     elif coord == 'NAD83(2011)':
         if hemi != 'N':
-            raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
+            raise IOError('NAD83(2011): Invalid projection: {}, {}'.format(coord, proj))
         zone = int(zone)
         if zone <= 19:
             return str(6329 + zone)
@@ -2245,7 +2245,9 @@ class CarisAPI():
         --output-crs EPSG:26919 --extent 300000 5000000 350000 5050000 --resolution 1.0m --iho-order S44_1A
          file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
 
-        if resolution == '0.5m':
+        if resolution == '0.25m':
+            cuberes = 'NOAA_0.25m'
+        elif resolution == '0.5m':
             cuberes = 'NOAA_0.5m'
         elif resolution == '1.0m':
             cuberes = 'NOAA_1m'
