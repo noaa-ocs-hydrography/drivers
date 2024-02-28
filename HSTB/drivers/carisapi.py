@@ -642,7 +642,7 @@ def parse_charlene_carislog(carislog):
     return process_overview, sbetproc
 
 
-def support_files_finder(command, suppress_exception=True):
+def support_files_finder(command, suppress_exception=True, is_revamp=False):
     cubeparams = ''
     depth_coverage = ''
     depth_object = ''
@@ -652,17 +652,23 @@ def support_files_finder(command, suppress_exception=True):
     xmlfiles = glob.glob(os.path.join(sys_dir, '*.xml'))
     txtfiles = glob.glob(os.path.join(sys_dir, '*.txt'))
 
-    valid_cubeparams = ['CUBEParams_NOAA_2024.xml', 'CUBEParams_NOAA_2023.xml',
+    valid_cubeparams = ['CUBEParams_NOAA_2023.xml',
                         'CUBEParams_NOAA_2022.xml', 'CUBEParams_NOAA_2021.xml', 'CUBEParams_NOAA_2020.xml',
                         'CUBEParams_NOAA_2019.xml', 'CUBEParams_NOAA_2018.xml', 'CUBEParams_NOAA_2017.xml']
-    valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2024.txt', 'NOAA_DepthRanges_CompleteCoverage_2023.txt',
+    valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2023.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2022.txt', 'NOAA_DepthRanges_CompleteCoverage_2021.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2020.txt', 'NOAA_DepthRanges_CompleteCoverage_2019.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2018.txt', 'NOAA_DepthRanges_CompleteCoverage_2017.txt']
-    valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2024.txt', 'NOAA_DepthRanges_ObjectDetection_2023.txt',
+    valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2023.txt',
                        'NOAA_DepthRanges_ObjectDetection_2022.txt', 'NOAA_DepthRanges_ObjectDetection_2021.txt',
                        'NOAA_DepthRanges_ObjectDetection_2020.txt', 'NOAA_DepthRanges_ObjectDetection_2019.txt',
                        'NOAA_DepthRanges_ObjectDetection_2018.txt', 'NOAA_DepthRanges_ObjectDetection_2017.txt']
+
+    if is_revamp: # HSSD 2024
+        valid_cubeparams = ['CUBEParams_NOAA_2024.xml', 'CUBEParams_NOAA_2023.xml', 'CUBEParams_NOAA_2022.xml']
+        valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2024.txt', 'NOAA_DepthRanges_CompleteCoverage_2023.txt',
+                          'NOAA_DepthRanges_CompleteCoverage_2022.txt']
+        valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2023.txt', 'NOAA_DepthRanges_ObjectDetection_2022.txt']
 
     for cbparams in valid_cubeparams:
         fullcb = os.path.join(sys_dir, cbparams)
@@ -1036,7 +1042,7 @@ class CarisAPI():
     def __init__(self, processtype='', hdcs_folder='', hvf='', project_name='', sheet_name='', vessel_name='', day_num='',
                  input_format='', logger=os.path.join(charlene_test_folder, 'log.txt'), benchcsv='',
                  coord_mode='', proj_mode='', noaa_support_files=False, benchfrom='', benchto='', benchtoraw='',
-                 bench=True, progressbar=None, base=False, hipsips=True, overridehipsversion=''):
+                 bench=True, progressbar=None, base=False, hipsips=True, overridehipsversion='', is_revamp=False):
         self.benchclass = benchmark.Benchmark(benchfrom, benchto, benchtoraw)
         self.benchfrom = benchfrom
         self.benchto = benchto
@@ -1060,7 +1066,8 @@ class CarisAPI():
                 self.hipscommand, self.hipsversion = command_finder_hips()
             self.hdcsio_read = hdcsio_read()
             if self.noaa_support_files:
-                self.cubeparams, self.depth_coverage, self.depth_object = support_files_finder(self.hipscommand)
+                self.cubeparams, self.depth_coverage, self.depth_object = \
+                    support_files_finder(self.hipscommand, is_revamp=is_revamp)
         else:
             self.hipscommand, self.hipsversion = '', ''
         if base:
@@ -2259,6 +2266,10 @@ class CarisAPI():
             cuberes = 'NOAA_8m'
         elif resolution == '16.0m':
             cuberes = 'NOAA_16m'
+        elif resolution == '32.0m':
+            cuberes = 'NOAA_32m'
+        elif resolution == '64.0m':
+            cuberes = 'NOAA_64m'
         else:
             raise AttributeError('{} Resolution is not supported'.format(resolution))
 
@@ -2370,11 +2381,15 @@ class CarisAPI():
             fullcommand += '"'
             fullcommand += ' "' + outputname + '"'
 
-        if mode == 'CALDER_RICE':
-            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method ' + mode + ' --output-crs '
+        if mode in ['CALDER_RICE', 'CALDER_RICE_2024']:
+            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method CALDER_RICE --output-crs '
             fullcommand += output_crs + ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
-            fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 16.0m --points-per-cell 15'
-            fullcommand += ' --area SWATH --keep-partial-bins'
+            if mode == 'CALDER_RICE':
+                fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 16.0m --points-per-cell 15'
+                fullcommand += ' --area SWATH --keep-partial-bins'
+            else:
+                fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 64.0m --points-per-cell 15'
+                fullcommand += ' --area SWATH --keep-partial-bins --supergrid-size 64.0m'
             fullcommand += ' --max-grid-size ' + maxgrid + ' --min-grid-size ' + mingrid + ' --include-flag ACCEPTED "file:///'
             fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
             if querybyline:
