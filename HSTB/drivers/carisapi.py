@@ -642,7 +642,7 @@ def parse_charlene_carislog(carislog):
     return process_overview, sbetproc
 
 
-def support_files_finder(command, suppress_exception=True):
+def support_files_finder(command, suppress_exception=True, is_revamp=False):
     cubeparams = ''
     depth_coverage = ''
     depth_object = ''
@@ -652,17 +652,23 @@ def support_files_finder(command, suppress_exception=True):
     xmlfiles = glob.glob(os.path.join(sys_dir, '*.xml'))
     txtfiles = glob.glob(os.path.join(sys_dir, '*.txt'))
 
-    valid_cubeparams = ['CUBEParams_NOAA_2024.xml', 'CUBEParams_NOAA_2023.xml',
+    valid_cubeparams = ['CUBEParams_NOAA_2023.xml',
                         'CUBEParams_NOAA_2022.xml', 'CUBEParams_NOAA_2021.xml', 'CUBEParams_NOAA_2020.xml',
                         'CUBEParams_NOAA_2019.xml', 'CUBEParams_NOAA_2018.xml', 'CUBEParams_NOAA_2017.xml']
-    valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2024.txt', 'NOAA_DepthRanges_CompleteCoverage_2023.txt',
+    valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2023.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2022.txt', 'NOAA_DepthRanges_CompleteCoverage_2021.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2020.txt', 'NOAA_DepthRanges_CompleteCoverage_2019.txt',
                       'NOAA_DepthRanges_CompleteCoverage_2018.txt', 'NOAA_DepthRanges_CompleteCoverage_2017.txt']
-    valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2024.txt', 'NOAA_DepthRanges_ObjectDetection_2023.txt',
+    valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2023.txt',
                        'NOAA_DepthRanges_ObjectDetection_2022.txt', 'NOAA_DepthRanges_ObjectDetection_2021.txt',
                        'NOAA_DepthRanges_ObjectDetection_2020.txt', 'NOAA_DepthRanges_ObjectDetection_2019.txt',
                        'NOAA_DepthRanges_ObjectDetection_2018.txt', 'NOAA_DepthRanges_ObjectDetection_2017.txt']
+
+    if is_revamp: # HSSD 2024
+        valid_cubeparams = ['CUBEParams_NOAA_2024.xml', 'CUBEParams_NOAA_2023.xml', 'CUBEParams_NOAA_2022.xml']
+        valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2024.txt', 'NOAA_DepthRanges_CompleteCoverage_2023.txt',
+                          'NOAA_DepthRanges_CompleteCoverage_2022.txt']
+        valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2023.txt', 'NOAA_DepthRanges_ObjectDetection_2022.txt']
 
     for cbparams in valid_cubeparams:
         fullcb = os.path.join(sys_dir, cbparams)
@@ -847,6 +853,7 @@ def find_csar_band_name(csar, log=None, wldatum='MLLW'):
 
 def proj_to_epsg(coord, proj):
     # 12/2021 updated in favor of the nad83 2011 epsg codes, from 269XX to 63XX
+    # 08/2023 added NAD83(2011)
     zone = proj[9:len(proj) - 1]
     hemi = proj[-1]
     if coord == 'NAD83':
@@ -855,16 +862,28 @@ def proj_to_epsg(coord, proj):
         elif hemi != 'N':
             raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
         zone = int(zone)
-        if zone <= 3:
+        if zone <= 23:
             return str(26900 + zone)
-        elif zone <= 19:
+        elif zone == 59:
+            return '3372'
+        elif zone == 60:
+            return '3373'
+        else:
+            raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
+    elif coord == 'NAD83(2011)':
+        if hemi != 'N':
+            raise IOError('NAD83(2011): Invalid projection: {}, {}'.format(coord, proj))
+        zone = int(zone)
+        if zone <= 19:
             return str(6329 + zone)
+        elif zone <=23:
+            return str(26900 + zone)
         elif zone == 59:
             return '6328'
         elif zone == 60:
             return '6329'
         else:
-            raise IOError('NAD83: Invalid projection: {}, {}'.format(coord, proj))
+            raise IOError('NAD83(2011): Invalid projection: {}, {}'.format(coord, proj))
     elif coord == 'WGS84':
         if len(zone) == 2:
             if hemi == 'N':
@@ -885,10 +904,14 @@ def proj_to_epsg(coord, proj):
     elif coord == 'NAD83(PA11)':
         if len(zone) == 2:
             raise IOError('NAD83(PA11): Invalid projection: {}, {}'.format(coord, proj))
+        elif zone in ['1', '2', '3'] and hemi == 'N':
+            return '2690' + zone
         elif zone in ['4', '5'] and hemi == 'N':
             return '663' + zone
         elif zone == '2' and hemi == 'S':
             return '6636'
+        elif zone == '4' and hemi == 'S':
+            return 'UTM-04S-Nad83'
         else:
             raise IOError('NAD83(PA11): Invalid projection: {}, {}'.format(coord, proj))
     elif coord == 'NAD83(MA11)':
@@ -1019,7 +1042,7 @@ class CarisAPI():
     def __init__(self, processtype='', hdcs_folder='', hvf='', project_name='', sheet_name='', vessel_name='', day_num='',
                  input_format='', logger=os.path.join(charlene_test_folder, 'log.txt'), benchcsv='',
                  coord_mode='', proj_mode='', noaa_support_files=False, benchfrom='', benchto='', benchtoraw='',
-                 bench=True, progressbar=None, base=False, hipsips=True, overridehipsversion=''):
+                 bench=True, progressbar=None, base=False, hipsips=True, overridehipsversion='', is_revamp=False):
         self.benchclass = benchmark.Benchmark(benchfrom, benchto, benchtoraw)
         self.benchfrom = benchfrom
         self.benchto = benchto
@@ -1043,7 +1066,8 @@ class CarisAPI():
                 self.hipscommand, self.hipsversion = command_finder_hips()
             self.hdcsio_read = hdcsio_read()
             if self.noaa_support_files:
-                self.cubeparams, self.depth_coverage, self.depth_object = support_files_finder(self.hipscommand)
+                self.cubeparams, self.depth_coverage, self.depth_object = \
+                    support_files_finder(self.hipscommand, is_revamp=is_revamp)
         else:
             self.hipscommand, self.hipsversion = '', ''
         if base:
@@ -1640,8 +1664,9 @@ class CarisAPI():
                 local_raw_file = [lne for lne in local_raw_file if lne not in need_conversion]
                 if need_conversion:
                     self.convert_sss(need_conversion, overwrite=False)
+                return # will not overwrite existing lines, stop process sss
                 if not local_raw_file:
-                    return
+                    return # will overwrite existing lines
 
         for line in local_raw_file:
             rawfiles += '"' + line + '" '
@@ -2227,7 +2252,9 @@ class CarisAPI():
         --output-crs EPSG:26919 --extent 300000 5000000 350000 5050000 --resolution 1.0m --iho-order S44_1A
          file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
 
-        if resolution == '0.5m':
+        if resolution == '0.25m':
+            cuberes = 'NOAA_0.25m'
+        elif resolution == '0.5m':
             cuberes = 'NOAA_0.5m'
         elif resolution == '1.0m':
             cuberes = 'NOAA_1m'
@@ -2239,6 +2266,10 @@ class CarisAPI():
             cuberes = 'NOAA_8m'
         elif resolution == '16.0m':
             cuberes = 'NOAA_16m'
+        elif resolution == '32.0m':
+            cuberes = 'NOAA_32m'
+        elif resolution == '64.0m':
+            cuberes = 'NOAA_64m'
         else:
             raise AttributeError('{} Resolution is not supported'.format(resolution))
 
@@ -2350,11 +2381,15 @@ class CarisAPI():
             fullcommand += '"'
             fullcommand += ' "' + outputname + '"'
 
-        if mode == 'CALDER_RICE':
-            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method ' + mode + ' --output-crs '
+        if mode in ['CALDER_RICE', 'CALDER_RICE_2024']:
+            fullcommand = self.hipscommand + ' --run CreateVRSurface --estimation-method CALDER_RICE --output-crs '
             fullcommand += output_crs + ' --extent ' + extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
-            fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 16.0m --points-per-cell 15'
-            fullcommand += ' --area SWATH --keep-partial-bins'
+            if mode == 'CALDER_RICE':
+                fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 16.0m --points-per-cell 15'
+                fullcommand += ' --area SWATH --keep-partial-bins'
+            else:
+                fullcommand += ' --finest-resolution 0.10m --coarsest-resolution 64.0m --points-per-cell 15'
+                fullcommand += ' --area SWATH --keep-partial-bins --supergrid-size 64.0m'
             fullcommand += ' --max-grid-size ' + maxgrid + ' --min-grid-size ' + mingrid + ' --include-flag ACCEPTED "file:///'
             fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
             if querybyline:
