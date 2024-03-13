@@ -642,7 +642,7 @@ def parse_charlene_carislog(carislog):
     return process_overview, sbetproc
 
 
-def support_files_finder(command, suppress_exception=True, is_revamp=False):
+def support_files_finder(command, suppress_exception=False, is_revamp=False):
     cubeparams = ''
     depth_coverage = ''
     depth_object = ''
@@ -665,10 +665,9 @@ def support_files_finder(command, suppress_exception=True, is_revamp=False):
                        'NOAA_DepthRanges_ObjectDetection_2018.txt', 'NOAA_DepthRanges_ObjectDetection_2017.txt']
 
     if is_revamp: # HSSD 2024
-        valid_cubeparams = ['CUBEParams_NOAA_2024.xml', 'CUBEParams_NOAA_2023.xml', 'CUBEParams_NOAA_2022.xml']
-        valid_depth_cc = ['NOAA_DepthRanges_CompleteCoverage_2024.txt', 'NOAA_DepthRanges_CompleteCoverage_2023.txt',
-                          'NOAA_DepthRanges_CompleteCoverage_2022.txt']
-        valid_depth_obj = ['NOAA_DepthRanges_ObjectDetection_2023.txt', 'NOAA_DepthRanges_ObjectDetection_2022.txt']
+        valid_cubeparams = ['CUBEParams_NOAA_2024.xml']
+        valid_depth_cc = ['NOAA_DepthRanges_General1_2024.txt']
+        valid_depth_obj = []
 
     for cbparams in valid_cubeparams:
         fullcb = os.path.join(sys_dir, cbparams)
@@ -688,9 +687,13 @@ def support_files_finder(command, suppress_exception=True, is_revamp=False):
 
     if cubeparams and depth_coverage and depth_object:
         return cubeparams, depth_coverage, depth_object
+    elif is_revamp and cubeparams and depth_coverage:
+        return cubeparams, depth_coverage, depth_object
     else:
         if not suppress_exception:
             mess = "Caris Support Files not found at {}".format(sys_dir)
+            if is_revamp:
+                mess = "Caris Support Files for HSSD 2024 not found at {}".format(sys_dir)
             raise Exception(mess)
         else:
             return cubeparams, depth_coverage, depth_object
