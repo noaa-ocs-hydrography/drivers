@@ -1107,6 +1107,10 @@ class CarisAPI():
                 if self.progressbar:
                     self.progressbar.UpdatePulse('Running Caris Processes')
 
+    def run_this_scribble(self, fullcommand):
+        p = subprocess.Popen(fullcommand)
+        p.wait()
+
     def caris_hips_license_check(self, printout=True):
         fullcommand = self.hipscommand + ' --version'
         test = -1
@@ -1775,7 +1779,7 @@ class CarisAPI():
             else:
                 self.run_this(fullcommand)
 
-    def create_beampattern(self, type, bbpfile, querybyline=False):
+    def create_beampattern(self, type, bbpfile, querybyline=False, scribble=False):
         '''Runs CreateSIPSBeamPattern with all the options.  Example: carisbatch.exe --run CreateSIPSBeamPattern
         --mosaic-engine SIPS_BACKSCATTER --beam-pattern-file C:\HIPSData\SIPS\beampatternfile.bbp
         file:///C:/HIPSData/HDCS_Data/Test/Test.hips'''
@@ -1805,11 +1809,13 @@ class CarisAPI():
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
+        elif scribble:
+            self.run_this_scribble(fullcommand)
         else:
             self.run_this(fullcommand)
 
     def create_mosaic(self, epsg, extentlowx, extentlowy, extenthighx, extenthighy, resolution, beampattern, type,
-                      outputname, update=True, querybyline=False):
+                      outputname, update=True, querybyline=False, scribble=False):
         '''Rune CreateSIPSMosaic with all the options.  Example: carisbatch.exe --run CreateSIPSMosaic
         --mosaic-engine SIPS_BACKSCATTER --output-crs EPSG:26919 --extent 300000 5000000 350000 5050000
         --resolution 1.0m --beam-pattern-file c:\HIPSData\SIPS\beampattern.bbp
@@ -1855,6 +1861,8 @@ class CarisAPI():
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
+        elif scribble:
+            self.run_this_scribble(fullcommand)
         else:
             self.run_this(fullcommand)
 
@@ -2250,7 +2258,7 @@ class CarisAPI():
             self.run_this(fullcommand)
 
     def new_hips_surface(self, epsg, extentlowx, extentlowy, extenthighx, extenthighy, resolution, iho, outputname,
-                         querybyline=False):
+                         querybyline=False, scribble=False):
         '''Runs CreateHIPSGridWithCUBE with all the options.  Example: carisbatch.exe --run CreateHIPSGridWithCube
         --output-crs EPSG:26919 --extent 300000 5000000 350000 5050000 --resolution 1.0m --iho-order S44_1A
          file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
@@ -2309,8 +2317,68 @@ class CarisAPI():
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
+        elif scribble:
+            self.run_this_scribble(fullcommand)
         else:
             self.run_this(fullcommand)
+
+    def new_hips_surface_scribble(self, epsg, extentlowx, extentlowy, extenthighx, extenthighy, resolution, iho,
+                                  outputname, querybyline=False):
+        '''Runs CreateHIPSGrid with all the options.  Example: carisbatch.exe --run CreateHIPSGrid
+        --output-crs EPSG:26919 --extent 300000 5000000 350000 5050000 --resolution 1.0m --iho-order S44_1A
+         file:///C:/HIPSData/HDCS_Data/Test/Test.hips C:\HIPSData\Products\CUBE1m.csar'''
+
+        if resolution == '0.25m':
+            cuberes = 'NOAA_0.25m'
+        elif resolution == '0.5m':
+            cuberes = 'NOAA_0.5m'
+        elif resolution == '1.0m':
+            cuberes = 'NOAA_1m'
+        elif resolution == '2.0m':
+            cuberes = 'NOAA_2m'
+        elif resolution == '4.0m':
+            cuberes = 'NOAA_4m'
+        elif resolution == '8.0m':
+            cuberes = 'NOAA_8m'
+        elif resolution == '16.0m':
+            cuberes = 'NOAA_16m'
+        elif resolution == '32.0m':
+            cuberes = 'NOAA_32m'
+        elif resolution == '64.0m':
+            cuberes = 'NOAA_64m'
+        else:
+            raise AttributeError('{} Resolution is not supported'.format(resolution))
+
+        output_crs = epsg_to_crs(epsg)
+        fullcommand = self.hipscommand + ' --run CreateHIPSGrid --output-crs ' + output_crs + ' --extent '
+        fullcommand += extentlowx + ' ' + extentlowy + ' ' + extenthighx + ' ' + extenthighy
+        fullcommand += ' --keep-up-to-date --gridding-method SHOAL_TRUE'
+        fullcommand += ' --resolution ' + resolution + ' "file:///'
+        fullcommand += os.path.join(self.hdcs_folder, self.sheet_name, self.sheet_name + '.hips')
+        if querybyline:
+            fullcommand += '?'
+            for line in self.converted_lines:
+                linename = os.path.split(line)[1]
+                fullcommand += 'Vessel=' + self.vessel_name + ';Line=' + linename
+                if self.converted_lines.index(line) == (len(self.converted_lines) - 1):
+                    # last line
+                    pass
+                else:
+                    fullcommand += '&'
+        else:
+            if self.vessel_name and self.day_num:
+                fullcommand += '?Vessel=' + self.vessel_name + ';Day=' + self.day_num
+            elif self.vessel_name:
+                fullcommand += '?Vessel=' + self.vessel_name
+            elif self.day_num:
+                fullcommand += '?Day=' + self.day_num
+
+        if self.onlysurface_additionalvessel:
+            fullcommand += '&Vessel=' + self.onlysurface_additionalvessel + ';Day=' + self.day_num
+        fullcommand += '"'
+        fullcommand += ' "' + outputname + '"'
+
+        self.run_this_scribble(fullcommand)
 
     def finalize_hips(self, outputname, minz, maxz, uncertainty='GREATER', applydesignated=True):
         '''Runs FinalizeRaster with all the options.  Example: carisbatch.exe --run FinalizeRaster --filter
@@ -2596,7 +2664,7 @@ class CarisAPI():
         else:
             self.run_this(fullcommand)
 
-    def export_raster(self, surface, output_type, outputname, bandname='Depth', forcebase=False):
+    def export_raster(self, surface, output_type, outputname, bandname='Depth', forcebase=False, scribble=False):
         '''Runs ExportRaster with all the options.  Example: carisbatch.exe --run ExportRaster --output-format
         GeoTIFF --include-band Depth C:\HIPSData\Products\VR.csar C:\HIPSData\Products\VR.tiff'''
 
@@ -2612,6 +2680,8 @@ class CarisAPI():
 
         if self.bench:
             self.benchclass.run(fullcommand, self.logger, self.benchcsv, self.progressbar)
+        elif scribble:
+            self.run_this_scribble(fullcommand)
         else:
             self.run_this(fullcommand)
 
