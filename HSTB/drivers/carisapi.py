@@ -1921,7 +1921,7 @@ class CarisAPI():
             self.run_this(fullcommand)
 
     def import_auxiliary(self, datatype, source, epsg=None, height=None, delheave=None, height_rms=None,
-                         delheave_rms=None, nav=None, nav_rms=None, querybyline=False):
+                         delheave_rms=None, nav=None, nav_rms=None, drix=False, querybyline=False):
         '''Runs ImportHIPSFromAuxiliary with all the options.  Example: carisbatch.exe --run ImportHIPSFromAuziliary
          --input-format APP_POSMV --allow-partial --delayed-heave 0 --delayed-heave-rms 0 C:\HIPSData\POS\DN170.000
          file:///C:/HIPSData/HDCS_Data/Test/Test.hips'''
@@ -1945,6 +1945,10 @@ class CarisAPI():
             fullcommand += '--navigation '
         if nav_rms:
             fullcommand += '--navigation-rms 1sec '
+        if drix and datatype == 'APP_SBET':
+            fullcommand += '--gyro 0sec --pitch 0sec --roll 0sec '
+        if drix and datatype == 'APP_RMS':
+            fullcommand += '--gyro-rms 0sec --pitch-rms 0sec --roll-rms 0sec '
         if True not in [height, delheave, height_rms, delheave_rms, nav, nav_rms]:
             print([height, delheave, height_rms, delheave_rms, nav, nav_rms])
             print("{} not a valid process type".format(datatype))
