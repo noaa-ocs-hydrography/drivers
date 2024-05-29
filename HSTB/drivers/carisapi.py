@@ -1489,7 +1489,7 @@ class CarisAPI():
                 lon.append(np.rad2deg(navdata[:, 2].min()))
             except:
                 basename = os.path.basename(hdcsline)
-                if len(basename) > 10:
+                if len(basename) > 20:
                     raise Exception('Unable to read navigation from line {}'.format(hdcsline))
 
         lat = np.array(lat)
