@@ -722,12 +722,14 @@ class SRBag(h5py.File):
     def _vertical_crs_element(self):
         md_reference_system = self.xml_root.findall(
             gmd + 'referenceSystemInfo/' + gmd + 'MD_ReferenceSystem/' + gmd + 'referenceSystemIdentifier/' + gmd + 'RS_Identifier')
-        for elem in md_reference_system:
-            for sub_elem in elem:
-                if sub_elem.tag == gmd + 'code':
-                    for sub_sub_elem in sub_elem:
-                        if "VERT_CS" in sub_sub_elem.text.upper():
-                            return sub_sub_elem
+        search_terms = ['VERT_CS', 'VERTCRS']
+        for term in search_terms:
+            for elem in md_reference_system:
+                for sub_elem in elem:
+                    if sub_elem.tag == gmd + 'code':
+                        for sub_sub_elem in sub_elem:
+                            if term in sub_sub_elem.text.upper():
+                                return sub_sub_elem
 
     @property
     def vertical_crs_wkt(self):
@@ -892,7 +894,7 @@ class VRBag(SRBag):
     def vr_uncrt(self):
         return self.varres_refinements[self.varres_refinements.dtype.names[1]][0]
 
-    def set_refinements(self, data: list, elev_func=None, uncert_func=None, local_offset=True):
+    def set_refinements(self, data: list, elev_func=None, uncert_func=None, local_offset=False):
         """ Set ALL the varres_refinements using a list of lists of numpy arrays.
         elevation and uncertainty overview layers will be computed as well as many attributes
 
@@ -1146,7 +1148,7 @@ class VRBag(SRBag):
         self.varres_refinements[0, idx:idx + refinement.uncertainty.size, self.DEPTH_UNCRT] = refinement.uncertainty.ravel()
         # self.varres_refinements[0, current_size:new_size[1]] = array.ravel()
 
-    def set_refinement(self, i, j, refinement, update_attr=True, elev_func=None, uncert_func=None, local_offset=True):
+    def set_refinement(self, i, j, refinement, update_attr=True, elev_func=None, uncert_func=None, local_offset=False):
         # get the index of where to write the data
         if refinement is not None:
             array = refinement.depth
@@ -1440,10 +1442,10 @@ def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN
 
         # convert the BAG coordinates into geotiff pixel indices
         # also reverse the rows since bag is lowerleft and tif is upper left
-        row_end_indices = (sr_grid.numrow - 1) - numpy.array(sr_grid.row_index(ystarts), numpy.int)
-        row_start_indices = (sr_grid.numrow - 1) - numpy.array(sr_grid.row_index(yends), numpy.int)
-        col_start_indices = numpy.array(sr_grid.col_index(xstarts), numpy.int)
-        col_end_indices = numpy.array(sr_grid.col_index(xends), numpy.int)
+        row_end_indices = (sr_grid.numrow - 1) - numpy.array(sr_grid.row_index(ystarts), numpy.int_)
+        row_start_indices = (sr_grid.numrow - 1) - numpy.array(sr_grid.row_index(yends), numpy.int_)
+        col_start_indices = numpy.array(sr_grid.col_index(xstarts), numpy.int_)
+        col_end_indices = numpy.array(sr_grid.col_index(xends), numpy.int_)
 
         if DEBUGGING:
             row_min = int(min(row_start_indices.min(), row_end_indices.min()))
