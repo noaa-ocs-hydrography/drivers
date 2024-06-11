@@ -1359,6 +1359,50 @@ class kmall():
 
         return dg
 
+
+    def read_EMdgmSPEdataBlock(self):
+        dg = {}
+        format_to_unpack = "2I7f1b"
+        fields = struct.unpack(format_to_unpack, self.FID.read(struct.Struct(format_to_unpack).size))
+        # format_to_unpack = "2I1f"
+        # fields = struct.unpack(format_to_unpack, self.FID.read(struct.Struct(format_to_unpack).size))
+        #
+        # UTC time from position sensor. Unit seconds. Epoch 1970-01-01. Nanosec part to be added for more exact time.
+        dg['timeFromSensor_sec'] = fields[0]
+        # UTC time from position sensor. Unit nano seconds remainder.
+        dg['timeFromSensor_nanosec'] = fields[1]
+        dg['rangeInputRms'] = fields[2]
+        dg['ellipseSemiMajorAxisError_m'] = fields[3]
+        dg['ellipseSemiMinorAxisError_m'] = fields[4]
+        dg['ellipseOrientationError_deg'] = fields[5]
+        dg['latitudeError_m'] = fields[6]
+        dg['longitudeError_m'] = fields[7]
+        dg['heightError_m'] = fields[8]
+        dg['posErrorDataFromSensor'] = fields[9]
+        if self.verbose > 2:
+            self.print_datagram(dg)
+
+        return dg
+
+    def read_EMdgmSPE(self):
+        """
+        Read #SPE - Structure of position error datagram. The data fields are identical to the NMEA GST datagram.
+        The raw data as received from sensor is in the text string.
+        :return: A dictionary of dictionaries, including EMdgmHeader ('header'), EMdgmScommon ('cmnPart'), and
+        EMdgmSPEdataBlock ('sensorData').
+        """
+        start = self.FID.tell()
+
+        dg = {}
+        dg['header'] = self.read_EMdgmHeader()
+        dg['cmnPart'] = self.read_EMdgmScommon()
+        dg['sensorData'] = self.read_EMdgmSPEdataBlock()
+
+        # Seek to end of the packet.
+        self.FID.seek(start + dg['header']['numBytesDgm'], 0)
+
+        return dg
+
     def read_EMdgmSKMinfo(self):
         """
         Read sensor (S) output datagram - info of KMB datagrams.
@@ -3889,7 +3933,10 @@ class kmall():
         # flatten the serial number array
         recs_to_read['ping']['serial_num'] = np.squeeze(recs_to_read['ping']['serial_num'])
         # get the max number of beams
-        maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
+        if recs_to_read['ping']['traveltime'] != None:
+            maxlen = len(max(recs_to_read['ping']['traveltime'], key=lambda x: len(x)))
+        # else:
+        #     maxlen = 0
 
         # need to force in the serial number, its not in the header anymore with these kmall files...
         if recs_to_read['installation_params']['installation_settings'] is not None:
