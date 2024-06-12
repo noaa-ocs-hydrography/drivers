@@ -215,7 +215,7 @@ sonar_translator = {'em122': [None, 'tx', 'rx', None], 'em302': [None, 'tx', 'rx
                     'em2045': [None, 'txrx', None, None], 'em2045_dual': [None, 'txrx_port', 'txrx_stbd', None],
                     'em3002': [None, 'tx', 'rx', None], 'em2040p': [None, 'txrx', None, None],
                     'em3020': [None, 'tx', 'rx', None], 'em3020_dual': [None, 'txrx_port', 'txrx_stbd', None],
-                    'me70': [None, 'txrx', None, None]}
+                    'me70': [None, 'txrx', None, None], 'em30': [None, 'tx', 'rx', None]}
 
 
 class AllRead:
@@ -227,14 +227,14 @@ class AllRead:
     the file, a record or a dictionary of records belonging to a ping, and
     dictionary of navigation and attitude data, or other types of data such as
     runtime parameters.
-    
+
     The current record can be found in a class variable called 'packet'.  This
     contains the "header" information that exists for all records, such as
     time, record type, record size.  The data for the record is contained in a
     data record type specific subpacket type inside of the variable packet
     called 'subpack'.  Each of these are their own classes with their own
     variables and methods for working with their own data.
-    
+
     allRead methods of interest:
         getrecord
         getwatercolumn
@@ -244,15 +244,15 @@ class AllRead:
         getruntime
         getsscast
         getping
-        
+
     It is worth noting here that the getrecord method calls the mapfile
     method if a file map does not already exist.  The file map is also an
-    allRead class variable called 'map'.  The map class has a number of methods 
-    of its own, most notibly the method 'printmap' which displays the records 
+    allRead class variable called 'map'.  The map class has a number of methods
+    of its own, most notibly the method 'printmap' which displays the records
     available in file and what percentage of the file they consume.  The labels
-    for these records (record number) is listed in this map and can be used as 
+    for these records (record number) is listed in this map and can be used as
     a reference when working from the commandline.
-    
+
     """
 
     def __init__(self, infilename, start_ptr=0, end_ptr=0, byteswap=False, mode='rb'):
@@ -266,7 +266,7 @@ class AllRead:
         self.error = False
         self.start_ptr = start_ptr
         self.end_ptr = end_ptr
-        self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122, 124, 302, 304, 850]  # 850 being the ME70
+        self.ems_with_rangeangle = [2040, 2045, 710, 712, 312, 122, 124, 302, 304, 850, 30]  # 850 being the ME70
         self.ems_with_oldrangeangle = [3020, 1020, 120, 2000]
         self.time_buffer = []
 
@@ -429,7 +429,7 @@ class AllRead:
             except NotImplementedError as err:
                 print(err)
             self.packet_read = False
-    
+
     def _better_merge_arrays(self, base_arr, arrone, arrtwo, arrthree, arrfour):
         newdtype = np.dtype(base_arr.dtype.descr + arrone.dtype.descr + arrtwo.dtype.descr + arrthree.dtype.descr + arrfour.dtype.descr)
         newarray = np.empty(shape=base_arr.shape, dtype=newdtype)
@@ -444,13 +444,13 @@ class AllRead:
         for field in arrfour.dtype.names:
             newarray[field] = arrfour[field]
         return newarray
-    
+
     def _populate_rec(self):
         """
         Data78 comes in from sequential read by time/ping.  We want to just expand all the sector based arrays from
         sector-wise to beam-wise.  This will make our xarray Dataset only have time/beam dimensions, which makes
-        further computation simple. 
-        
+        further computation simple.
+
         Creates some duplication, but compression will basically make the increased data stored take up like no space
         """
         try:
@@ -466,7 +466,7 @@ class AllRead:
         else:
             # any NaN returns for traveltime are set to 0, lets us easily filter later
             rec.rx['TravelTime'] = np.nan_to_num(rec.rx['TravelTime'])
-            
+
             if 'Delay' not in rec.tx.dtype.names:
                 # this is a duplicate, happens when running sequential read with start_ptr/end_ptr, eof doesnt kick in
                 # shows here because 'Delay', etc.  are already removed from rec.tx
@@ -509,7 +509,7 @@ class AllRead:
                 populated_freq[rec.rx['TransmitSectorID'] == id] = freq_array[id]
                 populated_tiltangle[rec.rx['TransmitSectorID'] == id] = tiltangle_array[id]
                 populated_pulselength[rec.rx['TransmitSectorID'] == id] = pulselength_array[id]
-            
+
             #rec.rx = merge_arrays([rec.rx, populated_delay, populated_freq, populated_tiltangle], flatten=True)
             rec.rx = self._better_merge_arrays(rec.rx, populated_delay, populated_freq, populated_tiltangle, populated_pulselength)
 
@@ -517,7 +517,7 @@ class AllRead:
             rec.tx = rec.tx[new_tx_names]
 
             return rec
-                
+
     def _translate_to_array(self, data_list, override_type=None, uneven=False, maxlen=None, fullwith=None):
         """
         Translate and generate numpy array from list of records
@@ -585,7 +585,6 @@ class AllRead:
         self.infile.seek(0)
         found80 = 0
         has_data = False
-
         self.eof = False
         while found80 < 3:
             self.read()
@@ -595,6 +594,11 @@ class AllRead:
                 break
             elif datagram_type == 80:
                 found80 += 1
+            if self.eof:
+                if found80 == 0:
+                    raise ValueError("Unable to find data110 or data80 for attitude/velocity")
+                break
+
         self.infile.seek(curptr)
         self.at_right_byte = cur_startstatus
         return has_data
