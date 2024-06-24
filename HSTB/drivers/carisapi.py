@@ -1,4 +1,5 @@
 import os, sys, time, re
+from pathlib import Path
 import subprocess
 import numpy as np
 from pyproj import Transformer
@@ -1358,8 +1359,7 @@ class CarisAPI():
                     return
                 print('Converting {} MBES Files...'.format(len(local_raw_file)))
                 for line in local_raw_file:
-                    tempraw = os.path.split(line)[1]
-                    line_path = os.path.join(hdcspath, tempraw[:len(tempraw) - 4])
+                    line_path = os.path.join(hdcspath, Path(line).stem)
                     # If it isnt in the database, you need conversion (it cant be overwritten)
                     try:
                         is_in_hips = hip.get_line_from_path(line_path)
@@ -1665,8 +1665,7 @@ class CarisAPI():
                     print('HIPS file must be located in {}'.format(parent_hdcs))
                     return
                 for line in local_raw_file:
-                    tempraw = os.path.split(line)[1]
-                    line_path = os.path.join(hdcspath, tempraw[:len(tempraw) - 4])
+                    line_path = os.path.join(hdcspath, Path(line).stem)
                     # If it isnt in the database, you need conversion (it cant be overwritten)
                     if not hip.get_line_from_path(line_path):
                         need_conversion.extend([line])
@@ -1679,8 +1678,7 @@ class CarisAPI():
 
         for line in local_raw_file:
             rawfiles += '"' + line + '" '
-            tempraw = os.path.split(line)[1]
-            line_path = os.path.join(hdcspath, tempraw[:len(tempraw) - 4])
+            line_path = os.path.join(hdcspath, Path(line).stem)
             self.converted_lines.append(line_path)
 
         if len(rawfiles) > 30000:
@@ -2140,8 +2138,7 @@ class CarisAPI():
         else:
             finaladded = []
             for line in added:
-                justline = os.path.split(line)[1]
-                finaladded.append(justline[:len(justline) - 4])
+                finaladded.append(Path(line).stem)
             last = len(finaladded) % 4
             iters = len(finaladded) / 4
             print('Total lines to Compute TPU = {}'.format(len(finaladded)))
