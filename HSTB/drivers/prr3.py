@@ -874,6 +874,10 @@ class X7kRead:
         # cover the instance where there is no 7030 record for install params
         if not recs_to_read['installation_params']['time'].any() and not has_installation_rec:
             recs_to_read['installation_params'] = self.return_empty_installparams(sonarmodelnumber, serialnumber, serialnumbertwo, runtime=runtime)['installation_params']
+        # cover the instance where there is no 7001 record for serial numbers
+        if not recs_to_read['installation_params']['serial_one'].any():
+            recs_to_read['installation_params']['serial_one'] = np.array([serialnumber], dtype=np.dtype('uint64'))
+            recs_to_read['installation_params']['serial_two'] = np.array([serialnumbertwo], dtype=np.dtype('uint64'))
 
         # # I do this in the other drivers, might include it later...
         #
