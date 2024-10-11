@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 import json
 from math import cos, sin, asin, sqrt, degrees
 from collections import defaultdict
+import rasterio
 import glob
 import geopy.distance
 from winreg import ConnectRegistry, HKEY_LOCAL_MACHINE, OpenKey, QueryValueEx
@@ -797,7 +798,8 @@ def get_bands_from_csar(path_to_csar):
 
 
 def find_csar_band_name(csar, log=None, wldatum='MLLW'):
-    if os.path.splitext(csar)[1] == '.csar':
+    extension = os.path.splitext(csar)[1].lower()
+    if extension == '.csar':
         band_names = get_bands_from_csar(csar)
         out = ''
         b = ''
@@ -841,17 +843,30 @@ def find_csar_band_name(csar, log=None, wldatum='MLLW'):
                 print(out, file=logger)
                 print(out)
         return b
-    elif os.path.splitext(csar)[1] == '.asc':
+    elif extension == '.asc':
         if log:
             with open(log, 'a+') as logger:
                 print("Found .asc file: using 'Band 1' band name", file=logger)
                 print("Found .asc file: using 'Band 1' band name")
         return 'Band 1'
+    elif extension in ['.tif', '.tiff']:
+        try:
+            with rasterio.open(csar, ) as ds:
+                b = ds.descriptions[0]
+                message = f"Found .tif file: using {b} band name"
+        except:
+            b = ''
+            message = "Failed to find VDatum band name in the .tif file"
+        if log:
+            with open(log, 'a+') as logger:
+                print(message, file=logger)
+                print(message)
+        return b
     else:
         if log:
             with open(log, 'a+') as logger:
-                print("File format unsupported:  Require .asc or .csar file", file=logger)
-                print("File format unsupported:  Require .asc or .csar file")
+                print("File format unsupported:  Require .asc, .tif, or .csar file", file=logger)
+                print("File format unsupported:  Require .asc, .tif, or .csar file")
         return ''
 
 
