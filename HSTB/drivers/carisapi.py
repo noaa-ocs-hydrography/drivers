@@ -1045,7 +1045,7 @@ def find_csar_band_name(csar, log=None, wldatum='MLLW'):
 
 def proj_to_epsg(coord, proj):
     # 12/2021 updated in favor of the nad83 2011 epsg codes, from 269XX to 63XX
-    # 08/2023 added NAD83(2011)
+    # 08/2023 added NAD83(2011) 10/2024 added World Mercator (EPSG:3395)
     zone = proj[9:len(proj) - 1]
     hemi = proj[-1]
     if coord == 'NAD83':
@@ -1115,6 +1115,8 @@ def proj_to_epsg(coord, proj):
             return '8693'
         else:
             raise IOError('NAD83(MA11): Invalid projection: {}, {}'.format(coord, proj))
+    elif coord == 'World Mercator':
+        return '3395'
     else:
         raise IOError('Invalid coordinate system: {}'.format(coord))
 
