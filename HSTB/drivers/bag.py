@@ -2,6 +2,7 @@ import os
 from xml.etree import ElementTree as et
 import datetime
 import tempfile
+import math
 
 try:
     from tqdm import tqdm
@@ -1286,7 +1287,7 @@ STRETCH, FILL, NOTHING = range(3)
 
 
 def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN, edge_option=STRETCH, use_blocks=True, nodata=numpy.nan,
-                 count_file_ext=".temp.cnt"):
+                 count_file_ext=".temp.cnt", snap_to_grid=False):
     """
 
     Parameters
@@ -1368,7 +1369,14 @@ def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN
 
     ds_val.SetProjection(bagds.GetProjection())
     # bag_xform = bagds.GetGeoTransform()
-    xform = (sr_grid.orig_x, sr_grid.cell_size_x, 0, sr_grid.maxy, 0, -sr_grid.cell_size_y)
+    if snap_to_grid:
+        half_x_grid = sr_grid.cell_size_x / 2  # Get half grid size so pixels are placed on 2,6,10 for 4m instead of 0,4,8s
+        half_y_grid = sr_grid.cell_size_y / 2
+        x_shift = math.floor((sr_grid.orig_x -half_x_grid)  /  sr_grid.cell_size_x) *  sr_grid.cell_size_x + half_x_grid  # Move to grid and force west
+        y_shift = math.ceil((sr_grid.maxy - half_y_grid) / sr_grid.cell_size_y) *  sr_grid.cell_size_y + half_y_grid # Move to grid and force north
+        xform = (x_shift, sr_grid.cell_size_x, 0, y_shift, 0, -sr_grid.cell_size_y)
+    else: 
+        xform = (sr_grid.orig_x, sr_grid.cell_size_x, 0, sr_grid.maxy, 0, -sr_grid.cell_size_y)
     ds_val.SetGeoTransform(xform)
     r_val = ds_val.GetRasterBand(1)
     r_val.SetNoDataValue(0)
