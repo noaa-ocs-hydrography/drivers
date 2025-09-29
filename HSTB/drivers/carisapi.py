@@ -1429,7 +1429,7 @@ class CarisAPI():
                 fullcommand += ' --convert-navigation --gps-height-device ' + kongs_height + ' ' + rawfil
             elif self.input_format == 'TELEDYNE_7k':
                 fullcommand += ' --navigation-device POSITION --heading-device HEADING --motion-device RPH'
-                fullcommand += ' --swath-device BATHYMETRY ' + rawfil
+                fullcommand += ' --swath-device RAWDETECTION ' + rawfil
             elif self.input_format == 'GSF':
                 fullcommand += ' --depth-source TRUE ' + rawfil
             elif self.input_format == 'XTF':
