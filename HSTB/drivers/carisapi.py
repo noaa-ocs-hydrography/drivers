@@ -665,9 +665,11 @@ def support_files_finder(command, suppress_exception=False, is_revamp=False):
                        'NOAA_DepthRanges_ObjectDetection_2020.txt', 'NOAA_DepthRanges_ObjectDetection_2019.txt',
                        'NOAA_DepthRanges_ObjectDetection_2018.txt', 'NOAA_DepthRanges_ObjectDetection_2017.txt']
 
-    if is_revamp: # HSSD 2024/2025
-        valid_cubeparams = ['CUBEParams_NOAA_2025.xml', 'CUBEParams_NOAA_2024.xml']
-        valid_depth_cc = ['NOAA_DepthRanges_General1_2025.txt', 'NOAA_DepthRanges_General1_2024.txt']
+    if is_revamp: # HSSD 2024-2026
+        valid_cubeparams = ['CUBEParams_NOAA_2026.xml',
+                            'CUBEParams_NOAA_2025.xml', 'CUBEParams_NOAA_2024.xml']
+        valid_depth_cc = ['NOAA_DepthRanges_General1_2026.txt',
+                          'NOAA_DepthRanges_General1_2025.txt', 'NOAA_DepthRanges_General1_2024.txt']
         valid_depth_obj = []
 
     for cbparams in valid_cubeparams:
@@ -694,7 +696,7 @@ def support_files_finder(command, suppress_exception=False, is_revamp=False):
         if not suppress_exception:
             mess = "Caris Support Files not found at {}".format(sys_dir)
             if is_revamp:
-                mess = "Caris Support Files for HSSD 2024/2025 not found at {}".format(sys_dir)
+                mess = "Caris Support Files for HSSD 2026/2025/2024 not found at {}".format(sys_dir)
             raise Exception(mess)
         else:
             return cubeparams, depth_coverage, depth_object
