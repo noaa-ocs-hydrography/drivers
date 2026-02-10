@@ -2,7 +2,7 @@ import os
 from winreg import ConnectRegistry, HKEY_LOCAL_MACHINE, OpenKey, QueryValueEx
 
 HIPS_NAME = "HIPS"
-HIPS_VERSIONS = ('12.0', '11.4', '11.3', '11.2', '11.1', '10.4', '10.3', '10.2')
+HIPS_VERSIONS = ('12.1', '12.0', '11.4', '11.3', '11.2', '11.1', '10.4', '10.3', '10.2')
 BASE_EDITOR_NAME = "BASE Editor"
 BASE_EDITOR_VERSIONS = ('6.1', '5.5', '5.4', '5.3', '5.2', '5.1', '4.4', '4.3', '4.2')
 
