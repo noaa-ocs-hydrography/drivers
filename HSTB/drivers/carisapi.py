@@ -536,88 +536,88 @@ def parse_charlene_carislog(carislog):
                                 'Edgetech JSF end']:
                     process_overview['Conversion']['end'] = savemsg
                     activeproc = 'Conversion'
-                elif rawmsg == 'Import HIPS From Applanix POS MV start':
+                elif rawmsg.lower() == 'import hips from applanix pos mv start':
                     process_overview['ImportHIPSFromAuxiliaryAPP_POSMV']['start'] = savemsg
                     activeproc = 'ImportHIPSFromAuxiliaryAPP_POSMV'
-                elif rawmsg == 'Import HIPS From Applanix POS MV end':
+                elif rawmsg.lower() == 'import hips from applanix pos mv end':
                     process_overview['ImportHIPSFromAuxiliaryAPP_POSMV']['end'] = savemsg
                     activeproc = 'ImportHIPSFromAuxiliaryAPP_POSMV'
-                elif rawmsg == 'Import HIPS From Applanix SBET start':
+                elif rawmsg.lower() == 'import hips from applanix sbet start':
                     process_overview['ImportHIPSFromAuxiliaryAPP_SBET']['start'] = savemsg
                     activeproc = 'ImportHIPSFromAuxiliaryAPP_SBET'
-                elif rawmsg == 'Import HIPS From Applanix SBET end':
+                elif rawmsg.lower() == 'import hips from applanix sbet end':
                     process_overview['ImportHIPSFromAuxiliaryAPP_SBET']['end'] = savemsg
                     activeproc = 'ImportHIPSFromAuxiliaryAPP_SBET'
-                elif rawmsg == 'Import HIPS From Applanix RMS start':
+                elif rawmsg.lower() == 'import hips from applanix rms start':
                     process_overview['ImportHIPSFromAuxiliaryAPP_RMS']['start'] = savemsg
                     activeproc = 'ImportHIPSFromAuxiliaryAPP_RMS'
-                elif rawmsg == 'Import HIPS From Applanix RMS end':
+                elif rawmsg.lower() == 'import hips from applanix rms end':
                     process_overview['ImportHIPSFromAuxiliaryAPP_RMS']['end'] = savemsg
                     activeproc = 'ImportHIPSFromAuxiliaryAPP_RMS'
-                elif rawmsg == 'Import Tide to HIPS start':
+                elif rawmsg.lower() == 'import tide to hips start':
                     process_overview['ImportTideToHIPS']['start'] = savemsg
                     activeproc = 'ImportTideToHIPS'
-                elif rawmsg == 'Import Tide to HIPS end':
+                elif rawmsg.lower() == 'import tide to hips end':
                     process_overview['ImportTideToHIPS']['end'] = savemsg
                     activeproc = 'ImportTideToHIPS'
-                elif rawmsg == 'Georeference Bathymetry start':
+                elif rawmsg.lower() == 'georeference bathymetry start':
                     process_overview['GeoreferenceHIPSBathymetry']['start'] = savemsg
                     activeproc = 'GeoreferenceHIPSBathymetry'
-                elif rawmsg == 'Georeference Bathymetry end':
+                elif rawmsg.lower() == 'georeference bathymetry end':
                     process_overview['GeoreferenceHIPSBathymetry']['end'] = savemsg
                     activeproc = 'GeoreferenceHIPSBathymetry'
-                elif rawmsg == 'Sound Velocity Correct using CARIS Algorithm start':
+                elif rawmsg.lower() == 'sound velocity correct using caris algorithm start':
                     process_overview['SoundVelocityCorrectHIPSWithCARIS']['start'] = savemsg
                     activeproc = 'SoundVelocityCorrectHIPSWithCARIS'
-                elif rawmsg == 'Sound Velocity Correct using CARIS Algorithm end':
+                elif rawmsg.lower() == 'sound velocity correct using caris algorithm end':
                     process_overview['SoundVelocityCorrectHIPSWithCARIS']['end'] = savemsg
                     activeproc = 'SoundVelocityCorrectHIPSWithCARIS'
-                elif rawmsg == 'Compute HIPS GPS Tide start':
+                elif rawmsg.lower() == 'compute hips gps tide start':
                     process_overview['ComputeHIPSGPSTide']['start'] = savemsg
                     activeproc = 'ComputeHIPSGPSTide'
-                elif rawmsg == 'Compute HIPS GPS Tide end':
+                elif rawmsg.lower() == 'compute hips gps tide end':
                     process_overview['ComputeHIPSGPSTide']['end'] = savemsg
                     activeproc = 'ComputeHIPSGPSTide'
-                elif rawmsg == 'Merge HIPS start':
+                elif rawmsg.lower() == 'merge hips start':
                     process_overview['MergeHIPS']['start'] = savemsg
                     activeproc = 'MergeHIPS'
-                elif rawmsg == 'Merge HIPS end':
+                elif rawmsg.lower() == 'merge hips end':
                     process_overview['MergeHIPS']['end'] = savemsg
                     activeproc = 'MergeHIPS'
-                elif rawmsg == 'Compute HIPS TPU start':
+                elif rawmsg.lower() == 'compute hips tpu start':
                     process_overview['ComputeHIPSTPU']['start'] = savemsg
                     activeproc = 'ComputeHIPSTPU'
-                elif rawmsg == 'Compute HIPS TPU end':
+                elif rawmsg.lower() == 'compute hips tpu end':
                     process_overview['ComputeHIPSTPU']['end'] = savemsg
                     activeproc = 'ComputeHIPSTPU'
-                elif rawmsg == 'Create HIPS Grid using CUBE start':
+                elif rawmsg.lower() == 'create hips grid using cube start':
                     process_overview['CreateHIPSGrid']['start'] = savemsg
                     activeproc = 'CreateHIPSGrid'
-                elif rawmsg == 'Create HIPS Grid using CUBE end':
+                elif rawmsg.lower() == 'create hips grid using cube end':
                     process_overview['CreateHIPSGrid']['end'] = savemsg
                     activeproc = 'CreateHIPSGrid'
-                elif rawmsg == 'Create SIPS Beam Pattern using Side Scan start':
+                elif rawmsg.lower() == 'create sips beam pattern using side scan start':
                     process_overview['CreateSIPSBeamPattern']['start'] = savemsg
                     activeproc = 'CreateSIPSBeamPattern'
-                elif rawmsg == 'Create SIPS Beam Pattern using Side Scan end':
+                elif rawmsg.lower() == 'create sips beam pattern using side scan end':
                     process_overview['CreateSIPSBeamPattern']['end'] = savemsg
                     activeproc = 'CreateSIPSBeamPattern'
-                elif rawmsg == 'Create SIPS Beam Pattern using Side Scan start':
+                elif rawmsg.lower() == 'create sips beam pattern using side scan start':
                     process_overview['CreateSIPSBeamPattern']['start'] = savemsg
                     activeproc = 'CreateSIPSBeamPattern'
-                elif rawmsg == 'Create SIPS Beam Pattern using Side Scan end':
+                elif rawmsg.lower() == 'create sips beam pattern using side scan end':
                     process_overview['CreateSIPSBeamPattern']['end'] = savemsg
                     activeproc = 'CreateSIPSBeamPattern'
-                elif rawmsg == 'Compute SIPS Towfish Navigation start':
+                elif rawmsg.lower() == 'compute sips towfish navigation start':
                     process_overview['ComputeSIPSTowfishNavigation']['start'] = savemsg
                     activeproc = 'ComputeSIPSTowfishNavigation'
-                elif rawmsg == 'Compute SIPS Towfish Navigation end':
+                elif rawmsg.lower() == 'compute sips towfish navigation end':
                     process_overview['ComputeSIPSTowfishNavigation']['end'] = savemsg
                     activeproc = 'ComputeSIPSTowfishNavigation'
-                elif rawmsg == 'Create SIPS Mosaic using SIPS Side Scan start':
+                elif rawmsg.lower() == 'create sips mosaic using sips side scan start':
                     process_overview['CreateSIPSMosaic']['start'] = savemsg
                     activeproc = 'CreateSIPSMosaic'
-                elif rawmsg == 'Create SIPS Mosaic using SIPS Side Scan end':
+                elif rawmsg.lower() == 'create sips mosaic using sips side scan end':
                     process_overview['CreateSIPSMosaic']['end'] = savemsg
                     activeproc = 'CreateSIPSMosaic'
             elif l[0:7].lower() == 'warning' and activeproc:
