@@ -4240,7 +4240,7 @@ class kmall():
         # device translator will use the device identifier plus the values here, ex: 'TRAI_HD1' + '_serial_number'
         translate_device_ident = {'ATTI_1': 'motion_sensor_1', 'ATTI_2': 'motion_sensor_2', 'ATTI_3': 'motion_sensor_3',
                                   'POSI_1': 'position_1', 'POSI_2': 'position_2', 'POSI_3': 'position_3',
-                                  'CLCK': 'clock', 'SVPI': 'sound_velocity_1', 'TRAI_HD1': 'transducer_1',
+                                  'CLCK': 'clock', 'SVPI': 'sound_velocity_1', 'TRAI_HD1': 'transducer_1', 'TRAI_HD2': 'transducer_2',
                                   'TRAI_TX1': 'transducer_1', 'TRAI_RX1': 'transducer_2'}
         translate_device = {'N=': '_serial_number', 'X=': '_along_location', 'Y=': '_athwart_location',
                             'Z=': '_vertical_location', 'R=': '_roll_angle', 'P=': '_pitch_angle',
